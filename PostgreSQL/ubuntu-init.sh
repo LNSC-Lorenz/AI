@@ -102,8 +102,9 @@ if $ENABLE_UFW; then
   ufw --force reset
   ufw default deny incoming
   ufw default allow outgoing
-  ufw allow "$SSH_PORT/tcp"    # SSH
-  ufw allow 5432/tcp           # PostgreSQL（如需远程访问）
+  ufw allow "$SSH_PORT/tcp"              # SSH
+  ufw allow from 10.86.180.0/24 to any port 5432 proto tcp   # 内网运维和应用访问
+  ufw allow from 10.86.SAP.0/24 to any port 5432 proto tcp   # SAP 服务器所在网段（← 替换为实际 IP 段）
   ufw --force enable
   ufw status verbose
   ok "UFW 防火墙已启用"
