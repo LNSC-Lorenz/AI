@@ -161,18 +161,21 @@ ok "内核参数已优化"
 if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
   echo never > /sys/kernel/mm/transparent_hugepage/enabled
   echo never > /sys/kernel/mm/transparent_hugepage/defrag
-  # 持久化
-  cat >> /etc/rc.local <<'EOF'
+  # 持久化（幂等写入）
+  if ! grep -q "transparent_hugepage" /etc/rc.local 2>/dev/null; then
+    cat >> /etc/rc.local <<'EOF'
 echo never > /sys/kernel/mm/transparent_hugepage/enabled
 echo never > /sys/kernel/mm/transparent_hugepage/defrag
 EOF
-  chmod +x /etc/rc.local
+    chmod +x /etc/rc.local
+  fi
   ok "透明大页已禁用（PostgreSQL 性能优化）"
 fi
 
 # ── Step 8: 文件描述符限制 ──────────────────────────────────
 step "8: 文件描述符限制"
-cat >> /etc/security/limits.conf <<EOF
+if ! grep -q "PostgreSQL 优化" /etc/security/limits.conf; then
+  cat >> /etc/security/limits.conf <<EOF
 
 # PostgreSQL 优化
 postgres soft nofile 65536
@@ -182,6 +185,10 @@ postgres hard nproc  65536
 * soft nofile 65536
 * hard nofile 65536
 EOF
+  ok "文件描述符限制已写入"
+else
+  warn "limits.conf 已包含 PostgreSQL 配置，跳过（避免重复）"
+fi
 
 cat > /etc/systemd/system.conf.d/limits.conf <<EOF
 [Manager]
@@ -241,11 +248,11 @@ ok "不必要服务已清理"
 step "12: 数据盘权限配置"
 if mountpoint -q /data; then
   mkdir -p "$PG_DATA_DIR"
-  chmod 755 /data
-  ok "数据盘 /data 已挂载，目录 $PG_DATA_DIR 已创建"
+  chmod 755 /data                  # /data 本身 755（其他服务可读）
+  chmod 700 "$PG_DATA_DIR"         # PostgreSQL 数据目录必须 700
+  ok "数据盘 /data 已挂载，目录 $PG_DATA_DIR 已创建（权限 700）"
 else
-  warn "/data 未挂载，请检查 autoinstall 分区配置"
-  info "手动挂载: lsblk 查看磁盘，然后 mount /dev/sdb1 /data"
+  fail "/data 未挂载！请检查 autoinstall 分区配置后重新运行。\n  排查: lsblk 查看磁盘列表\n  手动挂载: mount /dev/sdb1 /data"
 fi
 
 # ── 完成 ──────────────────────────────────────────────────────

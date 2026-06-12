@@ -250,6 +250,15 @@ EOF
 chmod +x /usr/local/bin/pg-backup.sh
 chown root:root /usr/local/bin/pg-backup.sh
 
+# 配置 postgres 用户 .pgpass 免密（crontab 下无交互）
+PG_PASS_FILE="/var/lib/postgresql/.pgpass"
+if [ ! -f "$PG_PASS_FILE" ]; then
+  echo "localhost:5432:*:postgres:$POSTGRES_PASSWORD" > "$PG_PASS_FILE"
+  chown postgres:postgres "$PG_PASS_FILE"
+  chmod 600 "$PG_PASS_FILE"
+  ok ".pgpass 已配置（备份免密）"
+fi
+
 # 添加 crontab（每天凌晨2点）
 (crontab -u postgres -l 2>/dev/null; echo "0 2 * * * /usr/local/bin/pg-backup.sh >> /var/log/pg-backup.log 2>&1") \
   | crontab -u postgres -
