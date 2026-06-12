@@ -1,0 +1,212 @@
+#cloud-config
+# =============================================================
+# Ubuntu 24.04 LTS Autoinstall - ESXi 无人值守安装
+# 职责：硬件配置（网络/分区）+ 用户账户 + SSH
+# 系统优化由 ubuntu-init.sh 完成
+# =============================================================
+autoinstall:
+  version: 1
+
+  # ── 语言与键盘 ──────────────────────────────────────────────
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── 网络（ESXi VMXNET3，网卡名通常为 ens192）───────────────
+  # 当前配置：静态 IP（推荐生产环境）
+  # 如需 DHCP，将 dhcp4 改为 true 并注释掉 addresses 等行
+  network:
+    version: 2
+    ethernets:
+      ens192:
+        dhcp4: false
+        addresses: [10.86.180.71/24]
+        gateway4: 10.86.180.200
+        nameservers:
+          addresses: [10.86.180.1, 10.86.180.2]
+
+  # ── 存储分区 ────────────────────────────────────────────────
+  # 方案：系统盘(sda) LVM 自动分区，数据盘(sdb) 独立挂载 /data
+  # ESXi 中第一块磁盘通常为 sda（系统盘），第二块为 sdb（数据盘）
+  storage:
+    config:
+      # ── 系统盘 sda ──────────────────────────────────────────
+      - type: disk
+        id: disk-sda
+        path: /dev/sda
+        wipe: superblock-recursive
+        grub_device: true
+        ptable: gpt
+
+      - type: partition
+        id: part-efi
+        device: disk-sda
+        size: 512M
+        flag: boot
+        grub_device: true
+
+      - type: partition
+        id: part-boot
+        device: disk-sda
+        size: 1G
+
+      - type: partition
+        id: part-lvm
+        device: disk-sda
+        size: -1                           # 剩余全部给 LVM
+
+      - type: format
+        id: fmt-efi
+        volume: part-efi
+        fstype: fat32
+        label: EFI
+
+      - type: format
+        id: fmt-boot
+        volume: part-boot
+        fstype: ext4
+        label: boot
+
+      - type: lvm_volgroup
+        id: vg-system
+        name: vg-system
+        devices: [part-lvm]
+
+      - type: lvm_partition
+        id: lv-root
+        volgroup: vg-system
+        name: lv-root
+        size: 50G
+
+      - type: lvm_partition
+        id: lv-var
+        volgroup: vg-system
+        name: lv-var
+        size: 30G
+
+      - type: lvm_partition
+        id: lv-tmp
+        volgroup: vg-system
+        name: lv-tmp
+        size: 10G
+
+      - type: lvm_partition
+        id: lv-home
+        volgroup: vg-system
+        name: lv-home
+        size: -1                           # 剩余全给 /home
+
+      - type: format
+        id: fmt-root
+        volume: lv-root
+        fstype: ext4
+
+      - type: format
+        id: fmt-var
+        volume: lv-var
+        fstype: ext4
+
+      - type: format
+        id: fmt-tmp
+        volume: lv-tmp
+        fstype: ext4
+
+      - type: format
+        id: fmt-home
+        volume: lv-home
+        fstype: ext4
+
+      - type: mount
+        id: mnt-efi
+        device: fmt-efi
+        path: /boot/efi
+
+      - type: mount
+        id: mnt-boot
+        device: fmt-boot
+        path: /boot
+
+      - type: mount
+        id: mnt-root
+        device: fmt-root
+        path: /
+
+      - type: mount
+        id: mnt-var
+        device: fmt-var
+        path: /var
+
+      - type: mount
+        id: mnt-tmp
+        device: fmt-tmp
+        path: /tmp
+
+      - type: mount
+        id: mnt-home
+        device: fmt-home
+        path: /home
+
+      # ── 数据盘 sdb（PostgreSQL 专用）──────────────────────
+      - type: disk
+        id: disk-sdb
+        path: /dev/sdb
+        wipe: superblock-recursive
+        ptable: gpt
+
+      - type: partition
+        id: part-data
+        device: disk-sdb
+        size: -1                           # 整块数据盘
+
+      - type: format
+        id: fmt-data
+        volume: part-data
+        fstype: ext4
+        label: pgdata
+
+      - type: mount
+        id: mnt-data
+        device: fmt-data
+        path: /data
+
+  # ── 账户（唯一管理员用户）──────────────────────────────────
+  identity:
+    hostname: lcnnsc-db-pg01
+    username: sysadmin
+    # 密码: Change@2025
+    # 重新生成: openssl passwd -6 'YourPassword'
+    password: "$6$rounds=4096$saltsalt$kDZTG0l5K5N9jZMDH3zOLi7CL9l1N7VQ5g0q5XSmrqMQiP7l9RkN4GJ0hhPK0r7tMxbdqy4MhE8W.1vXiEiM1"
+
+  # ── SSH ─────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true
+    # 建议填入 SSH 公钥，填入后可禁用密码登录
+    authorized-keys: []
+    # authorized-keys:
+    #   - "ssh-rsa AAAA... user@host"
+
+  # ── 最小化软件包（系统优化工具由 ubuntu-init.sh 安装）──────
+  packages:
+    - open-vm-tools                        # ESXi VMware Tools（必须）
+    - curl
+    - ca-certificates
+
+  # ── 安装完成后执行 ───────────────────────────────────────────
+  late-commands:
+    # 启用 VMware Tools
+    - curtin in-target --target=/target -- systemctl enable open-vm-tools
+    # 禁用 root SSH 登录
+    - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    # 设置 /data 目录权限（PostgreSQL 数据盘）
+    - curtin in-target --target=/target -- mkdir -p /data/postgresql
+    - curtin in-target --target=/target -- chmod 755 /data
+    # 最终更新
+    - curtin in-target --target=/target -- apt-get -y -qq dist-upgrade
+    - curtin in-target --target=/target -- apt-get -y -qq autoremove
+
+  user-data:
+    disable_root: true
+
+  updates: security
+  shutdown: reboot
