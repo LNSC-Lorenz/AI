@@ -1,5 +1,36 @@
 # Ubuntu 24.04 LTS + PostgreSQL 18 企业级运维手册
 
+
+# 简述
+
+1. 重新生成 ISO
+   cd C:\Users\zhlo\Documents\GIT\AI\PostgreSQL\autoinstall
+   .\Create-CidataISO.ps1
+ 
+2. ESXi 挂载新 ISO -> 开机全自动安装（约15分钟，自动重启）
+ 
+3. 上传脚本
+   cd C:\Users\zhlo\Documents\GIT\AI\PostgreSQL
+   .\upload-scripts.ps1
+ 
+4. SSH 登录
+   ssh sysadmin@10.86.180.71
+   密码: ChangeMe2026!@#
+ 
+5. 执行加固（会提示输入新密码）
+   cd /opt/scripts
+   sudo chmod +x *.sh
+   sudo bash hardening.sh
+   -> Continue? y
+   -> New password: (输入新密码，>=14位)
+   -> Confirm: (再次输入)
+   sudo reboot
+ 
+6. 重启后安装 PostgreSQL
+   ssh sysadmin@10.86.180.71
+   sudo bash /opt/scripts/postgresql-install.sh
+
+
 ## 目录
 
 - [环境说明](#环境说明)

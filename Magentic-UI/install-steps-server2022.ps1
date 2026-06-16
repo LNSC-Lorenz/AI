@@ -30,7 +30,7 @@ param(
 # ============================================================
 
 $OLLAMA_HOST         = "http://10.87.5.55:11434"
-$ORCHESTRATOR_MODEL  = "qwen3.6:35b"
+$ORCHESTRATOR_MODEL  = "batiai/fara-7b:q5"
 $BROWSER_MODEL       = "batiai/fara-7b:q5"
 $MAGENTIC_PORT       = 8081
 $WSL_USER            = "mguser"
@@ -42,9 +42,10 @@ $WSL_PASS            = "Magentic@2025"
 
 $ErrorActionPreference = "Continue"
 
-# 修复 wsl 命令输出乱码（wsl 输出 UTF-16LE，PowerShell 需要对应设置）
-[Console]::OutputEncoding = [System.Text.Encoding]::Unicode
-$OutputEncoding = [System.Text.Encoding]::Unicode
+# 确保控制台 UTF-8，中文正常显示
+chcp 65001 | Out-Null
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Write-Step {
     param([int]$Num, [string]$Title)
@@ -79,6 +80,94 @@ function Run-WSL {
 # ============================================================
 # 步骤定义
 # ============================================================
+
+# ----------------------------------------------------------
+# Step -2: 准备环境（卸载旧 Ubuntu / 更新 PowerShell / 安装 Ubuntu 24.04）
+# ----------------------------------------------------------
+function Step-Neg2 {
+    Write-Step -2 "准备环境（卸载旧 Ubuntu / 更新 PowerShell / 安装 Ubuntu 24.04）"
+    Write-INFO "本步骤将完成："
+    Write-INFO "  [-2a] 卸载旧 Ubuntu 22.04 WSL 发行版"
+    Write-INFO "  [-2b] 更新 PowerShell 到最新版本（7.x）"
+    Write-INFO "  [-2c] 安装 Ubuntu 24.04（支持 GLIBC 2.38，quicksand 沙箱必需）"
+    Write-Host ""
+
+    if ((Confirm-Continue "Step -2") -eq $false) { return }
+
+    # ── [-2a] 卸载旧 Ubuntu 22.04 ──────────────────────────────────
+    Write-Host ""
+    Write-Host "  [-2a] 检查并卸载旧 Ubuntu 22.04..." -ForegroundColor Cyan
+    $oldDistros = wsl --list --quiet 2>&1 | Where-Object { $_ -match "Ubuntu" -and $_ -notmatch "24" }
+    if ($oldDistros) {
+        foreach ($d in $oldDistros) {
+            $dname = ($d -replace "\s","").Trim()
+            if ($dname) {
+                Write-INFO "卸载: $dname"
+                wsl --unregister $dname 2>&1 | Out-Null
+                Write-OK "已卸载: $dname"
+            }
+        }
+    } else {
+        Write-OK "未发现旧版 Ubuntu 22.04，跳过"
+    }
+    $oldPkg = Get-AppxPackage -Name "CanonicalGroupLimited.Ubuntu" -ErrorAction SilentlyContinue
+    if ($oldPkg -and $oldPkg.Name -notmatch "2404") {
+        Write-INFO "卸载旧 Ubuntu AppxPackage: $($oldPkg.Name)"
+        Remove-AppxPackage $oldPkg.PackageFullName -ErrorAction SilentlyContinue
+        Write-OK "旧 Ubuntu AppxPackage 已卸载"
+    }
+
+    # ── [-2b] 更新 PowerShell 到 7.x ──────────────────────────────
+    Write-Host ""
+    Write-Host "  [-2b] 检查 PowerShell 版本..." -ForegroundColor Cyan
+    $psVer = $PSVersionTable.PSVersion
+    Write-INFO "当前版本: $($psVer.Major).$($psVer.Minor)"
+    if ($psVer.Major -ge 7) {
+        Write-OK "PowerShell $($psVer.Major).$($psVer.Minor) 已是最新"
+    } else {
+        Write-INFO "正在下载安装 PowerShell 7.x..."
+        $dlDir = "$env:USERPROFILE\Downloads\magentic-ui-deps"
+        New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
+        $ps7Path = "$dlDir\PowerShell-7-win-x64.msi"
+        if (-not (Test-Path $ps7Path)) {
+            Invoke-WebRequest -Uri "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi" -OutFile $ps7Path -UseBasicParsing
+        } else { Write-OK "PowerShell 安装包已存在，跳过下载" }
+        Start-Process msiexec.exe -ArgumentList "/i `"$ps7Path`" /quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1" -Wait
+        Write-OK "PowerShell 7.x 安装完成"
+        Write-WARN "请关闭此窗口，用 pwsh.exe 重新运行: pwsh.exe -File .\install-steps-server2022.ps1 -Step -1"
+        return
+    }
+
+    # ── [-2c] 安装 Ubuntu 24.04 ────────────────────────────────────
+    Write-Host ""
+    Write-Host "  [-2c] 安装 Ubuntu 24.04..." -ForegroundColor Cyan
+    $already = (wsl --list --quiet 2>&1 | Out-String) -match "Ubuntu-24|Ubuntu24"
+    if ($already) {
+        Write-OK "Ubuntu 24.04 已安装并注册"
+    } else {
+        Write-INFO "使用 wsl --install 安装 Ubuntu-24.04（需要联网）..."
+        wsl --set-default-version 2
+        wsl --install -d Ubuntu-24.04 --no-launch
+        if ($LASTEXITCODE -ne 0) {
+            Write-FAIL "wsl --install 失败，请手动执行: wsl --install -d Ubuntu-24.04"
+            return
+        }
+        Write-OK "Ubuntu 24.04 安装完成"
+    }
+
+    $registered = (wsl --list --quiet 2>&1 | Out-String) -match "Ubuntu-24|Ubuntu24"
+    if ($registered) {
+        Write-OK "Ubuntu 24.04 已注册为 WSL 发行版"
+        wsl --set-default Ubuntu-24.04 2>&1 | Out-Null
+        Write-OK "已设为默认 WSL 发行版"
+    } else {
+        Write-WARN "Ubuntu 24.04 尚未初始化，请在新窗口完成首次初始化："
+        Write-Host ""
+        Write-Host "    wsl -d Ubuntu-24.04" -ForegroundColor Cyan
+        Write-Host "    输入用户名(wsluser)和密码(wsluser)后输入 exit" -ForegroundColor Yellow
+        Write-Host "    然后重新运行: .\install-steps-server2022.ps1 -Step 1 -SkipConfirm" -ForegroundColor Yellow
+    }
+}
 
 # ----------------------------------------------------------
 # Step -1: 检查系统环境（管理员权限 / Windows Server 2022 / Hyper-V）
@@ -146,29 +235,33 @@ function Step-Neg1 {
     $wslStatus = wsl --status 2>&1 | Out-String
     if ($wslStatus -match "找不到WSL 2内核|cannot find the WSL 2 kernel|kernel file") {
         Write-WARN "WSL2 内核文件缺失！"
-        Write-INFO "尝试在线更新内核: wsl --update"
-        wsl --update 2>&1 | ForEach-Object { Write-INFO $_ }
-        $wslStatus2 = wsl --status 2>&1 | Out-String
-        if ($wslStatus2 -match "找不到WSL 2内核|cannot find the WSL 2 kernel|kernel file") {
-            Write-WARN "在线更新失败，改用离线 MSI 安装..."
-            $dlDir = "$env:USERPROFILE\Downloads\magentic-ui-deps"
-            New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
-            $kernelMsi = "$dlDir\wsl2kernel.msi"
-            if (-not (Test-Path $kernelMsi)) {
-                Write-INFO "下载 WSL2 内核安装包..."
-                Invoke-WebRequest -Uri "https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi" -OutFile $kernelMsi -UseBasicParsing
-            } else {
-                Write-OK "内核安装包已存在，跳过下载"
-            }
-            Write-INFO "安装 WSL2 内核..."
-            Start-Process msiexec.exe -ArgumentList "/i `"$kernelMsi`" /quiet /norestart" -Wait
-            wsl --set-default-version 2 2>&1 | Out-Null
-            Write-OK "WSL2 内核安装完成，请重新运行 Step 1"
-        } else {
-            Write-OK "WSL2 内核更新成功"
-        }
+        Write-Host "  方案一（联网）: wsl --update" -ForegroundColor Yellow
+        Write-Host "  方案二（离线）: 下载 https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi" -ForegroundColor Yellow
+        Write-WARN "修复完成后请重新运行 Step -1 验证"
     } else {
         Write-OK "WSL2 内核正常"
+    }
+
+    # 检查 WSL 版本，确保支持 wsl --install -d
+    Write-INFO "检查 WSL 版本（需要 1.0+ 才支持 wsl --install -d Ubuntu-24.04）..."
+    $wslVer = wsl --version 2>&1 | Out-String
+    $needUpdate = $wslVer -match "找不到|not found|无法" -or $wslVer -notmatch "\d+\.\d+"
+    if (-not $needUpdate) {
+        # 提取主版本号
+        $verLine = ($wslVer -split "`n" | Where-Object { $_ -match "WSL \d|版本" } | Select-Object -First 1)
+        Write-OK "WSL 版本: $($verLine.Trim())"
+    } else {
+        Write-WARN "WSL 版本过旧，不支持 wsl --install -d，开始自动更新..."
+        $dlDir = "$env:USERPROFILE\Downloads\magentic-ui-deps"
+        New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
+        $wslMsi = "$dlDir\wsl-update.msi"
+        if (-not (Test-Path $wslMsi)) {
+            Write-INFO "下载 WSL 更新包..."
+            Invoke-WebRequest -Uri "https://github.com/microsoft/WSL/releases/download/2.4.13/wsl.2.4.13.0.x64.msi" -OutFile $wslMsi -UseBasicParsing
+        } else { Write-OK "WSL 更新包已存在，跳过下载" }
+        Start-Process msiexec.exe -ArgumentList "/i `"$wslMsi`" /quiet /norestart" -Wait
+        Write-OK "WSL 更新完成，请关闭并重新打开 PowerShell 后重新运行: .\install-steps-server2022.ps1 -Step -1"
+        return
     }
 
     Write-Host ""
@@ -223,7 +316,7 @@ function Step-1 {
 
     Write-Host "  本步骤将依次完成以下工作：" -ForegroundColor Cyan
     Write-Host "    [1a] 检查 WSL Linux 子系统功能是否已启用" -ForegroundColor Gray
-    Write-Host "    [1b] 检查 Ubuntu 22.04 是否已安装（AppxPackage）" -ForegroundColor Gray
+    Write-Host "    [1b] 检查 Ubuntu 24.04 是否已安装（AppxPackage）" -ForegroundColor Gray
     Write-Host "    [1c] 检查 Ubuntu 是否已完成首次初始化（注册为 WSL 发行版）" -ForegroundColor Gray
     Write-Host "    [1d] 创建专用账户 $WSL_USER 并验证 WSL2 可用" -ForegroundColor Gray
     Write-Host ""
@@ -257,71 +350,41 @@ function Step-1 {
         exit 0
     }
 
-    # ── [1b] Ubuntu AppxPackage 是否安装 ──────────────────────────
+    # ── [1b] 安装 Ubuntu 24.04 ───────────────────────────────────────
     Write-Host ""
-    Write-Host "  [1b] 检查 Ubuntu 22.04 AppxPackage..." -ForegroundColor Cyan
-    $ubuntuPkg = Get-AppxPackage -Name "CanonicalGroupLimited.Ubuntu*" -ErrorAction SilentlyContinue
-    if ($ubuntuPkg) {
-        Write-OK "Ubuntu AppxPackage 已安装: $($ubuntuPkg.Name)"
+    Write-Host "  [1b] 安装 Ubuntu 24.04..." -ForegroundColor Cyan
+    $alreadyInstalled = (wsl --list --quiet 2>&1 | Out-String) -match "Ubuntu-24|Ubuntu24"
+    if ($alreadyInstalled) {
+        Write-OK "Ubuntu 24.04 已安装"
     } else {
-        Write-WARN "Ubuntu 22.04 未安装，开始安装流程..."
-        $dlDir = "$env:USERPROFILE\Downloads\magentic-ui-deps"
-        New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
-        Write-INFO "下载目录: $dlDir（已下载的文件下次跳过下载）"
-
-        # VCLibs 依赖
-        Write-Host "  → 安装 VCLibs 依赖框架（缺少会报 0x80073CF3）..." -ForegroundColor Gray
-        $vclibsPath = "$dlDir\Microsoft.VCLibs.x64.14.00.Desktop.appx"
-        if (Get-AppxPackage -Name "Microsoft.VCLibs.140.00.UWPDesktop" -ErrorAction SilentlyContinue) {
-            Write-OK "VCLibs 已安装，跳过"
-        } else {
-            if (-not (Test-Path $vclibsPath)) {
-                Write-INFO "下载 VCLibs..."
-                Invoke-WebRequest -Uri "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx" -OutFile $vclibsPath -UseBasicParsing
-            } else { Write-OK "VCLibs 安装包已存在，跳过下载" }
-            Add-AppxPackage $vclibsPath -ErrorAction SilentlyContinue
-            Write-OK "VCLibs 安装完成（或已存在）"
-        }
-
-        # Ubuntu 22.04
-        Write-Host "  → 安装 Ubuntu 22.04..." -ForegroundColor Gray
-        $ubuntuPath = "$dlDir\ubuntu2204.appx"
-        if (-not (Test-Path $ubuntuPath)) {
-            Write-INFO "下载 Ubuntu 22.04 (~500MB)..."
-            Invoke-WebRequest -Uri "https://aka.ms/wslubuntu2204" -OutFile $ubuntuPath -UseBasicParsing
-        } else { Write-OK "Ubuntu 安装包已存在，跳过下载" }
-        Add-AppxPackage $ubuntuPath
+        Write-INFO "正在安装 Ubuntu-24.04（需要联网）..."
+        wsl --set-default-version 2
+        wsl --install -d Ubuntu-24.04 --no-launch
         if ($LASTEXITCODE -ne 0) {
-            Write-FAIL "Ubuntu AppxPackage 安装失败！"
-            Write-Host "  排查步骤：" -ForegroundColor Yellow
-            Write-Host "    1. 查看详细日志: Get-AppPackageLog -ActivityID <上方 ActivityId>" -ForegroundColor Gray
-            Write-Host "    2. 确认 VCLibs 已安装: Get-AppxPackage -Name 'Microsoft.VCLibs*'" -ForegroundColor Gray
-            Write-Host "    3. 重新运行本步骤: .\install-steps-server2022.ps1 -Step 1" -ForegroundColor Gray
+            Write-FAIL "Ubuntu-24.04 安装失败！"
+            Write-Host "  手动执行: wsl --install -d Ubuntu-24.04" -ForegroundColor Yellow
             return
         }
-        Write-OK "Ubuntu 22.04 AppxPackage 安装完成"
-        wsl --set-default-version 2
+        Write-OK "Ubuntu 24.04 安装完成"
     }
 
-    # ── [1c] Ubuntu 是否已完成首次初始化（注册为 WSL 发行版）──────
+    # ── [1c] Ubuntu 24.04 首次初始化 ──────────────────────────────────
     Write-Host ""
-    Write-Host "  [1c] 检查 Ubuntu 是否已注册为 WSL 发行版..." -ForegroundColor Cyan
+    Write-Host "  [1c] 检查 Ubuntu 24.04 是否已注册为 WSL 发行版..." -ForegroundColor Cyan
     $wslDistros = wsl --list 2>&1
-    $isRegistered = ($wslDistros | Out-String) -match "Ubuntu"
+    $isRegistered = ($wslDistros | Out-String) -match "Ubuntu-24|Ubuntu24"
 
     if (-not $isRegistered) {
-        Write-WARN "Ubuntu 尚未注册为 WSL 发行版（需要完成首次初始化）"
+        Write-WARN "Ubuntu 24.04 尚未初始化，需要首次设置用户名和密码"
         Write-Host ""
-        Write-Host "  ★ Ubuntu 首次初始化说明：" -ForegroundColor Yellow
-        Write-Host "    - 系统会弹出一个 Ubuntu 黑色窗口" -ForegroundColor Gray
-        Write-Host "    - 出现 'Enter new UNIX username:' 时，输入 wsluser 回车（注意：不能用 admin）" -ForegroundColor Gray
-        Write-Host "    - 出现 'New password:' 时，输入 wsluser 回车（不显示字符属正常）" -ForegroundColor Gray
-        Write-Host "    - 看到 '\$' 提示符后，输入 exit 回车关闭窗口" -ForegroundColor Gray
-        Write-Host "    - 此账户仅用于系统初始化，脚本会自动创建 $WSL_USER 专用账户" -ForegroundColor Gray
+        Write-Host "  ★ 首次初始化说明：" -ForegroundColor Yellow
+        Write-Host "    - 出现 'Enter new UNIX username:' 时，输入 wsluser 回车" -ForegroundColor Gray
+        Write-Host "    - 出现 'New password:' 时，输入 wsluser 回车" -ForegroundColor Gray
+        Write-Host "    - 看到 '\$' 提示符后，输入 exit 回车" -ForegroundColor Gray
         Write-Host ""
-        $ubuntuExe = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WindowsApps" -Filter "ubuntu*.exe" -ErrorAction SilentlyContinue |
+        $ubuntuExe = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WindowsApps" -Filter "ubuntu2404*" -ErrorAction SilentlyContinue |
                      Sort-Object Name | Select-Object -First 1
-        $ubuntuExePath = if ($ubuntuExe) { $ubuntuExe.FullName } else { "ubuntu.exe" }
+        $ubuntuExePath = if ($ubuntuExe) { $ubuntuExe.FullName } else { "ubuntu2404.exe" }
         Write-INFO "Ubuntu 路径: $ubuntuExePath"
 
         Write-Host ""
@@ -563,12 +626,17 @@ function Step-3 {
     if ($LASTEXITCODE -eq 0) {
         Write-OK "Python 3.12 已安装"
     } else {
-        Write-WARN "Python 3.12 未找到，开始安装..."
-        wsl bash -c "sudo apt-get update -qq && sudo apt-get install -y python3.12 python3.12-venv curl"
+        Write-WARN "Python 3.12 未找到，开始安装（加入 deadsnakes PPA）..."
+        $s3 = "export DEBIAN_FRONTEND=noninteractive`napt-get install -y software-properties-common`nadd-apt-repository -y ppa:deadsnakes/ppa`napt-get update -qq`napt-get install -y python3.12 python3.12-venv curl"
+        $t3 = "$env:TEMP\step3-python.sh"
+        [System.IO.File]::WriteAllText($t3, ($s3 -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+        $p3 = "/mnt/c/" + ($t3 -replace 'C:\\','') -replace '\\','/'
+        wsl -u root bash $p3
         if ($LASTEXITCODE -eq 0) {
             Write-OK "Python 3.12 安装成功"
         } else {
             Write-FAIL "Python 3.12 安装失败，请手动在 WSL2 中执行:"
+            Write-INFO "  sudo add-apt-repository -y ppa:deadsnakes/ppa"
             Write-INFO "  sudo apt-get update && sudo apt-get install -y python3.12 python3.12-venv"
         }
     }
@@ -582,12 +650,20 @@ function Step-4 {
 
     if ((Confirm-Continue "Step 4") -eq $false) { return }
 
-    $uvVer = wsl bash -c "export PATH=`$HOME/.local/bin:`$PATH && uv --version 2>&1"
+    $s4check = 'export PATH="$HOME/.local/bin:$PATH" && uv --version'
+    $t4check = "$env:TEMP\step4-check.sh"
+    [System.IO.File]::WriteAllText($t4check, ($s4check -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+    $p4check = "/mnt/c/" + ($t4check -replace 'C:\\','') -replace '\\','/'
+    wsl bash $p4check 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        Write-OK "uv 已安装: $uvVer"
+        Write-OK "uv 已安装"
     } else {
         Write-WARN "uv 未找到，开始安装..."
-        wsl bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        $s4 = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        $t4 = "$env:TEMP\step4-uv.sh"
+        [System.IO.File]::WriteAllText($t4, ($s4 -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+        $p4 = "/mnt/c/" + ($t4 -replace 'C:\\','') -replace '\\','/'
+        wsl bash $p4
         if ($LASTEXITCODE -eq 0) {
             Write-OK "uv 安装成功"
             Write-INFO "已添加到 ~/.local/bin，新终端中自动生效"
@@ -653,7 +729,7 @@ function Step-6 {
     Write-INFO "编排器模型 : $ORCHESTRATOR_MODEL"
     Write-INFO "浏览器模型 : $BROWSER_MODEL"
     Write-INFO "Ollama     : $OLLAMA_HOST/v1"
-    Write-INFO "沙箱       : quicksand (含浏览器预览)"
+    Write-INFO "沙箱       : null (直接在 WSL2 内执行，不启动 QEMU VM)"
 
     if ((Confirm-Continue "Step 6") -eq $false) { return }
 
@@ -668,8 +744,9 @@ model_client_configs:
       base_url: $OLLAMA_V1
       api_key: "ollama"
       max_retries: 5
+      timeout: 300
       model_info:
-        vision: false
+        vision: true
         function_calling: false
         json_output: true
         family: unknown
@@ -683,6 +760,7 @@ model_client_configs:
       base_url: $OLLAMA_V1
       api_key: "ollama"
       max_retries: 5
+      timeout: 300
       model_info:
         vision: true
         function_calling: false
@@ -692,7 +770,7 @@ model_client_configs:
         multiple_system_messages: false
 
 sandbox:
-  type: quicksand
+  type: "null"
 
 agent_mode: all
 "@
@@ -707,7 +785,11 @@ agent_mode: all
     if ($LASTEXITCODE -eq 0) {
         Write-OK "config.yaml 已写入 ~/magentic-lite/config.yaml"
         Write-INFO "验证配置内容:"
-        wsl bash -c "cat ~/magentic-lite/config.yaml"
+        $scat = 'cat ~/magentic-lite/config.yaml'
+        $tcat = "$env:TEMP\step6-cat.sh"
+        [System.IO.File]::WriteAllText($tcat, ($scat -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+        $pcat = "/mnt/c/" + ($tcat -replace 'C:\\','') -replace '\\','/'
+        wsl bash $pcat
     } else {
         Write-FAIL "config.yaml 写入失败"
     }
@@ -754,6 +836,7 @@ Write-Host "║   Magentic-UI 分步安装脚本 (Windows Server 2022)     ║" 
 Write-Host "║  用法: -Step <-1~7>  从指定步骤开始                  ║" -ForegroundColor Magenta
 Write-Host "║        -SkipConfirm  跳过确认提示                    ║" -ForegroundColor Magenta
 Write-Host "╠══════════════════════════════════════════════════════╣" -ForegroundColor Magenta
+Write-Host "║  Step-2: 卸载旧Ubuntu/更新PowerShell/装Ubuntu 24.04  ║" -ForegroundColor White
 Write-Host "║  Step-1: 检查管理员权限 / OS / Hyper-V 功能          ║" -ForegroundColor White
 Write-Host "║  Step 0: 验证 DGX Spark Ollama 连接                  ║" -ForegroundColor White
 Write-Host "║  Step 1: 检查 / 启用 WSL2（服务器版方式）            ║" -ForegroundColor White
@@ -774,6 +857,7 @@ Write-Host "    Web UI 端口 : $MAGENTIC_PORT" -ForegroundColor Yellow
 Write-Host ""
 
 $steps = @{
+    -2 = { Step-Neg2 }
     -1 = { Step-Neg1 }
      0 = { Step-0 }
      1 = { Step-1 }
@@ -787,7 +871,9 @@ $steps = @{
 }
 
 for ($i = $Step; $i -le 7; $i++) {
-    & $steps[$i]
+    if ($steps.ContainsKey($i)) {
+        & $steps[$i]
+    }
 }
 
 Write-Host ""

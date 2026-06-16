@@ -10,6 +10,9 @@
 |------|------|
 | `user-data` | Autoinstall 主配置（cloud-config 格式），包含网络/分区/账户 |
 | `meta-data` | cloud-init 元数据（必须存在） |
+| `Create-CidataISO.ps1` | Windows PowerShell 脚本，自动创建 cidata ISO |
+| `verify.sh` | 安装后验证脚本 |
+| `hardening.sh` | Ubuntu CIS 安全加固脚本（替代 ubuntu-init.sh） |
 
 ---
 
@@ -24,7 +27,7 @@
 | 网卡 | `ens192`（ESXi VMXNET3） |
 | 系统盘 | `/dev/sda`，LVM 分区（/、/var、/tmp、/home） |
 | 数据盘 | `/dev/sdb`，挂载 `/data`（PostgreSQL 专用） |
-| 管理员 | `sysadmin` / `Change@2025` |
+| 管理员 | `sysadmin` / `ChangeMe2026` |
 
 ---
 
@@ -74,20 +77,62 @@
 
 ### 1. 制作 cidata ISO
 
-**在 Windows 上（使用 Windows ADK oscdimg）：**
+#### 方法一：使用 PowerShell 脚本（推荐，自动处理）
+
+**前提：** 安装 Windows ADK（评估和部署工具包）或 7-Zip
 
 ```powershell
-oscdimg -j1 -lcidata .\autoinstall\ cidata.iso
+# 进入 autoinstall 目录
+cd c:\Users\zhlo\Documents\GIT\AI\PostgreSQL\autoinstall
+
+# 运行创建脚本（自动检测工具、转换换行符、验证结果）
+.\Create-CidataISO.ps1
+
+# 或指定输出路径
+.\Create-CidataISO.ps1 -OutputPath "D:\VMs\cidata.iso"
+
+# 或强制使用特定工具
+.\Create-CidataISO.ps1 -Tool Oscdimg    # 使用 Windows ADK
+.\Create-CidataISO.ps1 -Tool 7Zip       # 使用 7-Zip
 ```
 
-**在 Linux 上：**
+脚本功能：
+- 自动检测并使用可用的工具（oscdimg 或 7-Zip）
+- 自动将 `user-data` 和 `meta-data` 的换行符转换为 Unix 格式（LF）
+- 验证 ISO 卷标和内容
+- 显示验证结果
+
+#### 方法二：手动使用 oscdimg（Windows ADK）
+
+```powershell
+# 安装 Windows ADK 后，使用 oscdimg（推荐）
+# ADK 默认路径：C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg
+
+oscdimg -n -d -L"cidata" .\ cidata.iso
+```
+
+参数说明：
+- `-n`：允许长文件名
+- `-d`：允许小写字母
+- `-L"cidata"`：设置卷标为 `cidata`（必须，区分大小写）
+
+#### 方法三：手动使用 7-Zip
+
+```powershell
+# 确保 7-Zip 已安装（默认路径：C:\Program Files\7-Zip\7z.exe）
+
+# 创建 UDF 格式的 ISO
+7z a -tudf -v"cidata" cidata.iso user-data meta-data
+```
+
+#### 方法四：在 Linux 上制作
 
 ```bash
 sudo apt-get install -y genisoimage
 genisoimage -output cidata.iso -volid cidata -joliet -rock user-data meta-data
 ```
 
-> **注意：** ISO 卷标必须为 `cidata`，否则 cloud-init 无法识别。
+> **注意：** ISO 卷标必须为 `cidata`（小写），否则 cloud-init 无法识别。
 
 ### 2. ESXi 新建虚拟机
 
@@ -102,10 +147,12 @@ genisoimage -output cidata.iso -volid cidata -joliet -rock user-data meta-data
 
 ```bash
 ssh sysadmin@10.86.180.71
-# 首次登录需修改密码（Change@2025 → 新密码）
+# 密码: ChangeMe2026
 ```
 
-### 4. 执行系统优化和数据库安装
+### 4. 执行系统加固和数据库安装
+
+#### 方案 A：标准优化（ubuntu-init.sh）
 
 ```bash
 # 上传脚本到服务器
@@ -116,6 +163,40 @@ sudo bash ubuntu-init.sh
 
 # 安装 PostgreSQL 18
 sudo bash postgresql-install.sh
+```
+
+#### 方案 B：CIS 安全加固（hardening.sh）
+
+参考 [Ubuntu CIS Benchmarks](https://ubuntu.com/blog/hardening-automation-for-cis-benchmarks-now-available-for-ubuntu-24-04-lts) 的加固脚本，包含：
+- 密码策略（14位复杂度、历史记录）
+- SSH 安全加固（算法限制、会话控制）
+- 审计日志（auditd、AIDE 文件完整性）
+- 防火墙和网络防护
+- 系统内核参数优化
+
+```bash
+# 上传脚本到服务器
+scp hardening.sh postgresql-install.sh sysadmin@10.86.180.71:~/
+
+# 执行 CIS 加固
+sudo bash hardening.sh
+
+# 查看加固报告
+cat /var/log/cis-hardening-report.txt
+
+# 重启系统
+sudo reboot
+
+# 安装 PostgreSQL 18
+sudo bash postgresql-install.sh
+```
+
+**Ubuntu Pro 用户（可选）：**
+```bash
+# 自动化 CIS 扫描和修复
+sudo apt install ubuntu-security-guide
+sudo usg audit cis_level2_server
+sudo usg fix cis_level2_server
 ```
 
 ---

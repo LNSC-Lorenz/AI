@@ -14,14 +14,20 @@ autoinstall:
 
   # ── 网络（ESXi VMXNET3，网卡名通常为 ens192）───────────────
   # 当前配置：静态 IP（推荐生产环境）
-  # 如需 DHCP，将 dhcp4 改为 true 并注释掉 addresses 等行
+  # 如需 DHCP，将 dhcp4 改为 true 并注释掉 addresses、routes、nameservers 等行
   network:
     version: 2
     ethernets:
       ens192:
         dhcp4: false
+        optional: true
+        match:
+          driver: vmxnet3          # 匹配 VMXNET3 驱动
+        set-name: ens192           # 强制命名
         addresses: [10.86.180.71/24]
-        gateway4: 10.86.180.200
+        routes:
+          - to: default
+            via: 10.86.180.200
         nameservers:
           addresses: [10.86.180.1, 10.86.180.2]
 
@@ -30,36 +36,24 @@ autoinstall:
   # ESXi 中第一块磁盘通常为 sda（系统盘），第二块为 sdb（数据盘）
   storage:
     config:
-      # ── 系统盘 sda ──────────────────────────────────────────
+      # ── 系统盘 sda ── MBR 分区方案（BIOS 最兼容）───────────
       - type: disk
         id: disk-sda
         path: /dev/sda
         wipe: superblock-recursive
         grub_device: true
-        ptable: gpt
-
-      - type: partition
-        id: part-efi
-        device: disk-sda
-        size: 512M
-        flag: boot
-        grub_device: true
+        ptable: msdos                    # MBR 分区表
 
       - type: partition
         id: part-boot
         device: disk-sda
         size: 1G
+        flag: boot                        # 可启动分区（MBR 用）
 
       - type: partition
         id: part-lvm
         device: disk-sda
-        size: -1                           # 剩余全部给 LVM
-
-      - type: format
-        id: fmt-efi
-        volume: part-efi
-        fstype: fat32
-        label: EFI
+        size: -1                          # 剩余全部给 LVM
 
       - type: format
         id: fmt-boot
@@ -117,11 +111,6 @@ autoinstall:
         fstype: ext4
 
       - type: mount
-        id: mnt-efi
-        device: fmt-efi
-        path: /boot/efi
-
-      - type: mount
         id: mnt-boot
         device: fmt-boot
         path: /boot
@@ -173,9 +162,10 @@ autoinstall:
   identity:
     hostname: lcnnsc-db-pg01
     username: sysadmin
-    # 密码: Change@2025
-    # 重新生成: openssl passwd -6 'YourPassword'
-    password: "$6$rounds=4096$saltsalt$kDZTG0l5K5N9jZMDH3zOLi7CL9l1N7VQ5g0q5XSmrqMQiP7l9RkN4GJ0hhPK0r7tMxbdqy4MhE8W.1vXiEiM1"
+    # 明文密码: ChangeMe2026!@#
+    # 此 hash 仅为安装阶段占位，首次启动时由 user-data.chpasswd 和 late-commands 覆盖
+    # SHA-512 hash of 'ubuntu' (安装阶段临时密码，启动后被 chpasswd 覆盖)
+    password: '$6$exDY1mhS4KUYCE/2$zmn9ToZwTKLhCw.b4/b.ZRTIZM6AtkDqaAl/g7ZFwer0XTwXowbeblM7UK.VW1kMexI.OOkWL5lRTl.6WTwJf.'
 
   # ── SSH ─────────────────────────────────────────────────────
   ssh:
@@ -196,17 +186,33 @@ autoinstall:
   late-commands:
     # 启用 VMware Tools
     - curtin in-target --target=/target -- systemctl enable open-vm-tools
-    # 禁用 root SSH 登录
+    # SSH: 启用密码认证，禁止 root 登录，重启 ssh 服务（Ubuntu 24.04 服务名为 ssh）
     - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- systemctl enable ssh
     # 设置 /data 目录权限（PostgreSQL 数据盘）
     - curtin in-target --target=/target -- mkdir -p /data/postgresql
+    - curtin in-target --target=/target -- chown root:root /data
     - curtin in-target --target=/target -- chmod 755 /data
+    # 创建脚本上传目录（WinSCP/SCP 上传目标，sysadmin 可读写）
+    - curtin in-target --target=/target -- mkdir -p /opt/scripts
+    - curtin in-target --target=/target -- chown sysadmin:sysadmin /opt/scripts
+    - curtin in-target --target=/target -- chmod 775 /opt/scripts
+    # 强制设置 sysadmin 密码（覆盖 identity 中的占位 hash，确保登录成功）
+    - curtin in-target --target=/target -- bash -c "echo 'sysadmin:ChangeMe2026!@#' | chpasswd"
+    # 设置 sysadmin 无密码 sudo（方便后续脚本执行）
+    - curtin in-target --target=/target -- bash -c "echo 'sysadmin ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/sysadmin"
+    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/sysadmin
     # 最终更新
     - curtin in-target --target=/target -- apt-get -y -qq dist-upgrade
     - curtin in-target --target=/target -- apt-get -y -qq autoremove
 
   user-data:
     disable_root: true
+    chpasswd:
+      list: |
+        sysadmin:ChangeMe2026!@#
+      expire: False
 
   updates: security
   shutdown: reboot

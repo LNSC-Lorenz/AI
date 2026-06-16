@@ -1,0 +1,47 @@
+#cloud-config
+# Ubuntu 24.04 LTS Autoinstall - 简化版（单盘直接分区）
+autoinstall:
+  version: 1
+
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  network:
+    version: 2
+    ethernets:
+      ens192:
+        dhcp4: false
+        addresses: [10.86.180.71/24]
+        routes:
+          - to: default
+            via: 10.86.180.200
+        nameservers:
+          addresses: [10.86.180.1, 10.86.180.2]
+
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+
+  identity:
+    hostname: lcnnsc-db-pg01
+    username: sysadmin
+    password: "$6$rounds=4096$saltsalt$kDZTG0l5K5N9jZMDH3zOLi7CL9l1N7VQ5g0q5XSmrqMQiP7l9RkN4GJ0hhPK0r7tMxbdqy4MhE8W.1vXiEiM1"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+
+  packages:
+    - open-vm-tools
+    - curl
+    - ca-certificates
+
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable open-vm-tools
+    - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+
+  updates: security
+  shutdown: reboot

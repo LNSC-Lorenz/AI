@@ -252,12 +252,16 @@ function Step-3 {
         Write-OK "Python 3.12 已安装"
     } else {
         Write-WARN "Python 3.12 未找到，开始安装..."
-        wsl bash -c "sudo apt-get update -qq && sudo apt-get install -y python3.12 python3.12-venv curl"
+        $s3 = "export DEBIAN_FRONTEND=noninteractive`napt-get install -y software-properties-common`nadd-apt-repository -y ppa:deadsnakes/ppa`napt-get update -qq`napt-get install -y python3.12 python3.12-venv curl"
+        $t3 = "$env:TEMP\step3-python.sh"
+        [System.IO.File]::WriteAllText($t3, ($s3 -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+        $p3 = "/mnt/c/" + ($t3 -replace 'C:\\','') -replace '\\','/'
+        wsl -u root bash $p3
         if ($LASTEXITCODE -eq 0) {
             Write-OK "Python 3.12 安装成功"
         } else {
             Write-FAIL "Python 3.12 安装失败，请手动在 WSL2 中执行:"
-            Write-INFO "  sudo apt-get update && sudo apt-get install -y python3.12 python3.12-venv"
+            Write-INFO "  wsl -u root -- apt-get install -y python3.12 python3.12-venv"
         }
     }
 }
@@ -275,7 +279,11 @@ function Step-4 {
         Write-OK "uv 已安装: $uvVer"
     } else {
         Write-WARN "uv 未找到，开始安装..."
-        wsl bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        $s4 = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+        $t4 = "$env:TEMP\step4-uv.sh"
+        [System.IO.File]::WriteAllText($t4, ($s4 -replace "`r`n","`n"), (New-Object System.Text.UTF8Encoding $false))
+        $p4 = "/mnt/c/" + ($t4 -replace 'C:\\','') -replace '\\','/'
+        wsl bash $p4
         if ($LASTEXITCODE -eq 0) {
             Write-OK "uv 安装成功"
             Write-INFO "已添加到 ~/.local/bin，新终端中自动生效"

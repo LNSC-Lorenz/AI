@@ -3,7 +3,7 @@
 # PostgreSQL 18 企业级安装与配置脚本
 # 适用于 Ubuntu 24.04 LTS
 # 用法: sudo bash postgresql-install.sh
-# 前置: ubuntu-init.sh 已完成执行
+# 前置: ubuntu-init.sh 或 hardening.sh 已完成执行
 # =============================================================
 
 set -euo pipefail
@@ -170,12 +170,8 @@ local   all             all                                     md5
 # ── 本地 TCP ─────────────────────────────────────────────────
 host    all             all             127.0.0.1/32            scram-sha-256
 host    all             all             ::1/128                 scram-sha-256
-# ── 内网运维/应用访问（10.86.180.0/24）──────────────────────
-host    all             postgres        10.86.180.0/24          scram-sha-256
-host    all             appuser         10.86.180.0/24          scram-sha-256
-# ── SAP 服务器写入（跨网段，仅允许 sapwriter 用户）──────────
-# ← 将 10.86.SAP.0/24 替换为 SAP 服务器实际 IP 段
-host    appdb           sapwriter       10.86.SAP.0/24          scram-sha-256
+# ── 允许所有 IP 访问（生产环境建议限制特定网段）─────────────
+host    all             all             0.0.0.0/0               scram-sha-256
 EOF
 ok "pg_hba.conf 配置完成"
 
@@ -207,7 +203,7 @@ CREATE USER appuser WITH PASSWORD 'App@2025';
 GRANT CONNECT ON DATABASE appdb TO appuser;
 GRANT ALL PRIVILEGES ON DATABASE appdb TO appuser;
 
--- SAP 写入用户（跨网段 SAP 服务器专用，仅写入权限）
+-- SAP 写入用户（仅写入权限，无删除权限防止误操作）
 CREATE USER sapwriter WITH PASSWORD 'SapWrite@2025';
 GRANT CONNECT ON DATABASE appdb TO sapwriter;
 PGSQL
