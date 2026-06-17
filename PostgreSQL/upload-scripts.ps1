@@ -2,11 +2,11 @@
 param(
     [string]$ServerIP   = "10.86.180.71",
     [string]$Username   = "sysadmin",
-    [string]$Password   = "ChangeMe2026!@#",
+    [string]$Password   = "",
     [string]$RemotePath = "/opt/scripts/"
 )
 
-$Scripts = @("hardening.sh", "postgresql-install.sh", "verify.sh")
+$Scripts = @("hardening.sh", "postgresql-install.sh", "verify.sh", "pg-test-data.sh")
 $LocalPath = $PSScriptRoot
 
 Write-Host "===========================================" -ForegroundColor Cyan
@@ -16,6 +16,14 @@ Write-Host "Server : $ServerIP" -ForegroundColor Gray
 Write-Host "User   : $Username" -ForegroundColor Gray
 Write-Host "Target : $RemotePath" -ForegroundColor Gray
 Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host ""
+
+if ([string]::IsNullOrEmpty($Password)) {
+    $SecurePass = Read-Host "  Password for ${Username}@${ServerIP}" -AsSecureString
+    $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePass)
+    )
+}
 Write-Host ""
 
 $WinSCP = $null

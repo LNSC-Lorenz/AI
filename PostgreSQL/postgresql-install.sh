@@ -34,7 +34,7 @@ MAINTENANCE_WORK_MEM="2GB"      # 维护操作内存
 EFFECTIVE_CACHE_SIZE="48GB"     # 有效缓存大小（物理内存75%，按64GB计算）
 LOG_MIN_DURATION=1000           # 慢查询阈值（毫秒）
 
-POSTGRES_PASSWORD="Postgres@2025"   # postgres 超级用户密码（建议运行前修改）
+POSTGRES_PASSWORD="Postgres@2025"   # default, will be overridden by prompt below
 
 # ── 预检 ──────────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && fail "请以 root 用户运行: sudo bash $0"
@@ -55,6 +55,31 @@ info "数据目录         : $PG_DATA_DIR"
 echo ""
 read -rp "确认以上配置并继续? (y/N): " confirm
 [[ "$confirm" =~ ^[Yy]$ ]] || { info "已取消"; exit 0; }
+
+# ── 设置 postgres 超级用户密码 ────────────────────────────────
+echo ""
+echo "============================================="
+echo "  Set password for PostgreSQL superuser: postgres"
+echo "  (Other DB users use script defaults)"
+echo "============================================="
+while true; do
+    read -rsp "  New password for postgres: " POSTGRES_PASSWORD
+    echo ""
+    if [[ ${#POSTGRES_PASSWORD} -lt 8 ]]; then
+        warn "Password too short (min 8 chars). Try again."
+        continue
+    fi
+    read -rsp "  Confirm password: " _PG_CONFIRM
+    echo ""
+    if [[ "$POSTGRES_PASSWORD" != "$_PG_CONFIRM" ]]; then
+        warn "Passwords do not match. Try again."
+        continue
+    fi
+    break
+done
+unset _PG_CONFIRM
+ok "postgres password set. Continuing installation..."
+echo ""
 
 # ── Step 1: 检查是否已安装 ───────────────────────────────────
 step "1: 检查 PostgreSQL 安装状态"
@@ -206,22 +231,33 @@ GRANT ALL PRIVILEGES ON DATABASE appdb TO appuser;
 -- SAP 写入用户（仅写入权限，无删除权限防止误操作）
 CREATE USER sapwriter WITH PASSWORD 'SapWrite@2025';
 GRANT CONNECT ON DATABASE appdb TO sapwriter;
+
+-- AI 只读用户（AI 训练/OpenClaw 数据读取，仅 SELECT，无法修改任何数据）
+CREATE USER airead WITH PASSWORD 'AiRead@2025' CONNECTION LIMIT 5;
+GRANT CONNECT ON DATABASE appdb TO airead;
+GRANT USAGE ON SCHEMA public TO airead;
 PGSQL
 
-# 在 appdb 中为 sapwriter 授予表级写入权限
+# 在 appdb 中为 sapwriter 和 airead 授予表级权限
 sudo -u postgres psql -d appdb <<'PGSQL'
 -- sapwriter 只能 INSERT/UPDATE，不能 DELETE/DROP（防止误删）
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT INSERT, UPDATE ON TABLES TO sapwriter;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO sapwriter;
--- 当前已有的表（如有）
 GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO sapwriter;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sapwriter;
+
+-- airead 只读，仅 SELECT（AI 训练/OpenClaw 数据读取）
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO airead;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO airead;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO airead;
 PGSQL
 ok "业务数据库 appdb 创建完成"
 info "应用用户  : appuser   / App@2025"
 info "SAP写入   : sapwriter / SapWrite@2025"
+info "AI只读    : airead    / AiRead@2025  (SELECT only, max 5 connections)"
 warn "请在运行前修改以上默认密码"
 
 # ── Step 9: 创建备份目录 ─────────────────────────────────────

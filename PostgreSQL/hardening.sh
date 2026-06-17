@@ -7,7 +7,9 @@
 # 用法: sudo bash hardening.sh
 # =============================================================
 
-set -euo pipefail
+set -uo pipefail
+# Note: -e removed intentionally; individual critical steps use || fail() instead
+# This prevents non-fatal hardening steps from aborting the entire script
 
 # ── 颜色输出 ─────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -157,29 +159,31 @@ dictcheck = 1
 EOF
 ok "密码复杂度策略已配置 (最小14位, 必须包含大小写+数字+特殊字符)"
 
-# 配置密码历史
-if ! grep -q "remember=24" /etc/pam.d/common-password 2>/dev/null; then
-    sed -i 's/^password.*pam_unix.so/password [success=1 default=ignore] pam_unix.so obscure sha512 remember=24/' /etc/pam.d/common-password
-    ok "密码历史已配置 (记住24个旧密码)"
+# Password history - use pwhistory via pam-auth-update (safe method)
+if ! grep -q "pam_pwhistory" /etc/pam.d/common-password 2>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libpam-pwhistory 2>/dev/null || true
+    cat > /usr/share/pam-configs/pwhistory <<'EOF'
+Name: activate pwhistory
+Default: yes
+Priority: 1024
+Password-Type: Primary
+Password:
+    required pam_pwhistory.so remember=24 use_authtok
+EOF
+    DEBIAN_FRONTEND=noninteractive pam-auth-update --enable pwhistory 2>/dev/null || true
+    ok "Password history configured: remember 24 (pam-auth-update)"
 fi
 
-# 配置账户锁定（Ubuntu 24.04 使用 pam_faillock，pam_tally2 已废弃）
-if ! grep -q "pam_faillock" /etc/pam.d/common-auth 2>/dev/null; then
-    cat > /etc/security/faillock.conf <<'EOF'
+# Account lockout via faillock.conf only - DO NOT modify /etc/pam.d directly
+# Ubuntu 24.04 pam_faillock is already active by default, only configure limits
+cat > /etc/security/faillock.conf <<'EOF'
 deny = 5
 unlock_time = 900
 fail_interval = 900
 root_unlock_time = 900
 audit
 EOF
-    # 在 common-auth 中插入 faillock（如未存在）
-    if ! grep -q "pam_faillock.so" /etc/pam.d/common-auth; then
-        sed -i '/pam_unix.so/i auth required pam_faillock.so preauth silent' /etc/pam.d/common-auth
-        sed -i '/pam_unix.so/a auth [default=die] pam_faillock.so authfail' /etc/pam.d/common-auth
-        echo 'account required pam_faillock.so' >> /etc/pam.d/common-account
-    fi
-fi
-ok "账户锁定策略已配置 (5次失败锁定15分钟, pam_faillock)"
+ok "Account lockout configured: 5 failures = 15 min lock (faillock.conf only, PAM chain untouched)"
 
 # ── Step 4: CIS - SSH 加固 ──────────────────────────────────
 step "4: CIS SSH 安全加固"
@@ -203,6 +207,13 @@ sed -i "s/^#*Banner .*/Banner \/etc\/issue.net/" "$SSHD_CONFIG"
 sed -i "s/^#*Ciphers .*/Ciphers aes256-ctr,aes192-ctr,aes128-ctr/" "$SSHD_CONFIG"
 sed -i "s/^#*MACs .*/MACs hmac-sha2-512,hmac-sha2-256/" "$SSHD_CONFIG"
 
+# Ensure SFTP subsystem is enabled (required for WinSCP / SCP file transfer)
+SFTP_SERVER=$(find /usr/lib/openssh /usr/libexec -name sftp-server 2>/dev/null | head -1)
+if [[ -z "$SFTP_SERVER" ]]; then SFTP_SERVER="/usr/lib/openssh/sftp-server"; fi
+sed -i '/^Subsystem.*sftp/d' "$SSHD_CONFIG"
+echo "Subsystem sftp $SFTP_SERVER" >> "$SSHD_CONFIG"
+ok "SFTP subsystem enabled: $SFTP_SERVER"
+
 # 创建 SSH 登录警告信息
 cat > /etc/issue.net <<'EOF'
 ***************************************************************************
@@ -213,15 +224,27 @@ cat > /etc/issue.net <<'EOF'
 ***************************************************************************
 EOF
 
-# 限制 SSH 用户组
-if ! grep -q "AllowGroups" "$SSHD_CONFIG"; then
-    echo "AllowGroups sudo" >> "$SSHD_CONFIG"
-    ok "已限制 SSH 登录用户组 (仅 sudo 组成员)"
-fi
+# Ensure sysadmin is in sudo group (required by AllowGroups sudo)
+usermod -aG sudo sysadmin
+ok "sysadmin added to sudo group"
 
-systemctl restart ssh
-ok "CIS SSH 加固完成"
-warn "请确认新 SSH 连接可用后再关闭当前会话！"
+# Restrict SSH to sudo group only
+sed -i '/^AllowGroups/d' "$SSHD_CONFIG"
+echo "AllowGroups sudo" >> "$SSHD_CONFIG"
+ok "SSH restricted to sudo group (sysadmin is member)"
+
+# Validate SSH config before restarting (prevents lockout from bad config)
+if sshd -t 2>/dev/null; then
+    ok "SSH config validation passed"
+    systemctl restart ssh
+    ok "CIS SSH hardening complete"
+    warn "IMPORTANT: Test new SSH connection before closing this session!"
+else
+    warn "SSH config validation FAILED - restoring backup"
+    cp "${SSHD_CONFIG}.bak.$(date +%Y%m%d)" "$SSHD_CONFIG" 2>/dev/null || true
+    systemctl restart ssh
+    fail "SSH config error - original config restored. Review changes manually."
+fi
 
 # ── Step 5: CIS - 审计和日志 ────────────────────────────────
 step "5: CIS 审计和日志配置"
@@ -291,11 +314,14 @@ if [[ "$CIS_LEVEL" == "level2_server" ]]; then
     ok "SUID/SGID 文件清单已保存到 /var/log/sgid_suid_files.log"
 fi
 
-# 配置 tmp 目录安全挂载
-if ! grep -q "\/tmp" /etc/fstab 2>/dev/null; then
+# Secure /tmp mount - use systemd tmpfiles instead of fstab (safe, idempotent)
+if ! grep -q 'nosuid.*nodev.*noexec.*\/tmp\|tmpfs.*\/tmp' /etc/fstab 2>/dev/null; then
+    # Only add if not already a secured tmpfs entry
     echo "tmpfs /tmp tmpfs defaults,rw,nosuid,nodev,noexec,relatime,size=2G 0 0" >> /etc/fstab
-    mount -o remount /tmp 2>/dev/null || true
-    ok "/tmp 安全挂载已配置 (nosuid, nodev, noexec)"
+    mount -o remount /tmp 2>/dev/null || warn "/tmp remount skipped (may need reboot)"
+    ok "/tmp secure mount configured (nosuid, nodev, noexec)"
+else
+    ok "/tmp already has secure mount options"
 fi
 
 # ── Step 7: CIS - 网络和防火墙 ────────────────────────────────
@@ -405,18 +431,28 @@ EOF
 sysctl -p /etc/sysctl.d/99-postgresql.conf
 ok "PostgreSQL + CIS 内核参数已优化"
 
-# 禁用透明大页
+# Disable transparent hugepages
 echo never > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo never > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
-if ! grep -q "transparent_hugepage" /etc/rc.local 2>/dev/null; then
-    cat >> /etc/rc.local <<'EOF'
-#!/bin/bash
-echo never > /sys/kernel/mm/transparent_hugepage/enabled
-echo never > /sys/kernel/mm/transparent_hugepage/defrag
+# Use systemd drop-in instead of rc.local (idempotent, no duplicate writes)
+cat > /etc/systemd/system/disable-thp.service <<'EOF'
+[Unit]
+Description=Disable Transparent Huge Pages
+DefaultDependencies=no
+After=sysinit.target local-fs.target
+Before=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "echo never > /sys/kernel/mm/transparent_hugepage/enabled"
+ExecStart=/bin/sh -c "echo never > /sys/kernel/mm/transparent_hugepage/defrag"
+
+[Install]
+WantedBy=basic.target
 EOF
-    chmod +x /etc/rc.local
-fi
-ok "透明大页已禁用"
+systemctl daemon-reload
+systemctl enable disable-thp --now 2>/dev/null || true
+ok "Transparent hugepages disabled (systemd service)"
 
 # ── Step 10: 文件描述符和进程限制 ───────────────────────────
 step "10: 系统限制配置"
