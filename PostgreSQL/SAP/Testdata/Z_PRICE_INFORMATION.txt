@@ -1,0 +1,760 @@
+*&---------------------------------------------------------------------*
+*& Report Z_PRICE_INFORMATION
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT z_price_information.
+
+
+TABLES: mara,
+        mvke,
+        knvv,
+        komp.
+
+
+
+SELECTION-SCREEN BEGIN OF BLOCK sels WITH  FRAME
+  TITLE TEXT-s01.
+
+
+
+
+
+
+****** ...Sales Area
+  SELECTION-SCREEN BEGIN OF BLOCK area WITH  FRAME
+    TITLE textsal.
+    PARAMETERS: s_vkorg TYPE vkorg MEMORY ID vko,
+                s_vtweg TYPE  vtweg DEFAULT '10'.
+    PARAMETERS:     p_spart  TYPE spart MEMORY ID spa OBLIGATORY.
+  SELECTION-SCREEN END OF BLOCK area.
+***** ...Product
+  SELECTION-SCREEN BEGIN OF BLOCK prod WITH  FRAME
+    TITLE textmat.
+    PARAMETERS:
+      p_kunnr TYPE kunnr MEMORY ID kun,
+      s_matnr TYPE  matnr MEMORY ID mat OBLIGATORY.
+
+
+  SELECTION-SCREEN END OF BLOCK prod.
+***** ...Quantity
+  SELECTION-SCREEN BEGIN OF BLOCK qty WITH  FRAME
+    TITLE textqty.
+    PARAMETERS:
+      p_qty   TYPE kwmeng DEFAULT '1' OBLIGATORY.
+
+  SELECTION-SCREEN END OF BLOCK qty.
+
+***** ...Additional fields for price calculation
+  SELECTION-SCREEN BEGIN OF BLOCK addi WITH  FRAME
+    TITLE textopt.
+    PARAMETERS:
+      p_werks TYPE werks_d MEMORY ID wrk      OBLIGATORY,
+      p_waers TYPE waerk MEMORY ID whr    OBLIGATORY.
+    SELECTION-SCREEN SKIP 1.
+    PARAMETERS: p_kalsm TYPE kalsm      DEFAULT 'ZLEC01' OBLIGATORY,
+                p_auart TYPE auart      DEFAULT     'TA'     OBLIGATORY,
+                p_pstyv TYPE pstyv      DEFAULT     'TAN'    OBLIGATORY,
+                p_taxm1 TYPE taxm1      DEFAULT     '1'      OBLIGATORY,
+                p_taxk1 TYPE taxk1      DEFAULT     '1'      OBLIGATORY.
+    SELECTION-SCREEN SKIP 1.
+    PARAMETERS: p_vrkme TYPE vrkme      DEFAULT     'KG'     OBLIGATORY.
+    PARAMETERS: p_provg TYPE provg .
+    SELECTION-SCREEN SKIP 1.
+    PARAMETERS:     p_prsdt  TYPE prsdt DEFAULT sy-datum.
+    PARAMETERS:     p_hdnogr AS   CHECKBOX   DEFAULT 'X'.
+  SELECTION-SCREEN END OF BLOCK addi.
+SELECTION-SCREEN END OF BLOCK sels.
+***** Report Display Variant
+*SELECTION-SCREEN BEGIN OF BLOCK vari WITH  FRAME
+*                                     TITLE TEXT-s02.
+*PARAMETERS: p_alvvar TYPE slis_vari.
+*SELECTION-SCREEN END OF BLOCK vari.
+
+INITIALIZATION.
+
+  IF sy-langu = 'D'.
+    textsal = 'Vertriebsbereich'.
+    textmat = 'Material und Kunde'.
+    textopt = 'Allgemeine Preisrelevante Optionen'.
+    textqty = 'Anfragemenge'.
+  ELSE.
+    textsal = 'Sales Organisation'.
+    textmat = 'Product and customer'.
+    textopt = 'General price-relevant options'.
+    textqty = 'Req. Qty.'.
+  ENDIF.
+
+
+
+AT SELECTION-SCREEN ON s_matnr.
+  BREAK paan.
+  IF s_matnr CS '.'.
+    REPLACE ALL OCCURRENCES OF '.' IN s_matnr WITH ''.
+
+* Quick Fix Ersetzen Sie diese Anweisung durch eine SELECT-Anweisung mit ORDER BY.
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*    select single matnr from mara into s_matnr where zzerznr = s_matnr.
+
+    SELECT matnr FROM mara INTO s_matnr UP TO 1 ROWS WHERE zzerznr = s_matnr
+     ORDER BY PRIMARY KEY .
+    ENDSELECT.
+
+* End of Quick Fix
+
+  ENDIF.
+
+START-OF-SELECTION.
+
+
+* SET PF-STATUS 'TEST'.
+*
+*CASE sy-ucomm.
+*  WHEN 'CUSTOMER'.
+*
+*     "GET CURSOR FIELD fs_kna1-kunnr
+*     "VALUE w_kunnr.
+*
+*WHEN 'ORDER'.
+*      "GET CURSOR FIELD fs_kna1-vbeln
+*      "VALUE w_vbeln.
+*
+*endcase.
+
+
+  DATA: it_komp         TYPE zshop_tty_pricing_komp,
+        ls_komp         LIKE LINE OF it_komp,
+        lt_wmdvsx       TYPE STANDARD TABLE OF bapiwmdvs,
+        ls_wmdvsx       LIKE LINE OF lt_wmdvsx,
+        lt_wmdvex       TYPE STANDARD TABLE OF bapiwmdve,
+        ls_wmdvex       LIKE LINE OF lt_wmdvex,
+        lv_av_qty_plt   TYPE bapicm61v-wkbst,
+        lv_dialogflag   TYPE bapicm61v-diafl,
+        lv_rows,
+        lv_qty          TYPE mng06,
+        ls_kna1         TYPE kna1,
+        lv_name1        TYPE name1_gp,
+        lv_stras        TYPE stras_gp,
+        lv_ort          TYPE ort01_gp,
+        lv_erznr        TYPE zzerznr,
+        lv_erznr_format TYPE zzerznr_out,
+        lv_name_comp    TYPE string,
+        lv_mstae        TYPE mstae,
+        lv_mstae_t      TYPE string,
+        ls_makt         TYPE makt.
+
+  IF p_kunnr IS NOT INITIAL.
+    SELECT SINGLE * FROM kna1 INTO ls_kna1
+      WHERE kunnr = p_kunnr.
+  ENDIF.
+
+  "Aufbereiten Erzeugnisnummer
+  CALL FUNCTION 'Z_CA_FORMAT_ERZNR'
+    EXPORTING
+      iv_matnr = s_matnr
+    IMPORTING
+      ev_matnr = lv_erznr_format.
+
+  SELECT SINGLE zzerznr mstae FROM mara INTO ( lv_erznr, lv_mstae )
+    WHERE matnr = s_matnr.
+  SELECT SINGLE mtstb FROM t141t INTO lv_mstae_t
+    WHERE spras = sy-langu
+    AND mmsta = lv_mstae.
+
+  CONCATENATE lv_mstae lv_mstae_t INTO lv_mstae_t SEPARATED BY space.
+
+  SELECT SINGLE * FROM makt INTO ls_makt
+    WHERE matnr = s_matnr
+    AND spras = sy-langu.
+
+  REPLACE ALL OCCURRENCES OF lv_erznr IN ls_makt-maktx WITH space.
+
+  IF sy-langu = 'D'.
+    WRITE  / 'Material:' COLOR 2.
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*    WRITE :/ 'Material:' COLOR 2, s_matnr, ' / ', lv_erznr_format.
+    WRITE (18) s_matnr.
+* End of Quick Fix
+    WRITE ' / '. WRITE lv_erznr_format.WRITE ' / '. WRITE ls_makt-maktx.
+    WRITE :/ 'Mat. St.:' COLOR 2, lv_mstae_t.
+  ELSE.
+    WRITE  / 'Product:' COLOR 2.
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*    WRITE :/ 'Product:' COLOR 2, s_matnr, ' / ', lv_erznr_format.
+    WRITE (18) s_matnr.
+* End of Quick Fix
+    WRITE ' / '. WRITE lv_erznr_format. WRITE ' / '. WRITE ls_makt-maktx.
+    WRITE :/ 'Prd. St.:' COLOR 2, lv_mstae_t.
+  ENDIF.
+
+
+  IF p_kunnr IS NOT INITIAL.
+
+    MOVE ls_kna1-name1 TO lv_name1.
+    MOVE ls_kna1-stras TO lv_stras.
+    MOVE ls_kna1-ort01 TO lv_ort.
+
+    CONDENSE lv_name1.
+    CONDENSE lv_stras.
+    CONDENSE lv_ort.
+
+    CONCATENATE lv_name1 lv_stras lv_ort INTO lv_name_comp SEPARATED BY ' / '.
+
+    IF sy-langu = 'D'.
+      WRITE :/ 'Kunde   :' COLOR 2, lv_name_comp.
+    ELSE.
+      WRITE :/ 'Customer:' COLOR 2, lv_name_comp.
+    ENDIF.
+  ENDIF.
+
+  "3: >>> Verfügbarkeitsprüfung über 9999999999 -> gibt immer die ATP Menge zurück
+  CLEAR lt_wmdvsx.
+  ls_wmdvsx-req_date = p_prsdt.
+  ls_wmdvsx-req_qty = '99999999'.
+  APPEND ls_wmdvsx TO lt_wmdvsx.
+
+
+* Quick Fix A41 resolution of Type-Conflict
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*  CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*    EXPORTING
+*      plant      = p_werks
+*      material   = s_matnr
+*      unit       = 'ST'
+*      check_rule = 'A'
+*    IMPORTING
+*      av_qty_plt = lv_av_qty_plt
+*    TABLES
+*      wmdvsx     = lt_wmdvsx
+*      wmdvex     = lt_wmdvex.
+
+
+* Quick Fix A41 KB-based Pseudo Comment
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*    EXPORTING
+*      PLANT = P_WERKS
+*      MATERIAL_LONG = S_MATNR
+*      UNIT = 'ST'
+*      CHECK_RULE = 'A'
+*    IMPORTING
+*      AV_QTY_PLT = LV_AV_QTY_PLT
+*    TABLES
+*      WMDVSX = LT_WMDVSX
+*      WMDVEX = LT_WMDVEX.
+
+  CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+    EXPORTING
+      plant         = p_werks
+      material_long = s_matnr
+      unit          = 'ST'
+      check_rule    = 'A'
+    IMPORTING
+      av_qty_plt    = lv_av_qty_plt
+    TABLES
+      wmdvsx        = lt_wmdvsx
+      wmdvex        = lt_wmdvex. "#EC CI_USAGE_OK[0002438131]
+
+* End of Quick Fix
+
+
+* End of Quick Fix
+
+
+  MOVE p_qty TO lv_qty.
+  WRITE: /.
+  IF sy-langu = 'D'.
+    WRITE: / 'Anfragemenge', ':    ', lv_qty COLOR = 7.
+  ELSE.
+    WRITE: /  'Required Qty.', ':    ', lv_qty COLOR = 7.
+  ENDIF.
+  LOOP AT lt_wmdvex INTO ls_wmdvex.
+    IF sy-tabix = 1.
+      IF ls_wmdvex-com_qty >= p_qty.
+        IF sy-langu = 'D'.
+          WRITE: / 'ATP Menge    ', ':       ', ls_wmdvex-com_qty COLOR = 5.
+        ELSE.
+          WRITE: / 'ATP Qty      ', ':       ', ls_wmdvex-com_qty COLOR = 5.
+        ENDIF.
+      ELSE.
+        IF sy-langu = 'D'.
+          WRITE: / 'ATP Menge', ':       ', ls_wmdvex-com_qty COLOR = 6.
+        ELSE.
+          WRITE: / 'ATP Qty. ', ':       ', ls_wmdvex-com_qty COLOR = 6.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  "<<<<<<<<-------------------------------------
+
+
+  "Verfügbarkeitsprüfung über Wunschmenge
+  ">>>>>-------------------------------------
+  CLEAR lt_wmdvsx.
+  ls_wmdvsx-req_date = p_prsdt.
+  ls_wmdvsx-req_qty = p_qty.
+  APPEND ls_wmdvsx TO lt_wmdvsx.
+
+
+* Quick Fix A41 resolution of Type-Conflict
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*  CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*    EXPORTING
+*      plant      = p_werks
+*      material   = s_matnr
+*      unit       = 'ST'
+*      check_rule = 'A'
+*    IMPORTING
+*      av_qty_plt = lv_av_qty_plt
+*      dialogflag = lv_dialogflag
+*    TABLES
+*      wmdvsx     = lt_wmdvsx
+*      wmdvex     = lt_wmdvex.
+
+
+* Quick Fix A41 KB-based Pseudo Comment
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*    EXPORTING
+*      PLANT = P_WERKS
+*      MATERIAL_LONG = S_MATNR
+*      UNIT = 'ST'
+*      CHECK_RULE = 'A'
+*    IMPORTING
+*      AV_QTY_PLT = LV_AV_QTY_PLT
+*      DIALOGFLAG = LV_DIALOGFLAG
+*    TABLES
+*      WMDVSX = LT_WMDVSX
+*      WMDVEX = LT_WMDVEX.
+
+  CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+    EXPORTING
+      plant         = p_werks
+      material_long = s_matnr
+      unit          = 'ST'
+      check_rule    = 'A'
+    IMPORTING
+      av_qty_plt    = lv_av_qty_plt
+      dialogflag    = lv_dialogflag
+    TABLES
+      wmdvsx        = lt_wmdvsx
+      wmdvex        = lt_wmdvex. "#EC CI_USAGE_OK[0002438131]
+
+* End of Quick Fix
+
+
+* End of Quick Fix
+
+
+  "<<<<<<<<-------------------------------------
+  CLEAR lv_rows.
+  DESCRIBE TABLE lt_wmdvex LINES lv_rows.
+
+  "Nur einen Satz (ob komplett oder nicht)
+  IF lv_rows = 1.
+    LOOP AT lt_wmdvex INTO ls_wmdvex.
+      "Nur Teilmenge verfügbar?
+      IF p_qty < ls_wmdvex-req_qty.
+        IF sy-langu = 'D'.
+          WRITE: / 'Teilmenge verfügbar zum', ls_wmdvex-com_date, ':', ls_wmdvex-com_qty COLOR = 6.
+        ELSE.
+          WRITE: / 'Part. Qty. avail. to   ', ls_wmdvex-com_date, ':', ls_wmdvex-com_qty COLOR = 6.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ELSEIF lv_rows > 1.
+    "auf keinen Fall komplett gedeckt
+    LOOP AT lt_wmdvex INTO ls_wmdvex.
+      IF sy-langu = 'D'.
+        WRITE: / 'Teilmenge', sy-tabix, 'verfügbar zum', ls_wmdvex-com_date, ':', ls_wmdvex-com_qty COLOR = 6.
+      ELSE.
+        WRITE: / 'Part Qty.', sy-tabix, 'available to', ls_wmdvex-com_date, ':', ls_wmdvex-com_qty COLOR = 6.
+      ENDIF.
+    ENDLOOP.
+  ELSE.
+
+  ENDIF.
+
+  " >> Mindestauftragsmenge neu
+  DATA: lv_aumng TYPE aumng,
+        lv_RDPRF TYPE rdprf.
+
+* Quick Fix Ersetzen Sie diese Anweisung durch eine SELECT-Anweisung mit ORDER BY.
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*  SELECT SINGLE aumng FROM mvke INTO lv_aumng
+*    WHERE vkorg = s_vkorg
+*    AND matnr = s_matnr.
+
+  SELECT aumng rdprf FROM mvke INTO ( lv_aumng, lv_RDPRF ) UP TO 1 ROWS
+   WHERE vkorg = s_vkorg AND matnr = s_matnr
+   ORDER BY PRIMARY KEY .
+  ENDSELECT.
+* End of Quick Fix
+
+  IF sy-langu = 'D'.
+    WRITE: / 'Min. Auftragsm.:  ', lv_aumng.
+  ELSE.
+    WRITE: / 'Min. Order Qty.:  ', lv_aumng.
+  ENDIF.
+
+  IF lv_RDPRF IS NOT INITIAL.
+    IF sy-langu = 'D'.
+      WRITE: / 'Achtung - Rundungsregel aktiv: ', lv_rdprf.
+    ELSE.
+      WRITE: / 'Attention - Rounding rule active:  ', lv_rdprf.
+    ENDIF.
+  ENDIF.
+
+
+  "2: >>>Strukturverfügbarkeit
+  DATA: lt_zstruktur_atp TYPE zstruktur_atp_tty,
+        ls_zstruktur_atp TYPE zstruktur_atp,
+        ls_stpo          TYPE stpo,
+        lt_stpo          TYPE STANDARD TABLE OF stpo,
+        lt_stas          TYPE STANDARD TABLE OF stas,
+        ls_stko          TYPE stko,
+        ls_mast          TYPE mast,
+        lv_rows2.
+
+  BREAK paan.
+
+  "2-1: Stücklistennummer selektieren
+
+* Quick Fix Ersetzen Sie diese Anweisung durch eine SELECT-Anweisung mit ORDER BY.
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*  SELECT SINGLE * INTO ls_mast FROM mast
+*    WHERE werks = p_werks
+*    AND matnr = s_matnr
+*    AND stlal = '01'
+*    AND stlan = 1.
+
+  SELECT * INTO ls_mast FROM mast UP TO 1 ROWS
+   WHERE werks = p_werks AND matnr = s_matnr AND stlal = '01' AND stlan = 1
+   ORDER BY PRIMARY KEY .
+  ENDSELECT.
+
+  "Backup - EKLS
+  IF ls_mast IS INITIAL.
+     SELECT * INTO ls_mast FROM mast UP TO 1 ROWS
+     WHERE werks = '1010' AND matnr = s_matnr AND stlal = '01' AND stlan = 1
+     ORDER BY PRIMARY KEY .
+    ENDSELECT.
+  ENDIF.
+
+* End of Quick Fix
+
+  "2-2: Stücklistenpos.
+  SELECT stpo~*  FROM stas
+    INNER JOIN stpo ON stas~stlnr = stpo~stlnr
+                   AND stas~stlkn = stpo~stlkn
+*                   AND stas~stvkn = stpo~stpoz
+
+    INTO TABLE @lt_stpo
+    WHERE stas~stlnr = @ls_mast-stlnr
+    AND stas~stlal = '01'.
+
+  "2-3: Stücklistenkopf
+
+* Quick Fix Ersetzen Sie diese Anweisung durch eine SELECT-Anweisung mit ORDER BY.
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*  SELECT SINGLE * FROM stko
+*    INTO @ls_stko
+*    WHERE stlnr = @ls_mast-stlnr
+*    AND stlal = '01'.
+
+  SELECT * FROM stko
+   INTO @ls_stko UP TO 1 ROWS WHERE stlnr = @ls_mast-stlnr AND stlal = '01'
+   ORDER BY PRIMARY KEY .
+  ENDSELECT.
+* End of Quick Fix
+
+
+  LOOP AT lt_stpo INTO ls_stpo.
+    MOVE-CORRESPONDING ls_stpo TO ls_zstruktur_atp.
+    ls_zstruktur_atp-menge = ( ls_zstruktur_atp-menge * p_qty ) / ls_stko-bmeng.
+    MOVE ls_mast-matnr TO ls_zstruktur_atp-matnr.
+
+    SELECT SINGLE maktx FROM makt INTO ls_zstruktur_atp-maktx
+      WHERE matnr = ls_stpo-idnrk
+      AND spras = sy-langu.
+
+    CLEAR lt_wmdvsx.
+    ls_wmdvsx-req_date = p_prsdt.
+    ls_wmdvsx-req_qty = '99999999'.
+    APPEND ls_wmdvsx TO lt_wmdvsx.
+
+
+* Quick Fix A41 resolution of Type-Conflict
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*    CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*      EXPORTING
+*        plant      = p_werks
+*        material   = ls_zstruktur_atp-idnrk
+*        unit       = 'ST'
+*        check_rule = 'A'
+*      IMPORTING
+*        av_qty_plt = lv_av_qty_plt
+*        dialogflag = lv_dialogflag
+*      TABLES
+*        wmdvsx     = lt_wmdvsx
+*        wmdvex     = lt_wmdvex.
+
+
+* Quick Fix A41 KB-based Pseudo Comment
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+*      EXPORTING
+*        PLANT = P_WERKS
+*        MATERIAL_LONG = LS_ZSTRUKTUR_ATP-IDNRK
+*        UNIT = 'ST'
+*        CHECK_RULE = 'A'
+*      IMPORTING
+*        AV_QTY_PLT = LV_AV_QTY_PLT
+*        DIALOGFLAG = LV_DIALOGFLAG
+*      TABLES
+*        WMDVSX = LT_WMDVSX
+*        WMDVEX = LT_WMDVEX.
+
+    MOVE ls_mast-werks to p_werks.
+
+    CALL FUNCTION 'BAPI_MATERIAL_AVAILABILITY'
+      EXPORTING
+        plant         = p_werks
+        material_long = ls_zstruktur_atp-idnrk
+        unit          = 'ST'
+        check_rule    = 'A'
+      IMPORTING
+        av_qty_plt    = lv_av_qty_plt
+        dialogflag    = lv_dialogflag
+      TABLES
+        wmdvsx        = lt_wmdvsx
+        wmdvex        = lt_wmdvex. "#EC CI_USAGE_OK[0002438131]
+
+* End of Quick Fix
+
+
+* End of Quick Fix
+
+
+    LOOP AT lt_wmdvex INTO ls_wmdvex.
+      IF sy-tabix = 1.
+        MOVE ls_wmdvex-com_qty TO ls_zstruktur_atp-atpmnn.
+        APPEND ls_zstruktur_atp TO lt_zstruktur_atp.
+      ENDIF.
+    ENDLOOP.
+  ENDLOOP.
+
+  "DESCRIBE TABLE lt_zstruktur_atp LINES lv_rows2.
+  "Ausgabe Daten falls mindestens ein Satz
+  "IF lv_rows2 >= '1'.
+  SORT lt_zstruktur_atp BY posnr ASCENDING.
+  LOOP AT lt_zstruktur_atp INTO ls_zstruktur_atp.
+    IF sy-tabix = 1.
+      WRITE : /.
+      IF sy-langu = 'D'.
+        WRITE : / 'Strukturverfügbarkeit'.
+      ELSE.
+        WRITE : / 'Stucture availability'.
+      ENDIF.
+      IF sy-langu = 'D'.
+        WRITE: /  'Material           Posnr  T Komponente         Materialkurztext                                     Menge  ME          ATP-Menge' COLOR 2.
+      ELSE.
+        WRITE: /  'Product            Posno  T Component          Product Short Text                                   Qty.   QU          ATP-Qty. ' COLOR 2.
+      ENDIF.
+    ENDIF.
+    IF ls_zstruktur_atp-atpmnn >= ls_zstruktur_atp-menge.
+
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*      WRITE: / ls_zstruktur_atp-matnr, ls_zstruktur_atp-posnr, ls_zstruktur_atp-postp, ls_zstruktur_atp-idnrk, ls_zstruktur_atp-maktx, ls_zstruktur_atp-menge, ls_zstruktur_atp-meins, ls_zstruktur_atp-atpmnn COLOR 5.
+      WRITE /(18) ls_zstruktur_atp-matnr.
+* End of Quick Fix
+      WRITE ls_zstruktur_atp-posnr. WRITE ls_zstruktur_atp-postp.
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*      WRITE: / ls_zstruktur_atp-matnr, ls_zstruktur_atp-posnr, ls_zstruktur_atp-postp, ls_zstruktur_atp-idnrk, ls_zstruktur_atp-maktx, ls_zstruktur_atp-menge, ls_zstruktur_atp-meins, ls_zstruktur_atp-atpmnn COLOR 5.
+      WRITE (18) ls_zstruktur_atp-idnrk.
+* End of Quick Fix
+      WRITE ls_zstruktur_atp-maktx. WRITE ls_zstruktur_atp-menge. WRITE ls_zstruktur_atp-meins. WRITE ls_zstruktur_atp-atpmnn COLOR 5.
+    ELSE.
+
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*      WRITE: / ls_zstruktur_atp-matnr, ls_zstruktur_atp-posnr, ls_zstruktur_atp-postp, ls_zstruktur_atp-idnrk, ls_zstruktur_atp-maktx, ls_zstruktur_atp-menge, ls_zstruktur_atp-meins, ls_zstruktur_atp-atpmnn COLOR 6.
+      WRITE /(18) ls_zstruktur_atp-matnr.
+* End of Quick Fix
+      WRITE ls_zstruktur_atp-posnr. WRITE ls_zstruktur_atp-postp.
+* Quick Fix Längenangabe für WRITE hinzufügen
+* Transport L4DK900060 Sammeltransport Custom Code Adaption
+* Replaced Code:
+*      WRITE: / ls_zstruktur_atp-matnr, ls_zstruktur_atp-posnr, ls_zstruktur_atp-postp, ls_zstruktur_atp-idnrk, ls_zstruktur_atp-maktx, ls_zstruktur_atp-menge, ls_zstruktur_atp-meins, ls_zstruktur_atp-atpmnn COLOR 6.
+      WRITE (18) ls_zstruktur_atp-idnrk.
+* End of Quick Fix
+      WRITE ls_zstruktur_atp-maktx. WRITE ls_zstruktur_atp-menge. WRITE ls_zstruktur_atp-meins. WRITE ls_zstruktur_atp-atpmnn COLOR 6.
+    ENDIF.
+  ENDLOOP.
+  "ENDIF.
+
+
+  "3: >>>Nur wenn Kunde übergeben wurde, Preise
+  IF p_kunnr IS NOT INITIAL.
+    DATA: p_werks2 TYPE werks,
+          lv_provg TYPE provg.
+
+    SELECT SINGLE provg FROM mvke INTO lv_provg
+      WHERE vkorg = s_vkorg
+      AND matnr = s_matnr.
+
+    "Fallback - Staffel
+    IF lv_provg IS INITIAL.
+      IF p_provg IS NOT INITIAL.
+        MOVE p_provg TO lv_provg.
+      ENDIF.
+    ENDIF.
+
+    "Kalkschema vorbelegen
+    CASE s_vkorg.
+      WHEN '1000'.
+        p_kalsm = 'ZLEC01'.
+      WHEN '1300'.
+        p_kalsm = 'ZLEC06'.
+      WHEN '1400'.
+        p_kalsm = 'ZLEC14'.
+      WHEN '2400'.
+        p_kalsm = 'ZLEC17'.
+      WHEN '2500'.
+        p_kalsm = 'ZLEC18'.
+      WHEN '1500'.
+        p_kalsm = 'ZLEC04'.
+      WHEN '1800'.
+        p_kalsm = 'ZLEC08'.
+      WHEN '2600'.
+        p_kalsm = 'ZLEC09'.
+      WHEN '2700'.
+        p_kalsm = 'ZLEC07'.
+      WHEN '1900'.
+        p_kalsm = 'ZLEC10'.
+      WHEN OTHERS.
+
+    ENDCASE.
+
+
+
+    IF lv_provg IS NOT INITIAL.
+      CALL FUNCTION 'Z_SHOP_PRICING_GET'
+        EXPORTING
+          i_bukrs          = s_vkorg
+          i_vkorg          = s_vkorg
+          i_vtweg          = s_vtweg
+          i_spart          = p_spart
+          i_auart          = p_auart
+          i_werks          = p_werks
+          i_waers          = p_waers
+          i_kunnr          = p_kunnr
+          i_taxk1          = p_taxk1
+          i_matnr          = s_matnr
+*         I_VRKME          = 'KG'
+          i_prsdt          = p_prsdt
+          i_kalsm          = p_kalsm
+          i_qty            = p_qty
+          i_taxm1          = p_taxm1
+          i_pstyv          = p_pstyv
+          i_stagger        = 'X'
+          i_provg          = lv_provg
+        TABLES
+          it_komp          = it_komp
+        EXCEPTIONS
+          no_stagger_found = 1
+          no_kond_found    = 2
+          OTHERS           = 3.
+    ELSE.
+      CALL FUNCTION 'Z_SHOP_PRICING_GET'
+        EXPORTING
+          i_bukrs          = '1000'
+          i_vkorg          = s_vkorg
+          i_vtweg          = s_vtweg
+          i_spart          = p_spart
+          i_auart          = p_auart
+          i_werks          = p_werks
+          i_waers          = p_waers
+          i_kunnr          = p_kunnr
+          i_taxk1          = p_taxk1
+          i_matnr          = s_matnr
+*         I_VRKME          = 'KG'
+          i_prsdt          = p_prsdt
+          i_kalsm          = p_kalsm
+          i_qty            = p_qty
+          i_taxm1          = p_taxm1
+          i_pstyv          = p_pstyv
+          i_stagger        = ''
+        TABLES
+          it_komp          = it_komp
+        EXCEPTIONS
+          no_stagger_found = 1
+          no_kond_found    = 2
+          OTHERS           = 3.
+    ENDIF.
+
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ELSE.
+
+      "FORMAT INTENSIFIED ON.
+
+      WRITE: / '- - - - - - - - - '.
+      IF sy-langu = 'D'.
+        WRITE: /'Preisinformationen' COLOR = 2.
+      ELSE.
+        WRITE: /'Price information ' COLOR = 2.
+      ENDIF.
+      WRITE: / '- - - - - - - - - '.
+
+      "FORMAT INTENSIFIED OFF.
+
+      LOOP AT it_komp INTO ls_komp.
+        DATA: lv_kzwi2 TYPE kzwis.
+        lv_kzwi2 = ls_komp-kzwi1 / ls_komp-mglme.
+
+        IF sy-tabix = 1.
+          IF sy-langu = 'D'.
+            WRITE: / '                               Preis Liste      Preis Kunde' COLOR = 2.
+          ELSE.
+            WRITE: / '                               Price List       Price Cust.' COLOR = 2.
+          ENDIF.
+        ENDIF.
+
+        IF sy-langu = 'D'.
+          WRITE: / 'Ab', ls_komp-mglme, lv_kzwi2   ,ls_komp-netpr COLOR = 5, ls_komp-waers_kw00 .
+        ELSE.
+          WRITE: / 'Fr', ls_komp-mglme, lv_kzwi2   ,ls_komp-netpr COLOR = 5, ls_komp-waers_kw00 .
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+
+
+END-OF-SELECTION.
+
+*AT USER-COMMAND.
+*  CASE sy-ucomm.
+*
+*    WHEN 'BACK' OR 'UP' OR 'CANC'.
+*      LEAVE PROGRAM.
+*  ENDCASE.

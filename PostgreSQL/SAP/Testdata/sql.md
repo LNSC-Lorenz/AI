@@ -1,0 +1,235 @@
+表acdoca
+``` sql
+SELECT
+    RLDNR,
+    RBUKRS,
+    GJAHR,
+    BELNR,
+    DOCLN,
+    RYEAR,
+    AWORG,
+    AWREF,
+    AWITEM,
+    AWITGRP,
+    SUBTA,
+    RTCUR,
+    RWCUR,
+    RHCUR,
+    RKCUR,
+    RFCCUR,
+    CO_MEINH,
+    RACCT,
+    RCNTR,
+    PRCTR,
+    RFAREA,
+    RBUSA,
+    KOKRS,
+    SEGMENT,
+    TSL,
+    WSL,
+    WSL2,
+    WSL3,
+    HSL,
+    KSL,
+    FCSL,
+    MSL,
+    MFSL,
+    VMSL,
+    CO_MEGBTR,
+    DRCRK,
+    POPER,
+    PERIV,
+    FISCYEARPER,
+    BUDAT,
+    BLDAT,
+    BLART,
+    BUZEI,
+    ZUONR,
+    BSCHL,
+    BSTAT,
+    KDAUF,
+    KDPOS,
+    WWKAK_PA,
+    WWKAP_PA,
+    MATNR,
+    WERKS,
+    LIFNR,
+    KUNNR,
+    COCO_NUM,
+    WWERT,
+    PRCTR_DRVTN_SOURCE_TYPE,
+    UCB_ID,
+    UCB_SCALE_NUMERATOR,
+    KOART,
+    UMSKZ,
+    TAX_COUNTRY,
+    MWSKZ,
+    KALNR,
+    VPRSV,
+    MLAST,
+    KZBWS,
+    XOBEW,
+    SOBKZ,
+    CO_BELKZ,
+    CO_BEKNZ,
+    BELTP,
+    MUVFLG,
+    GKONT,
+    GKOAR,
+    ERLKZ,
+    PERNR,
+    PAOBJNR,
+    PROF_SEG_TYPE,
+    XPAOBJNR_CO_REL,
+    SCOPE,
+    ACCAS,
+    ACCASTY,
+    LSTAR,
+    AUFNR,
+    AUTYP,
+    ERKRS,
+    CO_REFBZ,
+    FKART,
+    VKORG,
+    VTWEG,
+    SPART,
+    MATNR_COPA,
+    MATKL,
+    KDGRP,
+    LAND1,
+    BRSCH,
+    BZIRK,
+    KUNRE,
+    KUNWE,
+    KONZS,
+    ACDOC_COPA_EEW_DUMMY_PA,
+    BESKZ_PA,
+    PAPH1_PA,
+    PAPH2_PA,
+    PAPH3_PA,
+    PSTYV_PA,
+    VKBUR_PA,
+    WWCST_PA,
+    SORHIST_PA,
+    WWBKL_PA,
+    WWADM_PA,
+    WWICK_PA,
+    AUART_PA,
+    VBUND_PA,
+    WWKSP_PA,
+    WWAPP_PA,
+    WWKDP_PA,
+    WWKTP_PA,
+    WWSUB_PA,
+    WWART_PA,
+    WWREG_PA,
+    MSTAE_PA,
+    DUMMY_MRKT_SGMNT_EEW_PS
+FROM SAPSR3.ACDOCA
+WHERE RBUKRS = '2600'
+  AND RLDNR = '0L';
+```
+
+表EKKO
+``` sql
+SELECT *
+FROM SAPSR3.EKKO
+WHERE BUKRS = '2600';
+```
+
+表EKPO
+``` sql
+SELECT *
+FROM SAPSR3.EKPO
+WHERE BUKRS = '2600';
+```
+
+表BSID
+``` sql
+SELECT *
+FROM SAPSR3.BSID
+WHERE BUKRS = '2600';
+```
+
+表BSAD
+``` sql
+SELECT *
+FROM SAPSR3.BSAD
+WHERE BUKRS = '2600';
+```
+
+表BSEG
+``` sql
+SELECT *
+FROM SAPSR3.BSEG
+WHERE BUKRS = '2600';
+```
+
+表MSEG
+``` sql
+SELECT *
+FROM SAPSR3.MSEG
+WHERE BUKRS = '2600';
+```
+
+表MSEG
+``` sql
+SELECT *
+FROM SAPSR3.MBEW
+WHERE BWKEY = '2600';
+```
+
+表QALS
+``` sql
+SELECT *
+FROM SAPSR3.QALS;
+```
+
+表QMEL
+``` sql
+SELECT *
+FROM SAPSR3.QMEL;
+```
+
+表AFKO
+``` sql
+SELECT *
+FROM SAPSR3.AFKO;
+```
+
+表AFVC
+``` sql
+SELECT *
+FROM SAPSR3.AFVC;
+```
+
+表CRHD
+``` sql
+SELECT *
+FROM SAPSR3.CRHD;
+```
+
+表AUFK
+``` sql
+SELECT *
+FROM SAPSR3.AUFK
+WHERE BUKRS = '2600';
+```
+
+表KNVV
+``` sql
+SELECT *
+FROM SAPSR3.KNVV;
+```
+
+表LFM1
+``` sql
+SELECT *
+FROM SAPSR3.LFM1;
+```
+
+表MARA
+``` sql
+SELECT *
+FROM SAPSR3.MARA;
+```
