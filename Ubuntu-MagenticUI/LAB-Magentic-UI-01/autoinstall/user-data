@@ -177,6 +177,8 @@ autoinstall:
     - open-vm-tools                        # ESXi VMware Tools（必须）
     - curl
     - ca-certificates
+    - qemu-kvm                             # KVM 虚拟化（Quicksand 沙箱加速必须）
+    - cpu-checker                          # kvm-ok 检测工具
 
   # ── 安装完成后执行 ───────────────────────────────────────────
   late-commands:
@@ -206,6 +208,13 @@ autoinstall:
       '
     # 安装 Python 3.12（Magentic-UI 依赖）
     - curtin in-target --target=/target -- apt-get install -y -qq python3.12 python3.12-venv
+    # 启用 KVM 嵌套虚拟化（Quicksand 沙箱性能必须）
+    # 加载 kvm 内核模块并设置开机自动加载
+    - curtin in-target --target=/target -- bash -c "echo 'kvm' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_intel' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_amd' >> /etc/modules-load.d/kvm.conf"
+    # 设置 /dev/kvm 权限：让 magentic 用户可以使用 KVM
+    - curtin in-target --target=/target -- usermod -aG kvm magentic
     # 强制设置 magentic 密码（覆盖 identity 中的占位 hash，确保登录成功）
     - curtin in-target --target=/target -- bash -c "echo 'magentic:ChangeMe2026!@#' | chpasswd"
     # 设置 magentic 无密码 sudo（方便后续脚本执行）

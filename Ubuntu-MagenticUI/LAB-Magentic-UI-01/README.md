@@ -8,22 +8,28 @@
 ## 架构概览
 
 ```
-┌───────────────────────────────┐         ┌──────────────────────────────┐
-│   Ubuntu Server (ESXi VM)     │         │   Dell DGX Spark             │
-│                               │  HTTP   │                              │
-│  ┌─────────────────────────┐  │────────►│  ┌────────────────────────┐  │
-│  │  Magentic-UI            │  │         │  │  Ollama (:11434)       │  │
-│  │  (localhost:8081)       │  │         │  │  ├─ qwen3.6:35b        │  │
-│  │  + Quicksand 沙箱       │  │         │  │  ├─ fara-7b:q5         │  │
-│  └─────────────────────────┘  │         │  └────────────────────────┘  │
-│  ┌─────────────────────────┐  │         │                              │
-│  │  Docker Engine          │  │         └──────────────────────────────┘
-│  └─────────────────────────┘  │
-│  ┌─────────────────────────┐  │
-│  │  UFW + Fail2ban + CIS  │  │
-│  └─────────────────────────┘  │
-└───────────────────────────────┘
+┌────────────────────────────────────┐         ┌──────────────────────────────┐
+│   Ubuntu Server (ESXi VM)          │         │   Dell DGX Spark             │
+│   LAB-Magentic-UI-01               │  HTTP   │   10.87.5.55                 │
+│                                    │────────►│                              │
+│  ┌──────────────────────────────┐  │         │  ┌────────────────────────┐  │
+│  │  nginx (:8081)               │  │         │  │  Ollama (:11434)       │  │
+│  │   └► Magentic-UI (:8082)    │  │         │  │  ├─ qwen3:32b (32B)    │  │
+│  │       └► Quicksand VM (KVM) │  │         │  │  ├─ qwen2.5vl-fast (8B)│  │
+│  └──────────────────────────────┘  │         │  │  KEEP_ALIVE=-1         │  │
+│  ┌──────────────────────────────┐  │         │  └────────────────────────┘  │
+│  │  Bridge (:11440) 代理        │  │         │                              │
+│  │  → Ollama /v1/chat/completions│ │         └──────────────────────────────┘
+│  └──────────────────────────────┘  │
+│  ┌──────────────────────────────┐  │
+│  │  Docker + UFW + Fail2ban     │  │
+│  └──────────────────────────────┘  │
+└────────────────────────────────────┘
 ```
+
+**桥接双路由说明**：
+- `qwen3:32b`（编排器）：已验证无 PARSER bug，通过桥接直接代理到 Ollama `/v1/chat/completions`。
+- `qwen2.5vl-fast`（浏览器代理）：需要视觉能力处理截图，直接代理到 Ollama 的 `/v1/chat/completions`。
 
 ## 文件说明
 
@@ -133,10 +139,13 @@ genisoimage -output cidata.iso -volid cidata -joliet -rock user-data meta-data
 
 1. vSphere Client → **新建虚拟机**
 2. 按上方"硬件配置"表分配资源
-3. **CD/DVD 驱动器 1**：挂载 `ubuntu-24.04-live-server-amd64.iso`
-4. **CD/DVD 驱动器 2**：挂载 `cidata.iso`（上传到数据存储）
-5. 启动顺序确认 CD/DVD 在硬盘之前
-6. 启动虚拟机 → 安装**全自动进行**，约 10~15 分钟后自动重启
+3. **CPU → 勾选"向客户操作系统公开硬件辅助的虚拟化"**（Expose hardware assisted virtualization）⚠️ **必须开启！**
+4. **CD/DVD 驱动器 1**：挂载 `ubuntu-24.04-live-server-amd64.iso`
+5. **CD/DVD 驱动器 2**：挂载 `cidata.iso`（上传到数据存储）
+6. 启动顺序确认 CD/DVD 在硬盘之前
+7. 启动虚拟机 → 安装**全自动进行**，约 10~15 分钟后自动重启
+
+> **⚠️ 关键：** 必须开启嵌套虚拟化（Nested Virtualization），否则 Quicksand 沙箱将使用 TCG 纯软件模拟，**性能极差**，导致 LLM 调用超时。
 
 ### 3. 安装完成后登录
 
@@ -181,9 +190,13 @@ bash deploy-magentic-ui.sh
 
 ## 性能说明
 
-- **首次启动**：部署脚本会自动预加载 Ollama 模型，减少首次请求等待时间
-- **模型速度**：`qwen3.6:35b` 是 35B 参数模型，每次 Agent 决策需要一定时间；如追求速度，可将 `ORCHESTRATOR_MODEL` 改为更小的模型（如 7B/14B）
-- **内存占用**：同时运行 orchestrator 和 web_surfer 两个模型对 DGX Spark 显存压力较大，确保 DGX Spark 有足够显存
+- **首次启动**：部署脚本自动预加载模型（`keep_alive=-1`），模型常驻内存
+- **编排器推理**：qwen3:32b 43 t/s，每次 tool call 约 2-3 秒
+- **浏览器推理**：qwen2.5vl-fast 每次视觉动作约 60 秒（视觉编码器处理截图 ~4900 tokens @ 31 t/s）
+- **优化**：桥接层自动剥离历史截图，仅保留最新一张，避免重复编码
+- **完整浏览器任务**：5-6 个动作 × 60s + VM 启动 5s = 约 5-6 分钟
+- **内存占用**：qwen3:32b (~31GB) + qwen2.5vl-fast (~6GB) = ~37GB，DGX Spark 128GB 统一内存充裕
+- **关键优化**：`OLLAMA_KEEP_ALIVE=-1` 避免模型频繁加载/卸载
 
 ---
 
@@ -209,18 +222,73 @@ bash deploy-magentic-ui.sh
 
 ---
 
+## ⚠️ 模型策略（锁定，不可更改）
+
+> **规则**：本项目固定使用以下 2 个模型，**不测试、不切换、不推荐其他模型**。
+
+| 角色 | 模型名 | 说明 |
+|---|---|---|
+| **编排器** | `qwen3:32b` | 任务规划 + tool calling，无 PARSER bug |
+| **浏览器代理** | `qwen2.5vl-fast` | 视觉模型，处理截图，num_ctx=16384 |
+
+仅此 2 个模型。不接受替代方案。
+
+---
+
 ## DGX Spark 端准备
 
-确保 DGX Spark 上 Ollama 可被远程访问：
+### 1. 配置 Ollama 远程访问和性能优化
 
 ```bash
 # 在 DGX Spark 上执行
-export OLLAMA_HOST=0.0.0.0
-ollama serve
 
-# 确认模型
+# 创建 Ollama systemd override（永不卸载模型 + 多模型并行）
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null << 'EOF'
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
+Environment="OLLAMA_KEEP_ALIVE=-1"
+Environment="OLLAMA_MAX_LOADED_MODELS=3"
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+### 2. 拉取和创建模型
+
+```bash
+# 编排器（~20GB）
+ollama pull qwen3:32b
+
+# 浏览器视觉模型（~6GB）
+ollama pull qwen2.5vl
+
+# 创建快速版本（限制 context window）
+cat > /tmp/Modelfile.fast << 'EOF'
+FROM qwen2.5vl:latest
+PARAMETER num_ctx 16384
+PARAMETER temperature 0.0001
+EOF
+ollama create qwen2.5vl-fast -f /tmp/Modelfile.fast
+
+# 确认（必须看到这 3 个）
 ollama list
-# 应看到 qwen3.6:35b 和 fara-7b:q5
+# qwen3:32b, qwen2.5vl:latest, qwen2.5vl-fast
+```
+
+### 3. 验证
+
+```bash
+# 确认远程可访问
+curl http://10.87.5.55:11434/api/tags
+
+# 确认编排器无 PARSER bug（应无输出，表示安全）
+ollama show qwen3:32b --modelfile | grep -i parser
+
+# 确认视觉模型能力
+ollama show qwen2.5vl-fast --verbose 2>&1 | grep -A2 "Capabilities"
+# 应显示: completion, vision
 ```
 
 ---
@@ -231,8 +299,8 @@ ollama list
 
 ```bash
 OLLAMA_HOST="http://10.87.5.55:11434"    # DGX Spark 的实际 IP
-ORCHESTRATOR_MODEL="qwen3.6:35b"          # 编排器模型
-BROWSER_MODEL="batiai/fara-7b:q5"         # 浏览器代理模型
+ORCHESTRATOR_MODEL="qwen3:32b"            # 编排器模型（32B，tool calling）
+BROWSER_MODEL="qwen2.5vl-fast"            # 浏览器代理模型（8B，vision）
 MAGENTIC_PORT=8081                         # Web UI 端口
 ```
 
@@ -294,4 +362,6 @@ network:
 | 其它机器访问报 `Bad Host header` | Magentic-UI 只接受 localhost Host 头 | 已修复：脚本自动配置 nginx 反向代理，无需手动处理 |
 | Ollama 连接失败 | DGX Spark 未就绪 | 确认 `OLLAMA_HOST=0.0.0.0`、防火墙 11434、网络连通 |
 | Magentic-UI 启动失败 | Python 或依赖问题 | 检查 `python3.12 --version`、`docker info`、重新运行 deploy 脚本 |
-| 复杂任务报 `Chat completion failed` | 模型 `function_calling` 配置或模型超时 | 检查 `config.yaml` 中 `function_calling: true`，查看 `journalctl -u magentic-ui -f` |
+| `QEMU is using TCG` 警告 | ESXi 未开启嵌套虚拟化 | vSphere 关机 → 编辑设置 → CPU → 勾选"向客户操作系统公开硬件辅助的虚拟化" → 开机 |
+| `/dev/kvm` 不存在 | KVM 内核模块未加载 | `sudo modprobe kvm kvm_intel`，确认 ESXi 嵌套虚拟化已开启 |
+| `Chat completion failed after N attempts` | Ollama 推理超时（262k context 过大或无 KVM） | 1) 确认 KVM 已启用 2) 部署脚本会自动 patch `num_ctx=8192` 3) 检查 `journalctl -u magentic-ui -f` |

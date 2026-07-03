@@ -1,0 +1,243 @@
+#cloud-config
+# =============================================================
+# Ubuntu 24.04 LTS Autoinstall - ESXi 无人值守安装
+# 职责：硬件配置（网络/分区）+ 用户账户 + SSH + Docker
+# 安全加固由 harden-ubuntu.sh 完成
+# Agentic-UI 部署由 deploy-agentic-ui.sh 完成
+# =============================================================
+autoinstall:
+  version: 1
+
+  # ── 语言与键盘 ──────────────────────────────────────────────
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── 网络（ESXi VMXNET3，网卡名通常为 ens192）───────────────
+  # 静态 IP 配置
+  network:
+    version: 2
+    ethernets:
+      ens192:
+        dhcp4: false
+        optional: true
+        match:
+          name: "en*"              # 匹配任意以太网接口（VMXNET3/E1000 等）
+        set-name: ens192           # 统一命名为 ens192
+        addresses: [10.87.5.182/24]
+        routes:
+          - to: default
+            via: 10.87.5.1
+        nameservers:
+          addresses: [10.87.5.11, 10.87.5.12]
+
+  # ── 存储分区 ────────────────────────────────────────────────
+  # 方案：单系统盘(sda) LVM 分区（/、/var、/tmp、/home）
+  # 无独立数据盘（Agentic-UI 不需要）
+  storage:
+    config:
+      # ── 系统盘 sda ── GPT 分区方案（EFI 启动）───────────
+      - type: disk
+        id: disk-sda
+        path: /dev/sda
+        wipe: superblock-recursive
+        ptable: gpt                     # GPT 分区表（EFI 必需）
+
+      # ESP 分区（EFI 引导必需）
+      - type: partition
+        id: part-efi
+        device: disk-sda
+        size: 512M
+        flag: boot                        # EFI 系统分区
+        grub_device: true
+
+      # /boot 分区（ext4，用于内核和 grub 模块）
+      - type: partition
+        id: part-boot
+        device: disk-sda
+        size: 1G
+
+      # LVM 物理卷
+      - type: partition
+        id: part-lvm
+        device: disk-sda
+        size: -1                          # 剩余全部给 LVM
+
+      - type: format
+        id: fmt-efi
+        volume: part-efi
+        fstype: fat32
+        label: ESP
+
+      - type: format
+        id: fmt-boot
+        volume: part-boot
+        fstype: ext4
+        label: boot
+
+      - type: lvm_volgroup
+        id: vg-system
+        name: vg-system
+        devices: [part-lvm]
+
+      - type: lvm_partition
+        id: lv-root
+        volgroup: vg-system
+        name: lv-root
+        size: 50G
+
+      - type: lvm_partition
+        id: lv-var
+        volgroup: vg-system
+        name: lv-var
+        size: 30G
+
+      - type: lvm_partition
+        id: lv-tmp
+        volgroup: vg-system
+        name: lv-tmp
+        size: 10G
+
+      - type: lvm_partition
+        id: lv-home
+        volgroup: vg-system
+        name: lv-home
+        size: -1                           # 剩余全给 /home
+
+      - type: format
+        id: fmt-root
+        volume: lv-root
+        fstype: ext4
+
+      - type: format
+        id: fmt-var
+        volume: lv-var
+        fstype: ext4
+
+      - type: format
+        id: fmt-tmp
+        volume: lv-tmp
+        fstype: ext4
+
+      - type: format
+        id: fmt-home
+        volume: lv-home
+        fstype: ext4
+
+      - type: mount
+        id: mnt-efi
+        device: fmt-efi
+        path: /boot/efi
+
+      - type: mount
+        id: mnt-boot
+        device: fmt-boot
+        path: /boot
+
+      - type: mount
+        id: mnt-root
+        device: fmt-root
+        path: /
+
+      - type: mount
+        id: mnt-var
+        device: fmt-var
+        path: /var
+
+      - type: mount
+        id: mnt-tmp
+        device: fmt-tmp
+        path: /tmp
+
+      - type: mount
+        id: mnt-home
+        device: fmt-home
+        path: /home
+
+  # ── 账户（唯一管理员用户）──────────────────────────────────
+  identity:
+    hostname: LAB-Magentic-UI-02
+    username: magentic
+    # 明文密码: ChangeMe2026!@#
+    # 此 hash 仅为安装阶段占位，首次启动时由 user-data.chpasswd 和 late-commands 覆盖
+    # SHA-512 hash of 'ubuntu' (安装阶段临时密码，启动后被 chpasswd 覆盖)
+    password: '$6$exDY1mhS4KUYCE/2$zmn9ToZwTKLhCw.b4/b.ZRTIZM6AtkDqaAl/g7ZFwer0XTwXowbeblM7UK.VW1kMexI.OOkWL5lRTl.6WTwJf.'
+
+  # ── SSH ─────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true
+    # 建议填入 SSH 公钥，填入后可禁用密码登录
+    authorized-keys: []
+    # authorized-keys:
+    #   - "ssh-rsa AAAA... user@host"
+
+  # ── 最小化软件包（Docker/Python 由 late-commands 安装）──────
+  packages:
+    - open-vm-tools                        # ESXi VMware Tools（必须）
+    - curl
+    - ca-certificates
+    - qemu-kvm                             # KVM 虚拟化（Quicksand 沙箱加速必须）
+    - cpu-checker                          # kvm-ok 检测工具
+
+  # ── 安装完成后执行 ───────────────────────────────────────────
+  late-commands:
+    # 启用 VMware Tools
+    - curtin in-target --target=/target -- systemctl enable open-vm-tools
+    # SSH: 启用密码认证，禁止 root 登录，重启 ssh 服务（Ubuntu 24.04 服务名为 ssh）
+    - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- systemctl enable ssh
+    # 创建脚本上传目录（WinSCP/SCP 上传目标，magentic 可读写）
+    - curtin in-target --target=/target -- mkdir -p /opt/scripts
+    - curtin in-target --target=/target -- chown magentic:magentic /opt/scripts
+    - curtin in-target --target=/target -- chmod 775 /opt/scripts
+    # 安装 Docker Engine（Magentic-UI 沙箱依赖）
+    - |
+      curtin in-target --target=/target -- bash -c '
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      apt-get update -qq
+      apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      usermod -aG docker magentic
+      systemctl enable docker
+      systemctl start docker || true
+      docker --version || true
+      '
+    # 安装 Python 3.12（Magentic-UI 依赖）
+    - curtin in-target --target=/target -- apt-get install -y -qq python3.12 python3.12-venv
+    # 启用 KVM 嵌套虚拟化（Quicksand 沙箱性能必须）
+    # 加载 kvm 内核模块并设置开机自动加载
+    - curtin in-target --target=/target -- bash -c "echo 'kvm' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_intel' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_amd' >> /etc/modules-load.d/kvm.conf"
+    # 设置 /dev/kvm 权限：让 magentic 用户可以使用 KVM
+    - curtin in-target --target=/target -- usermod -aG kvm magentic
+    # 强制设置 magentic 密码（覆盖 identity 中的占位 hash，确保登录成功）
+    # 注意: 外层用单引号避免 bash 将 ! 解释为历史扩展
+    - curtin in-target --target=/target -- bash -c 'echo "magentic:ChangeMe2026!@#" | chpasswd'
+    # 设置 magentic 无密码 sudo（方便后续脚本执行）
+    - curtin in-target --target=/target -- bash -c "echo 'magentic ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/magentic"
+    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/magentic
+    # 最终更新
+    - curtin in-target --target=/target -- apt-get -y -qq dist-upgrade
+    - curtin in-target --target=/target -- apt-get -y -qq autoremove
+
+  user-data:
+    disable_root: true
+    chpasswd:
+      users:
+        - name: magentic
+          password: "ChangeMe2026!@#"
+          type: text
+      expire: False
+    runcmd:
+      - [ systemctl, daemon-reload ]
+      - [ systemctl, enable, docker ]
+      - [ systemctl, start, docker ]
+      - [ sh, -c, 'sleep 5 && docker --version && echo "Docker OK" || echo "Docker check failed"' ]
+
+  updates: security
+  shutdown: reboot

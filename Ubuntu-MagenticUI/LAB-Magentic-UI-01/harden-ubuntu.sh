@@ -219,9 +219,9 @@ ok "SFTP subsystem enabled: $SFTP_SERVER"
 cat > /etc/issue.net <<'EOF'
 ***************************************************************************
 *                         警告 NOTICE                                      *
-* 本系统仅供授权用户使用，未经授权的访问将被监控并追究法律责任。                *
-* This system is restricted to authorized users only.                     *
-* Unauthorized access will be monitored and prosecuted by law.            *
+* 本系统仅供授权用户使用，未经授权的访问将被监控并追究法律责任。           *
+* This system is restricted to authorized users only.                   *
+* Unauthorized access will be monitored and prosecuted by law.          *
 ***************************************************************************
 EOF
 

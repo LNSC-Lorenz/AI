@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================
-# Ubuntu 24.04 LTS CIS Hardening + Magentic-UI 优化脚本
+# Ubuntu 24.04 LTS CIS Hardening + Agentic-UI 优化脚本
 # 参考: https://ubuntu.com/blog/hardening-automation-for-cis-benchmarks
 # 职责: 系统加固、CIS合规、内核优化、Docker安全、安全基线配置
 # 前置: autoinstall 已完成
@@ -54,7 +54,7 @@ check_usg() {
 echo ""
 echo "╔══════════════════════════════════════════════╗"
 echo "║  Ubuntu 24.04 LTS CIS 加固脚本               ║"
-echo "║  目标: Magentic-UI 专用服务器                 ║"
+echo "║  目标: Agentic-UI 专用服务器                  ║"
 echo "║  参考: Ubuntu Security Guide (USG)           ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
@@ -219,9 +219,9 @@ ok "SFTP subsystem enabled: $SFTP_SERVER"
 cat > /etc/issue.net <<'EOF'
 ***************************************************************************
 *                         警告 NOTICE                                      *
-* 本系统仅供授权用户使用，未经授权的访问将被监控并追究法律责任。                *
-* This system is restricted to authorized users only.                     *
-* Unauthorized access will be monitored and prosecuted by law.            *
+* 本系统仅供授权用户使用，未经授权的访问将被监控并追究法律责任。           *
+* This system is restricted to authorized users only.                   *
+* Unauthorized access will be monitored and prosecuted by law.          *
 ***************************************************************************
 EOF
 
@@ -337,10 +337,10 @@ if $ENABLE_UFW; then
     ufw deny in from 127.0.0.0/8
     ufw deny in from ::1
     ufw allow "$SSH_PORT/tcp"
-    ufw allow "$MAGENTIC_PORT/tcp"  # Magentic-UI Web
+    ufw allow "$MAGENTIC_PORT/tcp"  # Agentic-UI Web
     ufw --force enable
     ufw status verbose
-    ok "CIS UFW 防火墙已启用 (SSH + Magentic-UI:$MAGENTIC_PORT)"
+    ok "CIS UFW 防火墙已启用 (SSH + Agentic-UI:$MAGENTIC_PORT)"
 else
     warn "防火墙配置已跳过（ENABLE_UFW=false）"
 fi
@@ -379,11 +379,11 @@ EOF
 systemctl enable fail2ban --now
 ok "Fail2ban 已启用（SSH 5次失败封禁1小时）"
 
-# ── Step 9: 内核参数优化（Magentic-UI + Docker + CIS）──────────
-step "9: 内核参数优化 (Magentic-UI + Docker + CIS)"
+# ── Step 9: 内核参数优化（Agentic-UI + Docker + CIS）──────────
+step "9: 内核参数优化 (Agentic-UI + Docker + CIS)"
 
-cat > /etc/sysctl.d/99-magentic-ui.conf <<'EOF'
-# Docker 容器优化
+cat > /etc/sysctl.d/99-agentic-ui.conf <<'EOF'
+# Agentic-UI + Docker 容器优化
 vm.swappiness = 10
 vm.dirty_ratio = 15
 vm.dirty_background_ratio = 5
@@ -407,8 +407,8 @@ fs.protected_symlinks = 1
 fs.protected_hardlinks = 1
 EOF
 
-sysctl -p /etc/sysctl.d/99-magentic-ui.conf
-ok "Magentic-UI + Docker + CIS 内核参数已优化"
+sysctl -p /etc/sysctl.d/99-agentic-ui.conf
+ok "Agentic-UI + Docker + CIS 内核参数已优化"
 
 # Disable transparent hugepages
 echo never > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
@@ -436,8 +436,8 @@ ok "Transparent hugepages disabled (systemd service)"
 # ── Step 10: 文件描述符和进程限制 ───────────────────────────
 step "10: 系统限制配置"
 
-cat > /etc/security/limits.d/99-magentic-ui.conf <<EOF
-# Magentic-UI + Docker limits
+cat > /etc/security/limits.d/99-agentic-ui.conf <<EOF
+# Agentic-UI + Docker limits
 magentic soft nofile 65536
 magentic hard nofile 65536
 magentic soft nproc  65536
@@ -484,9 +484,9 @@ fi
 # ── Step 12: 日志和监控 ───────────────────────────────────────
 step "12: 日志和监控配置"
 
-# Magentic-UI 日志轮转
-cat > /etc/logrotate.d/magentic-ui <<EOF
-/home/magentic/magentic-lite/*.log {
+# Agentic-UI 日志轮转
+cat > /etc/logrotate.d/agentic-ui <<EOF
+/home/magentic/agentic-ui/*.log {
     daily
     rotate 14
     compress
@@ -554,7 +554,7 @@ step "15: CIS 合规报告"
 cat > /var/log/cis-hardening-report.txt <<EOF
 ===============================================
   Ubuntu 24.04 LTS CIS Hardening Report
-  Target: Magentic-UI Server
+  Target: Agentic-UI Server
   Generated: $(date)
 ===============================================
 
@@ -588,8 +588,8 @@ cat >> /var/log/cis-hardening-report.txt <<EOF
    sudo apt install ubuntu-security-guide
    sudo usg audit cis_$CIS_LEVEL
 
-Magentic-UI 部署:
-   bash deploy-magentic-ui.sh
+Agentic-UI 部署:
+   bash deploy-agentic-ui.sh
 
 ===============================================
 EOF
@@ -600,7 +600,7 @@ ok "CIS 加固报告已保存到 /var/log/cis-hardening-report.txt"
 echo ""
 echo "╔══════════════════════════════════════════════╗"
 echo "║  Ubuntu 24.04 LTS CIS 加固完成！             ║"
-echo "║  目标: Magentic-UI 专用服务器                 ║"
+echo "║  目标: Agentic-UI 专用服务器                  ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 ok "系统更新和安全工具"
@@ -610,7 +610,7 @@ ok "CIS 审计和日志"
 ok "CIS 文件权限"
 ok "CIS 网络安全"
 ok "Fail2ban 防护"
-ok "Magentic-UI + Docker 内核优化"
+ok "Agentic-UI + Docker 内核优化"
 ok "Docker 安全加固"
 $ENABLE_UFW && ok "UFW 防火墙" || warn "防火墙未启用"
 echo ""
@@ -619,6 +619,6 @@ echo "  cat /var/log/cis-hardening-report.txt"
 echo ""
 warn "下一步:"
 echo "  1. 重启系统以应用所有内核参数: sudo reboot"
-echo "  2. 部署 Magentic-UI: bash deploy-magentic-ui.sh"
+echo "  2. 部署 Agentic-UI: bash deploy-agentic-ui.sh"
 echo "  3. 定期运行 AIDE 检查: sudo aide --check"
 echo ""
