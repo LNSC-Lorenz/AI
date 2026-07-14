@@ -1,0 +1,223 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LNSC-APPs-Center</title><link rel="icon" href="App.ico" type="image/x-icon"><script>document.documentElement.dataset.theme = localStorage.getItem('lnsc_theme') || 'dark';</script><link rel="stylesheet" href="style.css"></head><body><div id="app-root">
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="4.2" y1="4.2" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.8" y2="19.8"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/><line x1="4.2" y1="19.8" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.8" y2="4.2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-trending" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+    <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></symbol>
+    <symbol id="i-factory" viewBox="0 0 24 24"><path d="M2 21V9l6 4V9l6 4V9l6 4v8H2z"/><path d="M17 9V4h4v6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9L6.7 20.3a2.1 2.1 0 0 1-3-3l6.9-6.9A6 6 0 0 1 18.5 2.5l-3.8 3.8z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  </svg>
+  <canvas id="particle-canvas"></canvas>
+
+  <header id="main-header">
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-text">
+          <span class="logo-title">LNSC-APPs-Center | LAC | ></span>
+          <span class="logo-sub" data-i18n="logoSub">LNSC自开发Web应用中心</span>
+        </div>
+      </div>
+      <div class="search-box">
+        <span class="search-icon"><svg class="icon"><use href="#i-search"/></svg></span>
+        <input type="text" placeholder="搜索应用..." data-i18n-ph="searchPh" id="search-input" />
+      </div>
+      <div class="header-right">
+        <div class="weather-ticker" id="weather-ticker">
+          <div class="weather-track" id="weather-track"></div>
+        </div>
+        <button id="lang-toggle" class="theme-toggle lang-toggle" title="中 / EN">EN</button>
+        <button id="theme-toggle" class="theme-toggle" title="切换主题"><svg class="icon"><use href="#i-sun"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section id="hero-section">
+      <div class="hero-left">
+        <div class="hero-text">
+          <h1 class="hero-title" data-i18n="heroTitle">欢迎使用企业应用中心</h1>
+          <p class="hero-sub" data-i18n="heroSub">统一入口 · 高效协作 · 安全可靠</p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card" data-anim="fade-up" style="--delay:0.1s">
+            <span class="stat-num" id="stat-apps" data-target="0">0</span>
+            <span class="stat-label" data-i18n="statApps">已上线应用</span>
+          </div>
+          <div class="stat-card" data-anim="fade-up" style="--delay:0.2s">
+            <span class="stat-num" id="stat-users" data-target="0">0</span>
+            <span class="stat-label" data-i18n="statUsers">活跃用户</span>
+          </div>
+          <div class="stat-card" data-anim="fade-up" style="--delay:0.3s">
+            <span class="stat-num" id="stat-uptime" data-target="0">0</span>
+            <span class="stat-label" data-i18n="statUptime">服务可用率 %</span>
+          </div>
+        </div>
+      </div>
+      <div class="hero-terminal" data-anim="fade-up" style="--delay:0.2s">
+        <pre class="term-body" id="term-output">Loading...</pre>
+      </div>
+    </section>
+
+    <section id="category-section">
+      <h2 class="section-title" data-i18n="secCats">应用分类</h2>
+      <div class="category-grid">
+        <div class="cat-chip" data-cat="finance">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-trending"/></svg></span><span class="cat-label" data-i18n="cat_finance">财务管理</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="finance">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="project">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-clipboard"/></svg></span><span class="cat-label" data-i18n="cat_project">项目管理</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="project">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="market">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-cart"/></svg></span><span class="cat-label" data-i18n="cat_market">市场</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="market">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="workshop">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-factory"/></svg></span><span class="cat-label" data-i18n="cat_workshop">车间</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="workshop">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="hr">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-users"/></svg></span><span class="cat-label" data-i18n="cat_hr">人力资源</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="hr">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="it">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-monitor"/></svg></span><span class="cat-label" data-i18n="cat_it">IT 工具</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="it">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="sales">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-chart"/></svg></span><span class="cat-label" data-i18n="cat_sales">销售运营</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="sales">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="logistics">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-truck"/></svg></span><span class="cat-label" data-i18n="cat_logistics">物流</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="logistics">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="engineering">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-wrench"/></svg></span><span class="cat-label" data-i18n="cat_engineering">工程</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="engineering">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="quality">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-shield"/></svg></span><span class="cat-label" data-i18n="cat_quality">质量</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="quality">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="operations">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-settings"/></svg></span><span class="cat-label" data-i18n="cat_operations">运营</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="operations">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip" data-cat="business">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-briefcase"/></svg></span><span class="cat-label" data-i18n="cat_business">业务</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="business">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+        <div class="cat-chip cat-all-chip active" data-cat="all">
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-grid"/></svg></span><span class="cat-label" data-i18n="cat_all">全部</span></div>
+          <div class="cat-divider"></div>
+          <div class="cat-count"><b data-count="all">0</b> APPS</div>
+          <div class="cat-status"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="apps-section">
+      <h2 class="section-title" data-i18n="secApps">添加新应用</h2>
+      <form id="app-form" class="inline-add-form">
+        <div class="inline-form-row">
+          <label class="form-field"><span data-i18n="fName">名称 *</span><input type="text" name="name" required maxlength="20" placeholder="应用名称" data-i18n-ph="fNamePh"></label>
+          <label class="form-field"><span data-i18n="fDesc">描述</span><input type="text" name="desc" maxlength="40" placeholder="简短描述（可选）" data-i18n-ph="fDescPh"></label>
+        </div>
+        <div class="inline-form-row">
+          <label class="form-field"><span data-i18n="fCat">分类</span>
+            <select name="cat">
+              <option value="it" selected data-i18n="cat_it">IT 工具</option>
+              <option value="hr" data-i18n="cat_hr">人力资源</option>
+              <option value="finance" data-i18n="cat_finance">财务管理</option>
+              <option value="project" data-i18n="cat_project">项目管理</option>
+              <option value="sales" data-i18n="cat_sales">销售运营</option>
+              <option value="market" data-i18n="cat_market">市场</option>
+              <option value="logistics" data-i18n="cat_logistics">物流</option>
+              <option value="workshop" data-i18n="cat_workshop">车间</option>
+              <option value="engineering" data-i18n="cat_engineering">工程</option>
+              <option value="quality" data-i18n="cat_quality">质量</option>
+              <option value="operations" data-i18n="cat_operations">运营</option>
+              <option value="business" data-i18n="cat_business">业务</option>
+            </select>
+          </label>
+          <label class="form-field"><span data-i18n="fUpload">上传应用程序文件</span><input type="file" name="files" id="upload-input" webkitdirectory directory multiple></label>
+        </div>
+        <div class="upload-hint hidden" id="upload-hint"></div>
+        <button type="submit" class="btn-primary btn-full" data-i18n="btnAdd">添加</button>
+      </form>
+      <div class="apps-grid" id="apps-grid"></div>
+    </section>
+
+    <section id="shortcuts-section" data-anim="fade-up">
+      <h2 class="section-title" data-i18n="secShortcuts">常用系统</h2>
+      <div class="shortcuts-grid">
+        <a class="shortcut-card" href="https://lechlergmbh.my.salesforce.com/" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-users"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">CRM</span>
+        </a>
+        <a class="shortcut-card" href="https://oa-lechlerconnect.msappproxy.net/" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-clipboard"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">OA</span>
+        </a>
+        <a class="shortcut-card" href="https://saperpcn.lechler.com/sap/bc/gui/sap/its/webgui?sap-language=EN&sap-client=100" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-monitor"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">SAP</span>
+        </a>
+      </div>
+    </section>
+
+    <section id="notice-section" data-anim="fade-up">
+      <h2 class="section-title" data-i18n="secNotices">系统消息</h2>
+      <div class="notice-list" id="msg-list">
+        <div class="notice-item"><span class="notice-dot info"></span><span class="notice-text">加载中...</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer id="main-footer">
+    <span data-i18n="footer">© 2026 莱克勒喷嘴系统（常州）有限公司 &nbsp;&nbsp;|&nbsp; v1.0.0</span>
+  </footer>
+</div><script src="script.js"></script></body></html>

@@ -1,0 +1,13 @@
+{
+  "name": "lnsc-apps-center",
+  "version": "1.0.0",
+  "description": "LNSC Enterprise App Center with file upload",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

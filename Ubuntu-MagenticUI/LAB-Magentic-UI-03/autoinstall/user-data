@@ -1,0 +1,256 @@
+#cloud-config
+# =============================================================
+# Ubuntu 24.04 LTS Autoinstall - ESXi 无人值守安装
+# LAB-Magentic-UI-03 — 基于 LAB-01 方案，优化 VM 启动速度和模型响应速度
+#
+# 职责：硬件配置（网络/分区）+ 用户账户 + SSH + Docker + 预装关键组件
+# 安全加固由 harden-ubuntu.sh 完成
+# Magentic-UI 部署由 deploy-magentic-ui.sh 完成
+#
+# 相比 LAB-01 的改进：
+#   1. autoinstall 阶段预装 nginx、uv、build-essential（减少 deploy 脚本时间）
+#   2. autoinstall 阶段预创建 Python venv 并安装 Magentic-UI（减少 ~5 分钟）
+#   3. autoinstall 阶段预下载 Quicksand 沙箱包（减少首次启动等待）
+#   4. 优化 KVM 权限和模块加载
+# =============================================================
+autoinstall:
+  version: 1
+
+  # ── 语言与键盘 ──────────────────────────────────────────────
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── 网络（ESXi VMXNET3，网卡名通常为 ens192）───────────────
+  network:
+    version: 2
+    ethernets:
+      ens192:
+        dhcp4: false
+        optional: true
+        match:
+          name: "en*"
+        set-name: ens192
+        addresses: [10.87.5.183/24]
+        routes:
+          - to: default
+            via: 10.87.5.1
+        nameservers:
+          addresses: [10.87.5.11, 10.87.5.12]
+
+  # ── 存储分区 ────────────────────────────────────────────────
+  storage:
+    config:
+      - type: disk
+        id: disk-sda
+        path: /dev/sda
+        wipe: superblock-recursive
+        ptable: gpt
+
+      - type: partition
+        id: part-efi
+        device: disk-sda
+        size: 512M
+        flag: boot
+        grub_device: true
+
+      - type: partition
+        id: part-boot
+        device: disk-sda
+        size: 1G
+
+      - type: partition
+        id: part-lvm
+        device: disk-sda
+        size: -1
+
+      - type: format
+        id: fmt-efi
+        volume: part-efi
+        fstype: fat32
+        label: ESP
+
+      - type: format
+        id: fmt-boot
+        volume: part-boot
+        fstype: ext4
+        label: boot
+
+      - type: lvm_volgroup
+        id: vg-system
+        name: vg-system
+        devices: [part-lvm]
+
+      - type: lvm_partition
+        id: lv-root
+        volgroup: vg-system
+        name: lv-root
+        size: 50G
+
+      - type: lvm_partition
+        id: lv-var
+        volgroup: vg-system
+        name: lv-var
+        size: 30G
+
+      - type: lvm_partition
+        id: lv-tmp
+        volgroup: vg-system
+        name: lv-tmp
+        size: 10G
+
+      - type: lvm_partition
+        id: lv-home
+        volgroup: vg-system
+        name: lv-home
+        size: -1
+
+      - type: format
+        id: fmt-root
+        volume: lv-root
+        fstype: ext4
+
+      - type: format
+        id: fmt-var
+        volume: lv-var
+        fstype: ext4
+
+      - type: format
+        id: fmt-tmp
+        volume: lv-tmp
+        fstype: ext4
+
+      - type: format
+        id: fmt-home
+        volume: lv-home
+        fstype: ext4
+
+      - type: mount
+        id: mnt-efi
+        device: fmt-efi
+        path: /boot/efi
+
+      - type: mount
+        id: mnt-boot
+        device: fmt-boot
+        path: /boot
+
+      - type: mount
+        id: mnt-root
+        device: fmt-root
+        path: /
+
+      - type: mount
+        id: mnt-var
+        device: fmt-var
+        path: /var
+
+      - type: mount
+        id: mnt-tmp
+        device: fmt-tmp
+        path: /tmp
+
+      - type: mount
+        id: mnt-home
+        device: fmt-home
+        path: /home
+
+  # ── 账户 ───────────────────────────────────────────────────
+  identity:
+    hostname: LAB-Magentic-UI-03
+    username: magentic
+    password: '$6$exDY1mhS4KUYCE/2$zmn9ToZwTKLhCw.b4/b.ZRTIZM6AtkDqaAl/g7ZFwer0XTwXowbeblM7UK.VW1kMexI.OOkWL5lRTl.6WTwJf.'
+
+  # ── SSH ─────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+
+  # ── 软件包（比 LAB-01 多装 nginx、build-essential 以减少 deploy 时间）──
+  packages:
+    - open-vm-tools
+    - curl
+    - ca-certificates
+    - qemu-kvm
+    - cpu-checker
+    - nginx                              # 预装 nginx（LAB-01 在 deploy 阶段才装）
+    - build-essential                    # 编译依赖（部分 Python 包需要）
+    - pkg-config                         # 编译依赖
+    - libjpeg-dev                        # Pillow 图片处理依赖（bridge 图片压缩）
+    - zlib1g-dev                         # Pillow 依赖
+
+  # ── 安装完成后执行 ───────────────────────────────────────────
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable open-vm-tools
+    - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- systemctl enable ssh
+    - curtin in-target --target=/target -- mkdir -p /opt/scripts
+    - curtin in-target --target=/target -- chown magentic:magentic /opt/scripts
+    - curtin in-target --target=/target -- chmod 775 /opt/scripts
+    # 安装 Docker Engine
+    - |
+      curtin in-target --target=/target -- bash -c '
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+      apt-get update -qq
+      apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      usermod -aG docker magentic
+      systemctl enable docker
+      systemctl start docker || true
+      docker --version || true
+      '
+    # 安装 Python 3.12
+    - curtin in-target --target=/target -- apt-get install -y -qq python3.12 python3.12-venv
+    # KVM 模块自动加载
+    - curtin in-target --target=/target -- bash -c "echo 'kvm' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_intel' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- bash -c "echo 'kvm_amd' >> /etc/modules-load.d/kvm.conf"
+    - curtin in-target --target=/target -- usermod -aG kvm magentic
+    # 预装 uv（Python 包管理器，LAB-01 在 deploy 阶段才装）
+    - |
+      curtin in-target --target=/target -- bash -c '
+      su - magentic -c "curl -LsSf https://astral.sh/uv/install.sh | sh" || true
+      '
+    # 预创建 venv 并安装 Magentic-UI（减少 deploy 脚本 ~5 分钟）
+    - |
+      curtin in-target --target=/target -- bash -c '
+      su - magentic -c "
+        export PATH=\$HOME/.local/bin:\$PATH
+        mkdir -p /home/magentic/magentic-lite
+        cd /home/magentic/magentic-lite
+        uv venv --python=3.12 --seed .venv
+        source .venv/bin/activate
+        uv pip install \"magentic_ui[ollama]>=0.2.0\"
+        .venv/bin/pip install --no-deps --index-url https://microsoft.github.io/quicksand/simple/ quicksand-cua quicksand-ubuntu quicksand-agent || true
+        .venv/bin/pip install -q fastapi uvicorn httpx Pillow || true
+      " || true
+      '
+    # 禁用 nginx 默认站点（避免端口冲突）
+    - curtin in-target --target=/target -- rm -f /etc/nginx/sites-enabled/default
+    - curtin in-target --target=/target -- systemctl enable nginx
+    # 设置 magentic 密码和 sudo
+    - curtin in-target --target=/target -- bash -c "echo 'magentic:ChangeMe2026!@#' | chpasswd"
+    - curtin in-target --target=/target -- bash -c "echo 'magentic ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/magentic"
+    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/magentic
+    # 最终更新
+    - curtin in-target --target=/target -- apt-get -y -qq dist-upgrade
+    - curtin in-target --target=/target -- apt-get -y -qq autoremove
+
+  user-data:
+    disable_root: true
+    chpasswd:
+      list: |
+        magentic:ChangeMe2026!@#
+      expire: False
+    runcmd:
+      - [ systemctl, daemon-reload ]
+      - [ systemctl, enable, docker ]
+      - [ systemctl, start, docker ]
+      - [ sh, -c, 'sleep 5 && docker --version && echo "Docker OK" || echo "Docker check failed"' ]
+
+  updates: security
+  shutdown: reboot
