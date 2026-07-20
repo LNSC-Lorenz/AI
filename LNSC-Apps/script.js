@@ -157,9 +157,14 @@ async function loadMessages() {
     }
     msgs.slice().reverse().forEach(m => {
       const dot = m.action === 'add' ? 'success' : 'urgent';
-      const icon = m.action === 'add' ? '＋' : '✕';
-      const text = icon + ' ' + m.appName;
-      const date = m.time ? m.time.slice(0, 16).replace('T', ' ') : '';
+      const lang = document.documentElement.dataset.lang || 'zh';
+      const catDict = (I18N[lang] || I18N.zh);
+      const catName = catDict['cat_' + (m.cat || '')] || m.cat || '';
+      const actionText = m.action === 'add' ? (lang === 'zh' ? '添加了' : 'added') : (lang === 'zh' ? '删除了' : 'deleted');
+      const appLabel = lang === 'zh' ? '应用' : 'app';
+      const catPart = catName ? ((lang === 'zh' ? '来自' : 'From') + ' \u3010' + catName + '\u3011 ') : '';
+      const text = catPart + actionText + appLabel + ' \u3010' + m.appName + '\u3011';
+      const date = m.time ? m.time.slice(5, 16).replace('T', ' ') : '';
       const item = document.createElement('div');
       item.className = 'notice-item';
       item.innerHTML = '<span class="notice-dot ' + dot + '"></span><span class="notice-text">' + text + '</span><span class="notice-date">' + date + '</span>';
@@ -167,14 +172,15 @@ async function loadMessages() {
     });
   } catch (e) { console.warn('Messages load error:', e); }
 }
-function postMessage(action, appName) {
+function postMessage(action, appName, cat) {
   fetch('/api/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, appName, uid: MY_UID })
+    body: JSON.stringify({ action, appName, cat: cat || '', uid: MY_UID })
   }).then(() => loadMessages()).catch(() => {});
 }
 loadMessages();
+setInterval(loadMessages, 30000);
 
 function rebuildApps() {
   const hidden = loadLS(LS_HIDDEN, []);
@@ -357,7 +363,7 @@ function removeApp(app, card) {
       .then(r => r.json())
       .then(d => {
         if (!d.success) { alert(d.error || '删除失败'); return; }
-        postMessage('delete', app.name);
+        postMessage('delete', app.name, app.cat);
       })
       .catch(e => console.warn('Server delete error:', e));
   } else {
@@ -474,7 +480,7 @@ form.addEventListener('submit', async e => {
         } catch (e) {
           console.error('[Meta] save failed:', e);
         }
-        postMessage('add', app.name);
+        postMessage('add', app.name, app.cat);
         rebuildApps();
         render();
         setTimeout(() => { form.reset(); hint.classList.add('hidden'); submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }, 3000);
@@ -525,7 +531,7 @@ const I18N = {
     statApps: '已上线应用', statUsers: '活跃用户', statUptime: '服务可用率 %',
     secCats: '应用分类', secApps: '添加新应用', secShortcuts: '常用系统', secNotices: '系统消息',
     cat_all: '全部', cat_hr: '人力资源', cat_finance: '财务管理', cat_it: 'IT 工具',
-    cat_project: '项目管理', cat_sales: '销售运营', cat_market: '市场',
+    cat_project: '采购', cat_sales: '销售运营', cat_market: '市场',
     cat_logistics: '物流', cat_engineering: '工程', cat_quality: '质量', cat_operations: '运营', cat_business: '业务', cat_workshop: '车间',
     addApp: '添加应用', emptyHint: '暂无应用记录',
     fName: '名称 *', fNamePh: '应用名称', fUrl: '链接 *', fDesc: '描述',
@@ -541,7 +547,7 @@ const I18N = {
     statApps: 'Apps Online', statUsers: 'Active Users', statUptime: 'Uptime %',
     secCats: 'Categories', secApps: 'Add New App', secShortcuts: 'Links', secNotices: 'System Messages',
     cat_all: 'All', cat_hr: 'HR', cat_finance: 'Finance', cat_it: 'IT Tools',
-    cat_project: 'Projects', cat_sales: 'Sales', cat_market: 'Marketing',
+    cat_project: 'Purchasing', cat_sales: 'Sales', cat_market: 'Marketing',
     cat_logistics: 'Logistics', cat_engineering: 'Engineering', cat_quality: 'Quality', cat_operations: 'Operations', cat_business: 'Business', cat_workshop: 'Workshop',
     addApp: 'Add App', emptyHint: 'No apps found',
     fName: 'Name *', fNamePh: 'App name', fUrl: 'URL *', fDesc: 'Description',
@@ -568,6 +574,7 @@ function applyLang(lang) {
   langBtn.textContent = lang === 'en' ? '中' : 'EN';
   localStorage.setItem('lnsc_lang', lang);
   renderWeather();
+  loadMessages();
 }
 
 applyLang(localStorage.getItem('lnsc_lang') || 'zh');

@@ -18,6 +18,7 @@
     <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9L6.7 20.3a2.1 2.1 0 0 1-3-3l6.9-6.9A6 6 0 0 1 18.5 2.5l-3.8 3.8z"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
     <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
   </svg>
   <canvas id="particle-canvas"></canvas>
@@ -81,7 +82,7 @@
           <div class="cat-status"></div>
         </div>
         <div class="cat-chip" data-cat="project">
-          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-clipboard"/></svg></span><span class="cat-label" data-i18n="cat_project">项目管理</span></div>
+          <div class="cat-head"><span class="cat-icon"><svg class="icon"><use href="#i-clipboard"/></svg></span><span class="cat-label" data-i18n="cat_project">采购</span></div>
           <div class="cat-divider"></div>
           <div class="cat-count"><b data-count="project">0</b> APPS</div>
           <div class="cat-status"></div>
@@ -168,7 +169,7 @@
               <option value="it" selected data-i18n="cat_it">IT 工具</option>
               <option value="hr" data-i18n="cat_hr">人力资源</option>
               <option value="finance" data-i18n="cat_finance">财务管理</option>
-              <option value="project" data-i18n="cat_project">项目管理</option>
+              <option value="project" data-i18n="cat_project">采购</option>
               <option value="sales" data-i18n="cat_sales">销售运营</option>
               <option value="market" data-i18n="cat_market">市场</option>
               <option value="logistics" data-i18n="cat_logistics">物流</option>
@@ -204,6 +205,21 @@
           <span class="shortcut-icon"><svg class="icon"><use href="#i-monitor"/></svg></span>
           <span class="shortcut-divider"></span>
           <span class="shortcut-name">SAP</span>
+        </a>
+        <a class="shortcut-card" href="https://ai.lechler.com" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-search"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">AI</span>
+        </a>
+        <a class="shortcut-card" href="https://tools.lechler.com" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-wrench"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">Tools</span>
+        </a>
+        <a class="shortcut-card" href="https://myflow.lechler.com" target="_blank">
+          <span class="shortcut-icon"><svg class="icon"><use href="#i-chat"/></svg></span>
+          <span class="shortcut-divider"></span>
+          <span class="shortcut-name">MyFlow</span>
         </a>
       </div>
     </section>

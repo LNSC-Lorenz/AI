@@ -586,7 +586,9 @@ input, select, button, textarea { font-family: inherit; }
   border-top-color: var(--border);
 }
 .cat-apps-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
   font-family: 'Special Elite', 'Courier New', monospace;
   letter-spacing: 1.5px;
@@ -644,11 +646,10 @@ input, select, button, textarea { font-family: inherit; }
   transform: translateX(2px);
 }
 .cat-app-del {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
+  margin-left: 8px;
   font-size: 22px;
+  line-height: 1;
   font-weight: 700;
   color: var(--text-tertiary);
   cursor: pointer;

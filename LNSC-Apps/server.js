@@ -33,7 +33,7 @@ const upload = multer({
   dest: path.join(__dirname, '.uploads_tmp'),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB per file
   fileFilter: (req, file, cb) => {
-    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.map'];
+    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp', '.bmp'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) {
       cb(null, true);
@@ -186,14 +186,15 @@ app.get('/api/messages', (req, res) => {
 });
 
 app.post('/api/messages', (req, res) => {
-  const { action, appName, uid } = req.body;
+  const { action, appName, cat, uid } = req.body;
   if (!action || !appName) return res.status(400).json({ error: 'Missing fields' });
   const msgs = loadMessages();
   msgs.push({
     action,
     appName,
+    cat: cat || '',
     uid: uid || 'unknown',
-    time: new Date().toISOString()
+    time: new Date(Date.now() + 8 * 3600000).toISOString()
   });
   // 只保留最近200条
   if (msgs.length > 200) msgs.splice(0, msgs.length - 200);
