@@ -1,11 +1,11 @@
 <template>
-  <div class="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4 shadow-sm">
-    <div class="p-3 rounded-lg" :class="bgClass">
-      <component :is="icon" class="w-6 h-6" :class="iconClass" />
+  <div class="bg-zinc-900 border border-zinc-800 rounded p-4 flex items-center gap-4">
+    <div class="p-2.5 rounded bg-zinc-800">
+      <component :is="icon" class="w-5 h-5" :class="iconClass" />
     </div>
     <div>
-      <p class="text-2xl font-bold text-gray-900">{{ value }}</p>
-      <p class="text-sm text-gray-500">{{ label }}</p>
+      <p class="text-2xl font-semibold font-mono text-zinc-100">{{ value }}</p>
+      <p class="text-xs text-zinc-500 uppercase tracking-wide">{{ label }}</p>
     </div>
   </div>
 </template>
@@ -15,7 +15,7 @@ defineProps({
   icon: { type: Object, required: true },
   value: { type: [Number, String], required: true },
   label: { type: String, required: true },
-  bgClass: { type: String, default: 'bg-blue-50' },
-  iconClass: { type: String, default: 'text-blue-600' },
+  bgClass: { type: String, default: '' },
+  iconClass: { type: String, default: 'text-zinc-400' },
 })
 </script>

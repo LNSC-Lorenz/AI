@@ -3,86 +3,85 @@
     <!-- Back -->
     <button
       @click="$router.push('/jobs')"
-      class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
+      class="flex items-center gap-1 text-xs font-mono text-zinc-600 hover:text-zinc-400 mb-4 transition-colors"
     >
-      <ArrowLeft class="w-4 h-4" /> Back to Jobs
+      <ArrowLeft class="w-3.5 h-3.5" /> BACK
     </button>
 
-    <div v-if="loading" class="text-center py-12 text-gray-400">Loading job details...</div>
+    <div v-if="loading" class="text-center py-12 text-zinc-600 font-mono text-sm">Loading...</div>
 
     <template v-else-if="job">
       <!-- Header -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+      <div class="bg-zinc-900 border border-zinc-800 rounded p-5 mb-4">
         <div class="flex justify-between items-start">
           <div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-1">{{ job.name || 'Unnamed Job' }}</h2>
-            <p class="text-sm text-gray-400 font-mono">{{ job.id }}</p>
+            <h2 class="text-lg font-semibold text-zinc-200 mb-1">{{ job.name || 'Unnamed Job' }}</h2>
+            <p class="text-xs text-zinc-600 font-mono">{{ job.id }}</p>
           </div>
           <StatusBadge :status="job.state?.type || 'PENDING'" />
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6 pt-6 border-t border-gray-100">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-zinc-800">
           <div>
-            <p class="text-xs font-medium text-gray-500 uppercase mb-1">Flow ID</p>
-            <p class="text-sm font-mono text-gray-700">{{ job.flow_id?.slice(0, 12) || '-' }}</p>
+            <p class="text-xs font-mono text-zinc-600 uppercase mb-1">Flow</p>
+            <p class="text-sm font-mono text-zinc-400">{{ job.flow_id?.slice(0, 12) || '-' }}</p>
           </div>
           <div>
-            <p class="text-xs font-medium text-gray-500 uppercase mb-1">Deployment ID</p>
-            <p class="text-sm font-mono text-gray-700">{{ job.deployment_id?.slice(0, 12) || '-' }}</p>
+            <p class="text-xs font-mono text-zinc-600 uppercase mb-1">Deployment</p>
+            <p class="text-sm font-mono text-zinc-400">{{ job.deployment_id?.slice(0, 12) || '-' }}</p>
           </div>
           <div>
-            <p class="text-xs font-medium text-gray-500 uppercase mb-1">Start Time</p>
-            <p class="text-sm text-gray-700">{{ formatFull(job.start_time) }}</p>
+            <p class="text-xs font-mono text-zinc-600 uppercase mb-1">Start</p>
+            <p class="text-sm font-mono text-zinc-400">{{ formatFull(job.start_time) }}</p>
           </div>
           <div>
-            <p class="text-xs font-medium text-gray-500 uppercase mb-1">Duration</p>
-            <p class="text-sm text-gray-700">{{ formatDuration(job.start_time, job.end_time) }}</p>
+            <p class="text-xs font-mono text-zinc-600 uppercase mb-1">Duration</p>
+            <p class="text-sm font-mono text-zinc-400">{{ formatDuration(job.start_time, job.end_time) }}</p>
           </div>
         </div>
       </div>
 
       <!-- Tags -->
-      <div v-if="job.tags?.length" class="mb-6">
-        <h3 class="text-sm font-medium text-gray-500 mb-2">Tags</h3>
-        <div class="flex flex-wrap gap-2">
+      <div v-if="job.tags?.length" class="mb-4">
+        <div class="flex flex-wrap gap-1.5">
           <span
             v-for="tag in job.tags"
             :key="tag"
-            class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium"
+            class="bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-xs font-mono"
           >{{ tag }}</span>
         </div>
       </div>
 
       <!-- Parameters -->
-      <div v-if="job.parameters && Object.keys(job.parameters).length > 0" class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Settings class="w-5 h-5 text-gray-400" /> Parameters
+      <div v-if="job.parameters && Object.keys(job.parameters).length > 0" class="bg-zinc-900 border border-zinc-800 rounded p-5 mb-4">
+        <h3 class="text-xs font-mono text-zinc-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <Settings class="w-3.5 h-3.5" /> Parameters
         </h3>
-        <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm text-gray-700 overflow-x-auto">
+        <div class="bg-zinc-950 border border-zinc-800 rounded p-4 font-mono text-sm text-zinc-400 overflow-x-auto">
           <pre>{{ JSON.stringify(job.parameters, null, 2) }}</pre>
         </div>
       </div>
 
       <!-- State History -->
-      <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <History class="w-5 h-5 text-gray-400" /> State Timeline
+      <div class="bg-zinc-900 border border-zinc-800 rounded p-5">
+        <h3 class="text-xs font-mono text-zinc-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <History class="w-3.5 h-3.5" /> State
         </h3>
         <div v-if="job.state_details" class="space-y-3">
           <div class="flex items-center gap-3">
-            <div class="w-3 h-3 rounded-full" :class="stateColor(job.state?.type)"></div>
+            <div class="w-2 h-2 rounded-full" :class="stateColor(job.state?.type)"></div>
             <div>
-              <p class="text-sm font-medium text-gray-900">{{ job.state?.type }}</p>
-              <p class="text-xs text-gray-400">{{ job.state?.message || 'No message' }}</p>
-              <p class="text-xs text-gray-400">{{ formatFull(job.state?.timestamp) }}</p>
+              <p class="text-sm font-mono font-medium text-zinc-300">{{ job.state?.type }}</p>
+              <p class="text-xs font-mono text-zinc-600">{{ job.state?.message || '-' }}</p>
+              <p class="text-xs font-mono text-zinc-700">{{ formatFull(job.state?.timestamp) }}</p>
             </div>
           </div>
         </div>
-        <div v-else class="text-sm text-gray-400">No state history available</div>
+        <div v-else class="text-sm font-mono text-zinc-700">No state data</div>
       </div>
     </template>
 
-    <div v-else class="text-center py-12 text-gray-400">Job not found</div>
+    <div v-else class="text-center py-12 text-zinc-600 font-mono text-sm">Not found</div>
   </div>
 </template>
 
@@ -114,13 +113,13 @@ function formatDuration(start, end) {
 
 function stateColor(type) {
   const map = {
-    COMPLETED: 'bg-green-500',
+    COMPLETED: 'bg-emerald-500',
     FAILED: 'bg-red-500',
-    RUNNING: 'bg-blue-500',
-    PENDING: 'bg-yellow-500',
-    SCHEDULED: 'bg-purple-500',
+    RUNNING: 'bg-amber-500',
+    PENDING: 'bg-zinc-500',
+    SCHEDULED: 'bg-zinc-500',
   }
-  return map[type] || 'bg-gray-400'
+  return map[type] || 'bg-zinc-600'
 }
 
 onMounted(async () => {

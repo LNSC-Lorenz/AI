@@ -1,6 +1,6 @@
 <template>
   <span
-    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono font-medium uppercase tracking-wider"
     :class="badgeClass"
   >
     <span class="w-1.5 h-1.5 rounded-full" :class="dotClass"></span>
@@ -16,17 +16,17 @@ const props = defineProps({
 })
 
 const config = {
-  COMPLETED: { bg: 'bg-green-50 text-green-700', dot: 'bg-green-500', label: 'Completed' },
-  FAILED:    { bg: 'bg-red-50 text-red-700',     dot: 'bg-red-500',   label: 'Failed' },
-  RUNNING:   { bg: 'bg-blue-50 text-blue-700',   dot: 'bg-blue-500 animate-pulse', label: 'Running' },
-  PENDING:   { bg: 'bg-yellow-50 text-yellow-700', dot: 'bg-yellow-500', label: 'Pending' },
-  SCHEDULED: { bg: 'bg-purple-50 text-purple-700', dot: 'bg-purple-500', label: 'Scheduled' },
-  CANCELLED: { bg: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400',   label: 'Cancelled' },
-  CANCELLING:{ bg: 'bg-gray-100 text-gray-600',    dot: 'bg-gray-400',   label: 'Cancelling' },
-  CRASHED:   { bg: 'bg-red-50 text-red-700',       dot: 'bg-red-500',    label: 'Crashed' },
+  COMPLETED: { bg: 'bg-emerald-950/50 text-emerald-400', dot: 'bg-emerald-500', label: 'OK' },
+  FAILED:    { bg: 'bg-red-950/50 text-red-400',         dot: 'bg-red-500',     label: 'FAIL' },
+  RUNNING:   { bg: 'bg-amber-950/50 text-amber-400',     dot: 'bg-amber-500 animate-pulse', label: 'RUN' },
+  PENDING:   { bg: 'bg-zinc-800 text-zinc-400',           dot: 'bg-zinc-500',    label: 'WAIT' },
+  SCHEDULED: { bg: 'bg-zinc-800 text-zinc-400',           dot: 'bg-zinc-500',    label: 'SCHED' },
+  CANCELLED: { bg: 'bg-zinc-800 text-zinc-600',           dot: 'bg-zinc-600',    label: 'CANCEL' },
+  CANCELLING:{ bg: 'bg-zinc-800 text-zinc-600',           dot: 'bg-zinc-600',    label: 'CANCEL' },
+  CRASHED:   { bg: 'bg-red-950/50 text-red-400',          dot: 'bg-red-500',     label: 'CRASH' },
 }
 
-const entry = computed(() => config[props.status] || { bg: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400', label: props.status })
+const entry = computed(() => config[props.status] || { bg: 'bg-zinc-800 text-zinc-500', dot: 'bg-zinc-600', label: props.status })
 const badgeClass = computed(() => entry.value.bg)
 const dotClass = computed(() => entry.value.dot)
 const label = computed(() => entry.value.label)

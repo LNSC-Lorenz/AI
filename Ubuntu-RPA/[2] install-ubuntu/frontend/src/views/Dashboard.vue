@@ -1,77 +1,77 @@
 <template>
   <div>
-    <h2 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
+    <h2 class="text-lg font-semibold text-zinc-300 uppercase tracking-wider mb-6">Dashboard</h2>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-      <StatsCard :icon="ListChecks"  :value="stats.total"     label="Total Jobs"    bgClass="bg-slate-50"   iconClass="text-slate-600" />
-      <StatsCard :icon="Loader"      :value="stats.running"   label="Running"       bgClass="bg-blue-50"    iconClass="text-blue-600" />
-      <StatsCard :icon="Clock"       :value="stats.pending"   label="Pending"       bgClass="bg-yellow-50"  iconClass="text-yellow-600" />
-      <StatsCard :icon="CheckCircle" :value="stats.completed" label="Completed"     bgClass="bg-green-50"   iconClass="text-green-600" />
-      <StatsCard :icon="XCircle"     :value="stats.failed"    label="Failed"        bgClass="bg-red-50"     iconClass="text-red-600" />
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+      <StatsCard :icon="ListChecks"  :value="stats.total"     label="Total"     iconClass="text-zinc-400" />
+      <StatsCard :icon="Loader"      :value="stats.running"   label="Running"   iconClass="text-amber-500" />
+      <StatsCard :icon="Clock"       :value="stats.pending"   label="Pending"   iconClass="text-zinc-500" />
+      <StatsCard :icon="CheckCircle" :value="stats.completed" label="Completed" iconClass="text-emerald-500" />
+      <StatsCard :icon="XCircle"     :value="stats.failed"    label="Failed"    iconClass="text-red-500" />
     </div>
 
     <!-- Success Rate Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 p-5 mb-8 shadow-sm">
+    <div class="bg-zinc-900 border border-zinc-800 rounded p-4 mb-6">
       <div class="flex justify-between items-center mb-2">
-        <span class="text-sm font-medium text-gray-700">Success Rate</span>
-        <span class="text-sm font-bold" :class="stats.successRate >= 80 ? 'text-green-600' : stats.successRate >= 50 ? 'text-yellow-600' : 'text-red-600'">
+        <span class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Success Rate</span>
+        <span class="text-sm font-mono font-semibold" :class="stats.successRate >= 80 ? 'text-emerald-400' : stats.successRate >= 50 ? 'text-amber-400' : 'text-red-400'">
           {{ stats.successRate }}%
         </span>
       </div>
-      <div class="w-full bg-gray-200 rounded-full h-3">
+      <div class="w-full bg-zinc-800 rounded h-1.5">
         <div
-          class="h-3 rounded-full transition-all duration-500"
-          :class="stats.successRate >= 80 ? 'bg-green-500' : stats.successRate >= 50 ? 'bg-yellow-500' : 'bg-red-500'"
+          class="h-1.5 rounded transition-all duration-500"
+          :class="stats.successRate >= 80 ? 'bg-emerald-500' : stats.successRate >= 50 ? 'bg-amber-500' : 'bg-red-500'"
           :style="{ width: stats.successRate + '%' }"
         ></div>
       </div>
     </div>
 
     <!-- Recent Jobs -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg font-semibold text-gray-900">Recent Jobs</h3>
-        <router-link to="/jobs" class="text-sm text-blue-600 hover:text-blue-800 font-medium">
-          View All &rarr;
+    <div class="bg-zinc-900 border border-zinc-800 rounded overflow-hidden">
+      <div class="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
+        <h3 class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Recent Jobs</h3>
+        <router-link to="/jobs" class="text-xs text-amber-500 hover:text-amber-400 font-mono">
+          ALL &rarr;
         </router-link>
       </div>
-      <div v-if="loading" class="p-8 text-center text-gray-400">Loading...</div>
-      <div v-else-if="recentJobs.length === 0" class="p-8 text-center text-gray-400">No jobs yet</div>
+      <div v-if="loading" class="p-8 text-center text-zinc-600 font-mono text-sm">Loading...</div>
+      <div v-else-if="recentJobs.length === 0" class="p-8 text-center text-zinc-600 font-mono text-sm">No jobs</div>
       <table v-else class="w-full">
         <thead>
-          <tr class="text-left text-xs font-medium text-gray-500 uppercase border-b border-gray-100">
-            <th class="px-5 py-3">Job Name</th>
-            <th class="px-5 py-3">Status</th>
-            <th class="px-5 py-3">Tags</th>
-            <th class="px-5 py-3">Started</th>
-            <th class="px-5 py-3">Duration</th>
+          <tr class="text-left text-xs font-mono text-zinc-600 uppercase border-b border-zinc-800">
+            <th class="px-5 py-2.5">Name</th>
+            <th class="px-5 py-2.5">Status</th>
+            <th class="px-5 py-2.5">Tags</th>
+            <th class="px-5 py-2.5">Started</th>
+            <th class="px-5 py-2.5">Duration</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-50">
+        <tbody class="divide-y divide-zinc-800/50">
           <tr
             v-for="job in recentJobs"
             :key="job.id"
-            class="hover:bg-gray-50 cursor-pointer transition-colors"
+            class="hover:bg-zinc-800/50 cursor-pointer transition-colors"
             @click="$router.push(`/jobs/${job.id}`)"
           >
-            <td class="px-5 py-3.5">
-              <span class="font-medium text-gray-900 text-sm">{{ job.name || 'Unnamed' }}</span>
+            <td class="px-5 py-3">
+              <span class="font-medium text-zinc-200 text-sm">{{ job.name || 'Unnamed' }}</span>
             </td>
-            <td class="px-5 py-3.5">
+            <td class="px-5 py-3">
               <StatusBadge :status="job.state?.type || 'PENDING'" />
             </td>
-            <td class="px-5 py-3.5">
+            <td class="px-5 py-3">
               <span
                 v-for="tag in (job.tags || []).slice(0, 3)"
                 :key="tag"
-                class="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded mr-1"
+                class="inline-block bg-zinc-800 text-zinc-500 text-xs font-mono px-1.5 py-0.5 rounded mr-1"
               >{{ tag }}</span>
             </td>
-            <td class="px-5 py-3.5 text-sm text-gray-500">
+            <td class="px-5 py-3 text-sm font-mono text-zinc-500">
               {{ formatTime(job.start_time || job.expected_start_time) }}
             </td>
-            <td class="px-5 py-3.5 text-sm text-gray-500">
+            <td class="px-5 py-3 text-sm font-mono text-zinc-500">
               {{ formatDuration(job.start_time, job.end_time) }}
             </td>
           </tr>

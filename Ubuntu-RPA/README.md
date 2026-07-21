@@ -401,5 +401,10 @@ Ubuntu-RPA/
 │       ├── deploy_flows.py
 │       └── requirements.txt
 │
+├── [5] try-on/                          # 首次部署验证
+│   ├── hello_flow.py
+│   ├── deploy_hello.py
+│   └── README.md
+│
 └── README.md
 ```

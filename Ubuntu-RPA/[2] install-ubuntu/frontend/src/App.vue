@@ -1,38 +1,37 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <div class="min-h-screen bg-zinc-950 text-zinc-200">
     <!-- Sidebar -->
-    <aside class="fixed inset-y-0 left-0 w-60 bg-slate-900 text-white flex flex-col z-30">
-      <div class="px-5 py-6 border-b border-slate-700">
-        <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
-          <Bot class="w-6 h-6 text-blue-400" />
-          RPA Platform
+    <aside class="fixed inset-y-0 left-0 w-56 bg-zinc-900 border-r border-zinc-800 flex flex-col z-30">
+      <div class="px-5 py-5 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold tracking-widest uppercase text-zinc-300 flex items-center gap-2">
+          <Bot class="w-4 h-4 text-amber-500" />
+          RPA Console
         </h1>
-        <p class="text-xs text-slate-400 mt-1">Job Orchestration Console</p>
       </div>
-      <nav class="flex-1 px-3 py-4 space-y-1">
+      <nav class="flex-1 px-3 py-4 space-y-0.5">
         <router-link
           v-for="item in navItems"
           :key="item.path"
           :to="item.path"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
+          class="flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors"
           :class="$route.path === item.path
-            ? 'bg-blue-600 text-white'
-            : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
+            ? 'bg-zinc-800 text-amber-500'
+            : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'"
         >
-          <component :is="item.icon" class="w-5 h-5" />
+          <component :is="item.icon" class="w-4 h-4" />
           {{ item.label }}
         </router-link>
       </nav>
-      <div class="px-5 py-4 border-t border-slate-700">
-        <div class="flex items-center gap-2 text-xs">
-          <span class="w-2 h-2 rounded-full" :class="healthy ? 'bg-green-400' : 'bg-red-400'"></span>
-          <span class="text-slate-400">{{ healthy ? 'System Online' : 'System Offline' }}</span>
+      <div class="px-5 py-4 border-t border-zinc-800">
+        <div class="flex items-center gap-2 text-xs font-mono">
+          <span class="w-1.5 h-1.5 rounded-full" :class="healthy ? 'bg-emerald-500' : 'bg-red-500'"></span>
+          <span class="text-zinc-600">{{ healthy ? 'ONLINE' : 'OFFLINE' }}</span>
         </div>
       </div>
     </aside>
 
     <!-- Main -->
-    <main class="ml-60 p-8">
+    <main class="ml-56 p-8">
       <router-view />
     </main>
   </div>
