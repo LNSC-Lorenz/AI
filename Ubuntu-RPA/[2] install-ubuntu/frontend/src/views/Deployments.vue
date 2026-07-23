@@ -14,14 +14,14 @@
     <div v-if="store.deployments.length === 0 && !store.loading" class="text-center py-12 text-zinc-600">
       <Boxes class="w-10 h-10 mx-auto mb-3 text-zinc-700" />
       <p class="font-mono text-sm">No deployments</p>
-      <p class="text-xs mt-1 text-zinc-700 font-mono">Run deploy_flows.py on Worker</p>
+      <p class="text-xs mt-1 text-zinc-700 font-mono">Run must_deploy.py on Worker</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
       <div
         v-for="dep in store.deployments"
         :key="dep.id"
-        class="bg-zinc-900 border border-zinc-800 rounded p-4 hover:border-zinc-700 transition-colors"
+        class="bg-zinc-900 border border-zinc-800 rounded p-4 hover:border-amber-600/40 hover:shadow-lg hover:shadow-amber-950/20 transition-all duration-150"
       >
         <!-- Header -->
         <div class="flex justify-between items-start mb-3">
@@ -80,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { RefreshCw, Boxes, Play, Server, Clock } from 'lucide-vue-next'
 import { useJobsStore } from '../stores/jobs'
 
@@ -107,11 +107,18 @@ async function triggerDeployment(dep) {
   }
 }
 
+let refreshTimer = null
+
 function refresh() {
   store.fetchDeployments()
 }
 
 onMounted(() => {
   store.fetchDeployments()
+  refreshTimer = setInterval(() => store.fetchDeployments(), 30000)
+})
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
 })
 </script>

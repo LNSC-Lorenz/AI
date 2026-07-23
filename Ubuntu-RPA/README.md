@@ -66,7 +66,7 @@ sudo bash 05-setup-nginx.sh        # Nginx 反向代理
 
 # Register flows
 cd C:\RPA-Agent\flows
-python deploy_flows.py
+python must_deploy.py
 ```
 
 ### [4] install-worker-linux — Linux Worker 安装
@@ -76,7 +76,7 @@ sudo bash setup-linux-agent.sh http://10.86.180.120:4200/api linux-rpa-pool rpa-
 
 # Register flows
 cd /opt/rpa-agent/flows
-/opt/rpa-agent/.venv/bin/python deploy_flows.py
+/opt/rpa-agent/.venv/bin/python must_deploy.py
 ```
 
 ## 使用说明
@@ -139,7 +139,7 @@ sudo bash 05-setup-nginx.sh        # Nginx 反向代理配置
 
 # 注册流程
 cd C:\RPA-Agent\flows
-python deploy_flows.py
+python must_deploy.py
 ```
 
 #### 第六步：部署 Linux Worker（在 Linux RPA 机器上，可选）
@@ -149,7 +149,7 @@ sudo bash setup-linux-agent.sh http://10.86.180.120:4200/api linux-rpa-pool rpa-
 
 # 注册流程
 cd /opt/rpa-agent/flows
-/opt/rpa-agent/.venv/bin/python deploy_flows.py
+/opt/rpa-agent/.venv/bin/python must_deploy.py
 ```
 
 ### 部署后验证
@@ -238,7 +238,7 @@ cd "C:\path\to\[3] install-worker-windows"
 
 # 4. 注册 Flow（告诉 Server 这台机器能跑哪些任务）
 cd C:\RPA-Agent\flows
-C:\RPA-Agent\.venv\Scripts\python.exe deploy_flows.py
+C:\RPA-Agent\.venv\Scripts\python.exe must_deploy.py
 ```
 
 安装完成后：
@@ -246,10 +246,74 @@ C:\RPA-Agent\.venv\Scripts\python.exe deploy_flows.py
 - 日志位于 `C:\RPA-Agent\logs\`
 - Flow 代码位于 `C:\RPA-Agent\flows\`
 
+### Windows Worker 部署实例（lcnnsc-rpa-w01 / lcnnsc-rpa-w02）
+
+以两台全新安装的 Windows Server 为例，两台加入同一 Work Pool 实现 HA / 负载分担。
+
+**前提**（vCenter 模板克隆 + 自定义规范已完成）：
+
+| 项目 | lcnnsc-rpa-w01 | lcnnsc-rpa-w02 |
+|------|----------------|----------------|
+| 计算机名 | `lcnnsc-rpa-w01` | `lcnnsc-rpa-w02` |
+| IP | `10.86.180.121/24` | `10.86.180.122/24` |
+| 已加域 | ✅（域用户有本地管理员权限） | ✅ |
+| 能访问 Server | `http://10.86.180.120:4200` | 同左 |
+
+**第 1 步：复制安装文件夹**
+
+把 `[3] install-worker-windows/` 整个复制到 Worker 机器，如 `C:\Temp\install-worker-windows\`
+
+**第 2 步：以管理员运行 PowerShell 执行安装**
+
+```powershell
+# ===== lcnnsc-rpa-w01 上执行 =====
+cd C:\Temp\install-worker-windows
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\setup-windows-agent.ps1 `
+    -PrefectApiUrl "http://10.86.180.120:4200/api" `
+    -WorkPoolName "windows-rpa-pool" `
+    -WorkerName "lcnnsc-rpa-w01"
+```
+
+```powershell
+# ===== lcnnsc-rpa-w02 上执行（仅 WorkerName 不同） =====
+cd C:\Temp\install-worker-windows
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\setup-windows-agent.ps1 `
+    -PrefectApiUrl "http://10.86.180.120:4200/api" `
+    -WorkPoolName "windows-rpa-pool" `
+    -WorkerName "lcnnsc-rpa-w02"
+```
+
+脚本自动完成：Python 3.12 安装 → 虚拟环境 → Prefect + 依赖 → 复制 flows → 注册 Windows 服务（开机自启）。
+
+**第 3 步：验证 Worker 上线**
+
+Prefect UI（http://10.86.180.120:4200）→ **Work Pools** → `windows-rpa-pool` → Workers 列表应显示 `lcnnsc-rpa-w01` 和 `lcnnsc-rpa-w02` 均为 Online。
+
+**第 4 步：首次部署验证（try-on，任选一台执行）**
+
+```powershell
+# 复制 [5] try-on 的 test_deploy.py 到 C:\RPA-Agent\flows\
+cd C:\RPA-Agent\flows
+C:\RPA-Agent\.venv\Scripts\python.exe test_deploy.py
+```
+
+Prefect UI → **Deployments** → `hello` → **Run** → Flow Runs 显示 `Completed`，日志输出 `Hello from lcnnsc-rpa-w01...`（或 w02，由谁先抢到任务决定）。
+
+**第 5 步：注册正式业务 Flows（任选一台执行一次即可）**
+
+```powershell
+cd C:\RPA-Agent\flows
+C:\RPA-Agent\.venv\Scripts\python.exe must_deploy.py
+```
+
+> Deployment 注册到 Server 是全局的，同一 Work Pool 内两台 Worker 自动分担任务；一台停机，另一台继续工作。
+
 ### 日常使用流程
 
 1. **创建/修改 Flow** → 编辑 `C:\RPA-Agent\flows\` 下的 `.py` 文件
-2. **注册 Flow** → 运行 `deploy_flows.py` 将变更同步到 Server
+2. **注册 Flow** → 运行 `must_deploy.py` 将变更同步到 Server
 3. **触发执行** → 在 RPA 前端（http://10.86.180.120）点击 "Trigger" 或设置定时调度
 4. **查看结果** → 前端 Dashboard / Jobs 页面查看执行状态和日志
 
@@ -302,7 +366,7 @@ Vue3 + TailwindCSS 全可视化面板：
 
 2. 注册 Deployment（告诉 Server 这个任务存在）
    → cd C:\RPA-Agent\flows
-   → C:\RPA-Agent\.venv\Scripts\python.exe deploy_flows.py
+   → C:\RPA-Agent\.venv\Scripts\python.exe must_deploy.py
 
 3. 注册成功后，Prefect UI → Deployments 页面可以看到
 ```
@@ -334,7 +398,7 @@ Vue3 + TailwindCSS 全可视化面板：
 ```
 编写 Flow (.py)
     ↓
-deploy_flows.py 注册到 Server
+must_deploy.py 注册到 Server
     ↓
 Prefect UI / RPA 前端 点 Trigger（或定时触发）
     ↓
@@ -386,24 +450,31 @@ Ubuntu-RPA/
 │
 ├── [3] install-worker-windows/          # Windows Worker 安装
 │   ├── setup-windows-agent.ps1
+│   ├── install-lcnnsc-rpa-w01.cmd      # w01 / w02 / w03 一键安装
+│   ├── install-lcnnsc-rpa-w02.cmd
+│   ├── install-lcnnsc-rpa-w03.cmd
 │   └── flows/
-│       ├── sap_flow.py
-│       ├── web_flow.py
-│       ├── python_flow.py
-│       ├── deploy_flows.py
+│       ├── must_deploy.py               # 正式业务 Flow 注册（模板）
 │       └── requirements.txt
 │
 ├── [4] install-worker-linux/            # Linux Worker 安装
 │   ├── setup-linux-agent.sh
+│   ├── install-lcnnsc-rpa-l01.sh       # l01 / l02 / l03 一键安装
+│   ├── install-lcnnsc-rpa-l02.sh
+│   ├── install-lcnnsc-rpa-l03.sh
+│   ├── autoinstall/                     # ESXi 无人值守装机（同 [1] 模式）
+│   │   ├── Create-CidataISO.ps1         # -HostName 参数选择主机
+│   │   ├── lcnnsc-rpa-l01/              # .126  user-data + meta-data
+│   │   ├── lcnnsc-rpa-l02/              # .127
+│   │   └── lcnnsc-rpa-l03/              # .128
 │   └── flows/
 │       ├── web_flow.py
 │       ├── python_flow.py
-│       ├── deploy_flows.py
+│       ├── must_deploy.py
 │       └── requirements.txt
 │
 ├── [5] try-on/                          # 首次部署验证
-│   ├── hello_flow.py
-│   ├── deploy_hello.py
+│   ├── test_deploy.py                   # 单文件：hello-flow + 注册
 │   └── README.md
 │
 └── README.md

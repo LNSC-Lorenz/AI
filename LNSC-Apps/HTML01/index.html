@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>销售测试沟通 | 图片和视频记录集</title>
+<style>
+  :root {
+    --primary: rgb(29, 69, 159);
+    --primary-glow: rgba(29, 69, 159, 0.5);
+    --primary-dim: rgba(29, 69, 159, 0.15);
+    --accent: rgb(80, 130, 230);
+    --bg: #0d1017;
+    --bg-panel: #131722;
+    --bg-card: #1a1f2e;
+    --text: #dde3ee;
+    --text-sub: #6b7488;
+    --line: rgba(80, 130, 230, 0.18);
+    --grid-line: rgba(80, 130, 230, 0.05);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  ::selection { background: var(--primary); color: #fff; }
+
+  /* ── 头部：工业图纸风 ── */
+  header {
+    background: linear-gradient(180deg, #16203a, #0f1526);
+    border-bottom: 2px solid var(--accent);
+    padding: 18px 30px 14px;
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 4px; left: 0; right: 0;
+    height: 1px;
+    background: var(--line);
+  }
+  header h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 .bar {
+    display: inline-block;
+    width: 5px; height: 22px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--primary-glow);
+  }
+  header .path {
+    font-size: 10px;
+    color: var(--text-sub);
+    font-family: Consolas, monospace;
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+  header .path::before { content: '>> '; color: var(--accent); }
+  header .doc-ctrl {
+    flex-shrink: 0;
+    border: 1px solid var(--line);
+    font-family: Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-sub);
+    display: grid;
+    grid-template-columns: auto auto;
+  }
+  header .doc-ctrl span {
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  header .doc-ctrl span:nth-child(odd) {
+    border-right: 1px solid var(--line);
+    color: var(--accent);
+  }
+  header .doc-ctrl span:nth-last-child(-n+2) { border-bottom: none; }
+
+  /* ── 主体：左树 + 右预览 ── */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── 左侧：文件夹树 ── */
+  .sidebar {
+    width: 290px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-head {
+    padding: 14px 16px 10px;
+    font-size: 10px;
+    font-family: Consolas, monospace;
+    letter-spacing: 3px;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .sidebar-head::after {
+    content: '';
+    position: absolute;
+    left: 16px; bottom: -1px;
+    width: 46px; height: 2px;
+    background: var(--accent);
+  }
+  .tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) transparent;
+  }
+  .tree::-webkit-scrollbar { width: 5px; }
+  .tree::-webkit-scrollbar-thumb { background: var(--primary); }
+  .tree-node { user-select: none; }
+  .tree-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tree-label:hover { background: var(--primary-dim); }
+  .tree-label.active {
+    background: var(--primary-dim);
+    color: var(--accent);
+  }
+  .tree-label .arrow {
+    width: 12px;
+    font-size: 9px;
+    color: var(--primary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .tree-label .ficon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    vertical-align: -2px;
+  }
+  .tree-node.open > .tree-label .arrow { transform: rotate(90deg); }
+  .tree-label .arrow.leaf { visibility: hidden; }
+  .tree-label .fname { overflow: hidden; text-overflow: ellipsis; }
+  .tree-label .fcount {
+    margin-left: auto;
+    font-size: 9px;
+    font-family: Consolas, monospace;
+    color: var(--text-sub);
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .tree-children {
+    display: none;
+    padding-left: 16px;
+  }
+  .tree-node.open > .tree-children { display: block; animation: treeIn 0.25s ease both; }
+  @keyframes treeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── 右侧：预览区 ── */
+  .viewer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .viewer-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .search-input {
+    flex: 1;
+    min-width: 180px;
+    padding: 9px 16px;
+    border: 1px solid var(--line);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-size: 13px;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 18px var(--primary-dim);
+  }
+  .search-input::placeholder { color: var(--text-sub); }
+  .filter-btn {
+    padding: 8px 18px;
+    border: 1px solid var(--line);
+    background: var(--bg-panel);
+    color: var(--text-sub);
+    font-size: 11px;
+    font-family: Consolas, monospace;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover { color: var(--text); border-color: var(--accent); }
+  .filter-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .crumb {
+    padding: 10px 24px 0;
+    font-size: 11px;
+    font-family: Consolas, monospace;
+    letter-spacing: 1px;
+    color: var(--text-sub);
+    flex-shrink: 0;
+  }
+  .crumb b { color: var(--accent); }
+  .grid-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px 40px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) transparent;
+  }
+  .grid-wrap::-webkit-scrollbar { width: 6px; }
+  .grid-wrap::-webkit-scrollbar-thumb { background: var(--primary); }
+
+  .section-title {
+    font-size: 12px;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    letter-spacing: 2px;
+    color: var(--text-sub);
+    margin: 18px 0 10px;
+    border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 5px;
+    background:
+      repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 12px),
+      linear-gradient(var(--line), var(--line)) left bottom / 100% 1px no-repeat;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: 16px;
+  }
+  .album-card {
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    animation: cardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i) * 0.03s);
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .album-art {
+    aspect-ratio: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  }
+  .album-art::before, .album-art::after {
+    content: '';
+    position: absolute;
+    width: 13px; height: 13px;
+    border: 2px solid var(--accent);
+    opacity: 0;
+    transition: opacity 0.25s;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .album-art::before { top: 5px; left: 5px; border-right: none; border-bottom: none; }
+  .album-art::after { bottom: 5px; right: 5px; border-left: none; border-top: none; }
+  .album-card:hover .album-art {
+    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(29, 69, 159, 0.35);
+  }
+  .album-card:hover .album-art::before,
+  .album-card:hover .album-art::after { opacity: 1; }
+  .album-art img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    filter: saturate(0.9);
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s;
+  }
+  .album-card:hover .album-art img { transform: scale(1.06); filter: saturate(1.1); }
+  .album-art .scanline {
+    position: absolute;
+    left: 0; right: 0;
+    height: 40%; top: -40%;
+    background: linear-gradient(180deg, transparent, rgba(80,130,230,0.15), transparent);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .album-card:hover .scanline { animation: scan 1.2s linear infinite; }
+  @keyframes scan { from { top: -40%; } to { top: 110%; } }
+  .pdf-scroll {
+    max-height: 82vh;
+    max-width: 92vw;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) transparent;
+    cursor: grab;
+    user-select: none;
+  }
+  .pdf-scroll.dragging { cursor: grabbing; }
+  .pdf-pages canvas {
+    display: block;
+    margin: 0 auto 14px;
+    background: #fff;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  }
+  .pdf-bar {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .pdf-bar button {
+    min-width: 34px;
+    height: 30px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    color: var(--accent);
+    font-size: 15px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .pdf-bar button:hover { border-color: var(--accent); color: #fff; }
+  .pdf-bar .pdf-zoom-val {
+    min-width: 52px;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+  .doc-content {
+    background: #fff;
+    color: #222;
+    min-width: 400px;
+  }
+  .doc-content .docx-wrapper { background: transparent; padding: 0; }
+  .sheet-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    background: #ececec;
+    border-bottom: 1px solid #ccc;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .sheet-tabs button {
+    padding: 4px 12px;
+    background: #fff;
+    border: 1px solid #bbb;
+    color: #333;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .sheet-tabs button.active {
+    background: #217346;
+    border-color: #217346;
+    color: #fff;
+  }
+  .sheet-body table { border-collapse: collapse; background: #fff; }
+  .sheet-body td {
+    border: 1px solid #c9c9c9;
+    padding: 3px 10px;
+    font-size: 13px;
+    color: #222;
+    white-space: nowrap;
+    min-width: 40px;
+  }
+  .album-art .play-badge {
+    position: absolute;
+    right: 8px; bottom: 8px;
+    width: 32px; height: 32px;
+    background: var(--primary);
+    border: 1px solid var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 2;
+  }
+  .album-card:hover .play-badge { opacity: 1; transform: translateY(0); }
+  .album-name {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s;
+  }
+  .album-card:hover .album-name { color: var(--accent); }
+  .album-sub {
+    font-size: 9px;
+    font-family: Consolas, monospace;
+    letter-spacing: 1px;
+    color: var(--text-sub);
+    margin-top: 3px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .empty {
+    padding: 56px;
+    text-align: center;
+    color: var(--text-sub);
+    background: var(--bg-panel);
+    border: 1px dashed var(--line);
+    margin-top: 24px;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    letter-spacing: 1px;
+  }
+
+  /* ── 灯箱预览 ── */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 10, 16, 0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .lightbox.show { display: flex; animation: lbIn 0.2s ease; }
+  @keyframes lbIn { from { opacity: 0; } to { opacity: 1; } }
+  .lightbox img, .lightbox video {
+    max-width: 92vw;
+    max-height: 82vh;
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 60px var(--primary-glow);
+  }
+  .lightbox img {
+    cursor: zoom-in;
+    transition: transform 0.12s ease-out;
+    transform-origin: center center;
+  }
+  .lightbox img.zoomed { cursor: grab; transition: none; }
+  .lightbox img.dragging { cursor: grabbing; }
+  .lightbox .lb-rotate {
+    position: absolute;
+    top: 18px; right: 72px;
+    font-size: 24px;
+    color: var(--text-sub);
+    cursor: pointer;
+    z-index: 101;
+    transition: color 0.15s, transform 0.2s;
+    user-select: none;
+  }
+  .lightbox .lb-rotate:hover { color: var(--accent); transform: rotate(90deg); }
+  .lightbox .lb-zoom {
+    position: absolute;
+    top: 22px; left: 28px;
+    font-size: 11px;
+    font-family: Consolas, monospace;
+    letter-spacing: 2px;
+    color: var(--text-sub);
+    border: 1px solid var(--line);
+    padding: 4px 10px;
+    background: rgba(19, 23, 34, 0.7);
+    display: none;
+    z-index: 101;
+  }
+  .lightbox video {
+    width: auto;
+    height: auto;
+    min-width: min(960px, 90vw);
+    max-width: 92vw;
+    max-height: 78vh;
+    background: #000;
+    object-fit: contain;
+  }
+  .hevc-player {
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 60px var(--primary-glow);
+    background: #000;
+    position: relative;
+  }
+  .hevc-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-top: none;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-sub);
+  }
+  .hevc-bar button {
+    background: var(--primary);
+    border: 1px solid var(--accent);
+    color: #fff;
+    width: 34px; height: 24px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .hevc-bar .hevc-progress {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    position: relative;
+  }
+  .hevc-bar .hevc-progress .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: var(--accent);
+  }
+  .lightbox .lb-hint {
+    max-width: 80vw;
+    padding: 10px 20px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #ffb454;
+    background: rgba(60, 40, 10, 0.55);
+    border: 1px solid rgba(255, 180, 84, 0.4);
+    text-align: center;
+  }
+  .lightbox .lb-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 52px; height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    color: var(--text-sub);
+    background: rgba(19, 23, 34, 0.7);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    z-index: 101;
+  }
+  .lightbox .lb-nav:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--primary-dim);
+  }
+  .lightbox .lb-prev { left: 18px; }
+  .lightbox .lb-next { right: 18px; }
+  .lightbox .lb-count {
+    font-size: 10px;
+    font-family: Consolas, monospace;
+    letter-spacing: 2px;
+    color: var(--text-sub);
+  }
+  .lightbox .lb-name {
+    font-size: 12px;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+  .lightbox .lb-close {
+    position: absolute;
+    top: 20px; right: 28px;
+    font-size: 26px;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .lightbox .lb-close:hover { color: var(--accent); }
+  .lightbox .lb-open {
+    font-size: 11px;
+    font-family: Consolas, monospace;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    padding: 6px 16px;
+    transition: background 0.2s;
+  }
+  .lightbox .lb-open:hover { background: var(--primary-dim); }
+
+  @media (max-width: 760px) {
+    .sidebar { width: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1><span class="bar"></span>销售测试沟通 | 图片和视频记录集</h1>
+    <div class="path">\\lcnnsc-server\department\LNSC-06_QD-Quality\07_Open\001 销售测试沟通</div>
+  </div>
+  <div class="doc-ctrl">
+    <span>DEPT</span><span>LNSC-06 QD-QUALITY</span>
+    <span>TYPE</span><span>QUALITY RECORD / 质量记录</span>
+    <span>STATUS</span><span id="docStatus">INDEXING...</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- 左侧文件夹树 -->
+  <aside class="sidebar">
+    <div class="sidebar-head">FOLDER TREE // 文件夹</div>
+    <div class="tree" id="tree"></div>
+  </aside>
+
+  <!-- 右侧预览区 -->
+  <section class="viewer">
+    <div class="viewer-toolbar">
+      <input type="text" class="search-input" id="search" placeholder="SEARCH // 全局搜索文件名...">
+      <button class="filter-btn active" data-type="all">ALL</button>
+      <button class="filter-btn" data-type="image">IMG</button>
+      <button class="filter-btn" data-type="video">VIDEO</button>
+      <button class="filter-btn" data-type="pdf">PDF</button>
+      <button class="filter-btn" data-type="word">WORD</button>
+      <button class="filter-btn" data-type="excel">EXCEL</button>
+      <button class="filter-btn" id="sortBtn" title="按文件夹/年份排序">年份 ↓</button>
+    </div>
+    <div class="crumb" id="crumb"></div>
+    <div class="grid-wrap" id="gridWrap"></div>
+  </section>
+</div>
+
+<!-- 灯箱 -->
+<div class="lightbox" id="lightbox">
+  <span class="lb-close" id="lbClose">✕</span>
+  <span class="lb-rotate" id="lbRotate" title="旋转 90°（快捷键 R）">⟳</span>
+  <div class="lb-zoom" id="lbZoom"></div>
+  <div class="lb-nav lb-prev" id="lbPrev">❮</div>
+  <div class="lb-nav lb-next" id="lbNext">❯</div>
+  <div id="lbMedia"></div>
+  <div class="lb-name" id="lbName"></div>
+  <div class="lb-count" id="lbCount"></div>
+  <a class="lb-open" id="lbOpen" target="_blank">OPEN SOURCE FILE // 打开原文件</a>
+</div>
+
+<script src="lib/missile.js"></script>
+<script src="lib/h265webjs-v20220701.js"></script>
+<script src="lib/pdf.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/docx-preview.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+<script>
+// 网页部署时走 /libq/（共享盘挂载在网站根目录下），本地打开走 file:// UNC
+const BASE_PATH = location.protocol === 'file:'
+  ? 'file://///10.86.180.4/department/LNSC-06_QD-Quality/07_Open/001 销售测试沟通/'
+  : '/libq/';
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
+const VIDEO_EXTS = ['mp4', 'avi', 'mov', 'wmv', 'mkv', 'webm'];
+const PDF_EXTS = ['pdf'];
+const WORD_EXTS = ['docx'];
+const EXCEL_EXTS = ['xlsx'];
+
+let mediaList = [];
+let currentType = 'all';
+let currentSearch = '';
+let currentFolder = '';   // '' = 全部
+let sortDesc = true;      // 文件夹/年份排序，默认降序
+
+function getType(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (IMAGE_EXTS.includes(ext)) return 'image';
+  if (VIDEO_EXTS.includes(ext)) return 'video';
+  if (PDF_EXTS.includes(ext)) return 'pdf';
+  if (WORD_EXTS.includes(ext)) return 'word';
+  if (EXCEL_EXTS.includes(ext)) return 'excel';
+  return 'other';   // 旧版 .doc/.xls 等：列出但直接打开原文件
+}
+function fileUrl(m) {
+  const rel = (m.path ? m.path + '/' : '') + m.name;
+  return encodeURI(BASE_PATH + rel.replace(/\\/g, '/'));
+}
+function formatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + 'KB';
+  return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+}
+
+/* Win11 风格蓝色文件夹图标 */
+const FOLDER_ICON =
+  '<svg class="ficon" viewBox="0 0 24 24">' +
+  '<path fill="#1E62B7" d="M3.5 4h5.2c.4 0 .78.16 1.06.44L11.6 6.3H20.5A1.5 1.5 0 0 1 22 7.8V9.5H2V5.5A1.5 1.5 0 0 1 3.5 4z"/>' +
+  '<path fill="#4A9BE8" d="M2 8h20v9.5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z"/>' +
+  '<path fill="#6FB2F0" d="M2 9.2l1.2-1.7c.28-.4.74-.63 1.22-.63h15.16c.48 0 .94.23 1.22.63L22 9.2v8.3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.2z" opacity="0.55"/>' +
+  '</svg>';
+const PDF_ICON_CARD =
+  '<svg width="104" height="104" viewBox="0 0 24 24">' +
+  '<path fill="#E2574C" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>' +
+  '<path fill="#B53629" d="M15 2l5 5h-5V2z"/>' +
+  '<text x="12" y="17.5" font-size="6.5" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial, sans-serif">PDF</text>' +
+  '</svg>';
+const WORD_ICON_CARD =
+  '<svg width="104" height="104" viewBox="0 0 24 24">' +
+  '<path fill="#2B579A" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>' +
+  '<path fill="#1E3F6F" d="M15 2l5 5h-5V2z"/>' +
+  '<text x="12" y="17.5" font-size="7" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial, sans-serif">W</text>' +
+  '</svg>';
+const EXCEL_ICON_CARD =
+  '<svg width="104" height="104" viewBox="0 0 24 24">' +
+  '<path fill="#217346" d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>' +
+  '<path fill="#175434" d="M15 2l5 5h-5V2z"/>' +
+  '<text x="12" y="17.5" font-size="7" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial, sans-serif">X</text>' +
+  '</svg>';
+const ROOT_ICON =
+  '<svg class="ficon" viewBox="0 0 24 24">' +
+  '<path fill="#1E62B7" d="M3 4h18a1 1 0 0 1 1 1v5H2V5a1 1 0 0 1 1-1z"/>' +
+  '<path fill="#4A9BE8" d="M2 11h20v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-8z"/>' +
+  '<circle fill="#DCEBFB" cx="18.5" cy="7" r="1.1"/><circle fill="#DCEBFB" cx="18.5" cy="15" r="1.1"/>' +
+  '</svg>';
+
+/* ── 构建文件夹树 ── */
+function buildTree() {
+  const root = { name: '全部文件', path: '', children: {}, count: 0 };
+  mediaList.forEach(m => {
+    root.count++;
+    if (!m.path) return;
+    const parts = m.path.split('/');
+    let node = root;
+    let acc = '';
+    parts.forEach(p => {
+      acc = acc ? acc + '/' + p : p;
+      if (!node.children[p]) node.children[p] = { name: p, path: acc, children: {}, count: 0 };
+      node = node.children[p];
+      node.count++;
+    });
+  });
+  return root;
+}
+
+function renderTree() {
+  const treeEl = document.getElementById('tree');
+  treeEl.innerHTML = '';
+  const root = buildTree();
+
+  function makeNode(node, depth) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tree-node' + (depth === 0 ? ' open' : '');
+
+    const kids = Object.values(node.children).sort((a, b) => a.name.localeCompare(b.name));
+    const label = document.createElement('div');
+    label.className = 'tree-label' + (currentFolder === node.path ? ' active' : '');
+    label.innerHTML =
+      '<span class="arrow' + (kids.length ? '' : ' leaf') + '">▶</span>' +
+      '<span class="fname">' + (depth === 0 ? ROOT_ICON : FOLDER_ICON) + ' ' + node.name + '</span>' +
+      '<span class="fcount">' + node.count + '</span>';
+
+    label.addEventListener('click', () => {
+      // 点击箭头区域 → 展开/收起；点击其它区域 → 选中并展开
+      currentFolder = node.path;
+      if (kids.length) wrap.classList.toggle('open', true);
+      document.querySelectorAll('.tree-label').forEach(l => l.classList.remove('active'));
+      label.classList.add('active');
+      renderGrid();
+    });
+    // 单独点箭头只切换展开
+    label.querySelector('.arrow').addEventListener('click', e => {
+      if (kids.length) {
+        e.stopPropagation();
+        wrap.classList.toggle('open');
+      }
+    });
+
+    wrap.appendChild(label);
+    if (kids.length) {
+      const box = document.createElement('div');
+      box.className = 'tree-children';
+      kids.forEach(k => box.appendChild(makeNode(k, depth + 1)));
+      wrap.appendChild(box);
+    }
+    return wrap;
+  }
+
+  treeEl.appendChild(makeNode(root, 0));
+}
+
+/* ── 渲染右侧网格 ── */
+function renderGrid() {
+  const wrap = document.getElementById('gridWrap');
+  const crumb = document.getElementById('crumb');
+  wrap.innerHTML = '';
+
+  // 过滤：文件夹（含子文件夹） + 类型 + 搜索
+  const filtered = mediaList.filter(m => {
+    if (currentFolder && !(m.path === currentFolder || (m.path && m.path.startsWith(currentFolder + '/')))) return false;
+    const type = getType(m.name);
+    if (currentType !== 'all' && type !== currentType) return false;
+    if (currentSearch && !m.name.toLowerCase().includes(currentSearch)) return false;
+    return true;
+  });
+
+  crumb.innerHTML = 'LOCATION: <b>' + (currentFolder || 'ROOT / 全部') + '</b> — <b>' + filtered.length + '</b> FILES';
+
+  if (!filtered.length) {
+    wrap.innerHTML = '<div class="empty">NO FILES<br><small>该文件夹下没有匹配的文件</small></div>';
+    return;
+  }
+
+  // 按子文件夹分节显示（当前文件夹直属文件排最前）
+  lbItems = [];   // 重建灯箱导航列表（与显示顺序一致）
+  const sections = {};
+  filtered.forEach(m => {
+    const key = m.path === currentFolder ? '' : (m.path || '');
+    (sections[key] = sections[key] || []).push(m);
+  });
+
+  const secKeys = Object.keys(sections).sort((a, b) =>
+    sortDesc ? b.localeCompare(a) : a.localeCompare(b));
+  // “当前文件夹”（空 key）始终排最前
+  if (secKeys.includes('')) {
+    secKeys.splice(secKeys.indexOf(''), 1);
+    secKeys.unshift('');
+  }
+  secKeys.forEach(sec => {
+    if (sec !== '' || Object.keys(sections).length > 1) {
+      const t = document.createElement('div');
+      t.className = 'section-title';
+      t.textContent = sec === '' ? '当前文件夹' : sec;
+      wrap.appendChild(t);
+    }
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    sections[sec]
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .forEach((m, idx) => {
+        const type = getType(m.name);
+        const card = document.createElement('a');
+        card.className = 'album-card';
+        card.style.setProperty('--i', Math.min(idx, 14));
+        card.href = fileUrl(m);
+        card.target = '_blank';
+
+        const art = document.createElement('div');
+        art.className = 'album-art';
+        const scan = document.createElement('div');
+        scan.className = 'scanline';
+        art.appendChild(scan);
+        if (type === 'image') {
+          const img = document.createElement('img');
+          img.loading = 'lazy';
+          img.src = card.href;
+          img.onerror = () => { img.remove(); art.insertAdjacentText('afterbegin', '🖼️'); };
+          art.appendChild(img);
+        } else if (type === 'video') {
+          art.insertAdjacentHTML('afterbegin', '<span style="font-size:88px">🎬</span>');
+          const badge = document.createElement('div');
+          badge.className = 'play-badge';
+          badge.textContent = '▶';
+          art.appendChild(badge);
+        } else if (type === 'pdf') {
+          art.insertAdjacentHTML('afterbegin', PDF_ICON_CARD);
+        } else if (type === 'word') {
+          art.insertAdjacentHTML('afterbegin', WORD_ICON_CARD);
+        } else if (type === 'excel') {
+          art.insertAdjacentHTML('afterbegin', EXCEL_ICON_CARD);
+        } else {
+          art.insertAdjacentText('afterbegin', '📄');
+        }
+
+        const nm = document.createElement('div');
+        nm.className = 'album-name';
+        nm.textContent = m.name;
+        nm.title = m.name;
+
+        const sub = document.createElement('div');
+        sub.className = 'album-sub';
+        sub.innerHTML = '<span>' + (m.date || '') + '</span><span>' + formatSize(m.size) + '</span>';
+
+        card.appendChild(art);
+        card.appendChild(nm);
+        card.appendChild(sub);
+
+        // 点击 → 灯箱预览（图片/视频/PDF），其它类型直接打开
+        if (type === 'image' || type === 'video' || type === 'pdf' || type === 'word' || type === 'excel') {
+          const lbIdx = lbItems.length;
+          lbItems.push({ m, type });
+          card.addEventListener('click', e => {
+            e.preventDefault();
+            openLightbox(lbIdx);
+          });
+        }
+
+        grid.appendChild(card);
+      });
+
+    wrap.appendChild(grid);
+  });
+}
+
+/* ── HEVC 软解回退（h265web.js / WASM）── */
+const HEVC_TOKEN = 'base64:QXV0aG9yOmNoYW5neWFubG9uZ3xudW1iZXJ3b2xmLEdpdGh1YjpodHRwczovL2dpdGh1Yi5jb20vbnVtYmVyd29sZixFbWFpbDpwb3JzY2hlZ3QyM0Bmb3htYWlsLmNvbSxRUTo1MzEzNjU4NzIsSG9tZVBhZ2U6aHR0cDovL3h2aWRlby52aWRlbyxEaXNjb3JkOm51bWJlcndvbGYjODY5NCx3ZWNoYXI6bnVtYmVyd29sZjExLEJlaWppbmcsV29ya0luOkJhaWR1';
+let hevcPlayer = null;
+function releaseHevc() {
+  if (hevcPlayer) {
+    try { hevcPlayer.release(); } catch (e) {}
+    hevcPlayer = null;
+  }
+}
+function fmtTime(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function playWithHevc(m, media, showHint) {
+  if (typeof window.new265webjs !== 'function') {
+    showHint('⚠ 浏览器不支持该视频编码（HEVC/H.265），且软解库未加载。请点击下方“打开原文件”下载后本地观看');
+    return;
+  }
+  releaseHevc();
+  media.innerHTML = '';
+
+  const w = Math.min(1100, Math.floor(window.innerWidth * 0.85));
+  const h = Math.min(Math.floor(window.innerHeight * 0.65), Math.floor(w * 9 / 16));
+  const holder = document.createElement('div');
+  holder.id = 'glplayer';
+  holder.className = 'hevc-player';
+  holder.style.width = w + 'px';
+  holder.style.height = h + 'px';
+  media.appendChild(holder);
+
+  // 控制条：播放/暂停 + 进度 + 时间
+  const bar = document.createElement('div');
+  bar.className = 'hevc-bar';
+  bar.style.width = w + 'px';
+  bar.innerHTML =
+    '<button id="hevcPlayBtn">❚❚</button>' +
+    '<div class="hevc-progress" id="hevcProgress"><div class="fill" id="hevcFill"></div></div>' +
+    '<span id="hevcTime">--:-- / --:--</span>' +
+    '<span style="color:var(--accent)">HEVC 软解</span>';
+  media.appendChild(bar);
+
+  // h265web.js 全局计数器复位（官方 demo 做法）
+  window.STATICE_MEM_playerCount = -1;
+  window.STATICE_MEM_playerIndexPtr = 0;
+
+  let durationMs = 0;
+  let playing = false;
+  let gotFrame = false;
+  console.log('[HEVC] 软解启动:', fileUrl(m));
+  // 看门狗：8 秒内无画面则提示（可能非 HEVC 编码或 wasm 加载失败）
+  const watchdog = setTimeout(() => {
+    if (!gotFrame) {
+      console.warn('[HEVC] 8 秒无解码画面，可能编码不支持或 lib/ 加载失败');
+      showHint('⚠ 软解无画面：该视频编码可能不是 HEVC 或解码库加载失败，请点击下方“打开原文件”下载后本地观看（按 F12 看 Console 报错详情）');
+    }
+  }, 8000);
+  const player = window.new265webjs(fileUrl(m), {
+    player: 'glplayer',
+    width: w,
+    height: h,
+    token: HEVC_TOKEN,
+    accurateSeek: true,
+    extInfo: {
+      moovStartFlag: true,
+      readyShow: true,
+      autoPlay: true,
+      coreProbePart: 0.1,
+      ignoreAudio: 0,
+      cacheLength: 50
+    }
+  });
+  hevcPlayer = player;
+
+  const playBtn = bar.querySelector('#hevcPlayBtn');
+  const fill = bar.querySelector('#hevcFill');
+  const timeEl = bar.querySelector('#hevcTime');
+
+  player.onLoadFinish = () => {
+    console.log('[HEVC] onLoadFinish, mediaInfo:', (() => { try { return player.mediaInfo(); } catch (e) { return e; } })());
+    try {
+      const info = player.mediaInfo();
+      durationMs = (info && info.meta && info.meta.durationMs) || 0;
+      timeEl.textContent = '0:00 / ' + fmtTime(durationMs);
+      player.setVoice(1.0);
+    } catch (e) {}
+  };
+  player.onReadyShowDone = () => {
+    try { player.play(); playing = true; playBtn.textContent = '❚❚'; } catch (e) {}
+  };
+  player.onPlayTime = pts => {
+    if (!gotFrame) { gotFrame = true; clearTimeout(watchdog); console.log('[HEVC] 解码出帧正常'); }
+    const ms = pts * 1000;
+    if (durationMs) fill.style.width = Math.min(100, ms / durationMs * 100) + '%';
+    timeEl.textContent = fmtTime(ms) + ' / ' + fmtTime(durationMs);
+  };
+  player.onPlayFinish = () => {
+    playing = false;
+    playBtn.textContent = '▶';
+  };
+
+  playBtn.addEventListener('click', () => {
+    try {
+      if (playing) { player.pause(); playing = false; playBtn.textContent = '▶'; }
+      else { player.play(); playing = true; playBtn.textContent = '❚❚'; }
+    } catch (e) {}
+  });
+  bar.querySelector('#hevcProgress').addEventListener('click', e => {
+    if (!durationMs) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    try { player.seek(ratio * durationMs / 1000); } catch (err) {}
+  });
+
+  try { player.do(); } catch (e) {
+    clearTimeout(watchdog);
+    console.error('[HEVC] player.do() 异常:', e);
+    showHint('⚠ 软解初始化失败，请点击下方“打开原文件”下载后本地观看');
+  }
+}
+
+/* ── 灯箱 ── */
+const lightbox = document.getElementById('lightbox');
+let lbItems = [];
+let lbIndex = -1;
+let lbRotateFn = null;   // 当前媒体的旋转回调（每次打开时重设）
+/* 给非图片媒体（视频/软解容器）加 90° 旋转，旋转后自动缩放适应窗口 */
+function makeRotatable(el) {
+  let rot = 0;
+  return () => {
+    rot = (rot + 90) % 360;
+    let fit = 1;
+    if (rot % 180) {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      if (w && h) {
+        fit = Math.min(1, window.innerWidth * 0.92 / h, window.innerHeight * 0.78 / w);
+      }
+    }
+    el.style.transform = 'rotate(' + rot + 'deg) scale(' + fit + ')';
+  };
+}
+function openLightbox(idx) {
+  if (idx < 0 || idx >= lbItems.length) return;
+  releaseHevc();
+  lbIndex = idx;
+  const { m, type } = lbItems[idx];
+  const media = document.getElementById('lbMedia');
+  media.innerHTML = '';
+  if (type === 'image') {
+    const img = document.createElement('img');
+    img.src = fileUrl(m);
+    media.appendChild(img);
+    initZoom(img);
+    lbRotateFn = img._rotate;
+  } else if (type === 'pdf') {
+    lbRotateFn = renderPdf(m, media);
+  } else if (type === 'word' || type === 'excel') {
+    renderOffice(m, media, type);
+    lbRotateFn = null;
+  } else {
+    const v = document.createElement('video');
+    v.src = fileUrl(m);
+    v.controls = true;
+    v.autoplay = true;
+    v.playsInline = true;
+    v.preload = 'metadata';
+    const showHint = msg => {
+      if (media.querySelector('.lb-hint')) return;
+      const hint = document.createElement('div');
+      hint.className = 'lb-hint';
+      hint.textContent = msg;
+      media.appendChild(hint);
+    };
+    v.addEventListener('error', () => {
+      playWithHevc(m, media, showHint);
+    });
+    v.addEventListener('loadedmetadata', () => {
+      if (!v.videoWidth) {
+        playWithHevc(m, media, showHint);
+      }
+    });
+    media.appendChild(v);
+    lbRotateFn = makeRotatable(v);
+  }
+  document.getElementById('lbName').textContent = (m.path ? m.path + '/' : '') + m.name;
+  document.getElementById('lbCount').textContent = (idx + 1) + ' / ' + lbItems.length;
+  document.getElementById('lbOpen').href = fileUrl(m);
+  lightbox.classList.add('show');
+}
+/* 图片滚轮缩放 + 拖拽平移 + 双击复位 */
+/* PDF → pdf.js 逐页渲染为 canvas；工具栏/Ctrl+滚轮缩放，旋转按页重渲染，普通滚轮翻页。返回旋转回调 */
+let pdfToken = 0;
+function renderPdf(m, media) {
+  const url = fileUrl(m);
+  if (!window.pdfjsLib) {
+    // pdf.js 未加载，回退浏览器内置查看器
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.style.width = Math.min(1100, Math.floor(window.innerWidth * 0.85)) + 'px';
+    frame.style.height = Math.floor(window.innerHeight * 0.82) + 'px';
+    frame.style.border = '1px solid var(--line)';
+    frame.style.background = '#fff';
+    media.appendChild(frame);
+    return null;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+  const token = ++pdfToken;
+  let pdfDoc = null, zoom = 1, rot = 0, renderSeq = 0;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const baseW = Math.min(1000, window.innerWidth * 0.8);
+
+  const bar = document.createElement('div');
+  bar.className = 'pdf-bar';
+  bar.innerHTML =
+    '<button data-act="out" title="缩小（Ctrl+滚轮）">−</button>' +
+    '<span class="pdf-zoom-val">100%</span>' +
+    '<button data-act="in" title="放大（Ctrl+滚轮）">+</button>' +
+    '<button data-act="rot" title="旋转 90°（快捷键 R）">⟳</button>';
+  media.appendChild(bar);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'pdf-scroll';
+  const pages = document.createElement('div');
+  pages.className = 'pdf-pages';
+  scroll.appendChild(pages);
+  media.appendChild(scroll);
+  const hint = document.createElement('div');
+  hint.className = 'lb-hint';
+  hint.textContent = 'PDF 加载中…';
+  media.appendChild(hint);
+
+  async function renderAll() {
+    if (!pdfDoc || token !== pdfToken) return;
+    const seq = ++renderSeq;
+    pages.innerHTML = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      if (seq !== renderSeq || token !== pdfToken) return;
+      const page = await pdfDoc.getPage(i);
+      const rotation = (page.rotate + rot) % 360;
+      const vp0 = page.getViewport({ scale: 1, rotation });
+      const scale = baseW * zoom / vp0.width;
+      const vp = page.getViewport({ scale: scale * dpr, rotation });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = Math.floor(vp.width / dpr) + 'px';
+      canvas.style.height = Math.floor(vp.height / dpr) + 'px';
+      pages.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    }
+  }
+  /* 缩放：先用 CSS 等比拉伸即时反馈并保持锚点，再防抖重渲染保证清晰度 */
+  let rerenderTimer = null;
+  function setZoom(z, ax, ay) {
+    const old = zoom;
+    zoom = Math.min(4, Math.max(0.4, z));
+    if (zoom === old) return;
+    bar.querySelector('.pdf-zoom-val').textContent = Math.round(zoom * 100) + '%';
+    const k = zoom / old;
+    // 锚点默认可视区中心
+    if (ax === undefined) { ax = scroll.clientWidth / 2; ay = scroll.clientHeight / 2; }
+    // 即时拉伸现有 canvas（模糊但即时）
+    pages.querySelectorAll('canvas').forEach(c => {
+      c.style.width = (parseFloat(c.style.width) * k) + 'px';
+      c.style.height = (parseFloat(c.style.height) * k) + 'px';
+    });
+    // 保持鼠标下的内容位置不变
+    scroll.scrollLeft = (scroll.scrollLeft + ax) * k - ax;
+    scroll.scrollTop = (scroll.scrollTop + ay) * k - ay;
+    // 250ms 无操作后高清重渲染，并恢复滚动位置
+    clearTimeout(rerenderTimer);
+    rerenderTimer = setTimeout(async () => {
+      const sl = scroll.scrollLeft, st = scroll.scrollTop;
+      await renderAll();
+      scroll.scrollLeft = sl;
+      scroll.scrollTop = st;
+    }, 250);
+  }
+  const rotate = () => { rot = (rot + 90) % 360; renderAll(); };
+
+  bar.addEventListener('click', e => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (act === 'in') setZoom(zoom * 1.25);
+    else if (act === 'out') setZoom(zoom / 1.25);
+    else if (act === 'rot') rotate();
+  });
+  // 滚轮 = 缩放（以鼠标为锚点，同图片）；Shift+滚轮 = 上下滚动翻页
+  scroll.addEventListener('wheel', e => {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    const rect = scroll.getBoundingClientRect();
+    setZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - rect.left, e.clientY - rect.top);
+  }, { passive: false });
+  // 按住拖拽平移（上下左右都可）
+  let pdfDragging = false, psx = 0, psy = 0, psl = 0, pst = 0;
+  scroll.addEventListener('mousedown', e => {
+    e.preventDefault();
+    pdfDragging = true;
+    psx = e.clientX; psy = e.clientY;
+    psl = scroll.scrollLeft; pst = scroll.scrollTop;
+    scroll.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!pdfDragging) return;
+    scroll.scrollLeft = psl - (e.clientX - psx);
+    scroll.scrollTop = pst - (e.clientY - psy);
+  });
+  window.addEventListener('mouseup', () => {
+    pdfDragging = false;
+    scroll.classList.remove('dragging');
+  });
+  // 双击：复位 100% / 放大到 200%
+  scroll.addEventListener('dblclick', e => {
+    const rect = scroll.getBoundingClientRect();
+    setZoom(zoom === 1 ? 2 : 1, e.clientX - rect.left, e.clientY - rect.top);
+  });
+
+  pdfjsLib.getDocument(url).promise.then(pdf => {
+    if (token !== pdfToken) return;
+    hint.remove();
+    pdfDoc = pdf;
+    renderAll();
+  }).catch(() => {
+    if (token !== pdfToken) return;
+    hint.textContent = 'PDF 加载失败，请点击下方“打开原文件”';
+  });
+  return rotate;
+}
+/* Word(.docx)/Excel(.xlsx) → docx-preview / SheetJS 渲染为 HTML，支持滚轮缩放 + 拖拽平移 */
+let officeToken = 0;
+function renderOffice(m, media, kind) {
+  const url = fileUrl(m);
+  const token = ++officeToken;
+  let zoom = 1;
+
+  const bar = document.createElement('div');
+  bar.className = 'pdf-bar';
+  bar.innerHTML =
+    '<button data-act="out" title="缩小（滚轮）">−</button>' +
+    '<span class="pdf-zoom-val">100%</span>' +
+    '<button data-act="in" title="放大（滚轮）">+</button>';
+  media.appendChild(bar);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'pdf-scroll';
+  const content = document.createElement('div');
+  content.className = 'doc-content';
+  scroll.appendChild(content);
+  media.appendChild(scroll);
+  const hint = document.createElement('div');
+  hint.className = 'lb-hint';
+  hint.textContent = (kind === 'word' ? 'Word' : 'Excel') + ' 加载中…';
+  media.appendChild(hint);
+
+  function setZoom(z, ax, ay) {
+    const old = zoom;
+    zoom = Math.min(4, Math.max(0.4, z));
+    if (zoom === old) return;
+    bar.querySelector('.pdf-zoom-val').textContent = Math.round(zoom * 100) + '%';
+    if (ax === undefined) { ax = scroll.clientWidth / 2; ay = scroll.clientHeight / 2; }
+    const k = zoom / old;
+    content.style.zoom = zoom;
+    scroll.scrollLeft = (scroll.scrollLeft + ax) * k - ax;
+    scroll.scrollTop = (scroll.scrollTop + ay) * k - ay;
+  }
+  bar.addEventListener('click', e => {
+    const act = e.target.dataset && e.target.dataset.act;
+    if (act === 'in') setZoom(zoom * 1.25);
+    else if (act === 'out') setZoom(zoom / 1.25);
+  });
+  scroll.addEventListener('wheel', e => {
+    if (e.shiftKey) return;   // Shift+滚轮 = 上下滚动
+    e.preventDefault();
+    const rect = scroll.getBoundingClientRect();
+    setZoom(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX - rect.left, e.clientY - rect.top);
+  }, { passive: false });
+  let dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+  scroll.addEventListener('mousedown', e => {
+    if (e.target.closest('button, a')) return;   // 不影响 Sheet 页签点击
+    e.preventDefault();
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    sl = scroll.scrollLeft; st = scroll.scrollTop;
+    scroll.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    scroll.scrollLeft = sl - (e.clientX - sx);
+    scroll.scrollTop = st - (e.clientY - sy);
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    scroll.classList.remove('dragging');
+  });
+  scroll.addEventListener('dblclick', e => {
+    const rect = scroll.getBoundingClientRect();
+    setZoom(zoom === 1 ? 2 : 1, e.clientX - rect.left, e.clientY - rect.top);
+  });
+
+  fetch(url).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.arrayBuffer();
+  }).then(async buf => {
+    if (token !== officeToken) return;
+    if (kind === 'word') {
+      if (!window.docx) throw new Error('docx-preview 未加载');
+      await docx.renderAsync(buf, content, null, { inWrapper: true, ignoreLastRenderedPageBreak: true });
+    } else {
+      if (!window.XLSX) throw new Error('SheetJS 未加载');
+      const wb = XLSX.read(buf, { type: 'array' });
+      const tabs = document.createElement('div');
+      tabs.className = 'sheet-tabs';
+      const body = document.createElement('div');
+      body.className = 'sheet-body';
+      content.appendChild(tabs);
+      content.appendChild(body);
+      const show = name => {
+        body.innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[name]);
+        tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.textContent === name));
+      };
+      wb.SheetNames.forEach(name => {
+        const b = document.createElement('button');
+        b.textContent = name;
+        b.addEventListener('click', () => show(name));
+        tabs.appendChild(b);
+      });
+      show(wb.SheetNames[0]);
+    }
+    if (token !== officeToken) return;
+    hint.remove();
+  }).catch(() => {
+    if (token !== officeToken) return;
+    hint.textContent = '预览失败，请点击下方“打开原文件”';
+  });
+}
+function initZoom(img) {
+  let scale = 1, tx = 0, ty = 0, rot = 0;
+  const zoomLabel = document.getElementById('lbZoom');
+  const apply = () => {
+    // 旋转 90/270 度时缩放适应窗口
+    let fit = 1;
+    if (rot % 180) {
+      const w = img.offsetWidth, h = img.offsetHeight;
+      if (w && h) fit = Math.min(1, window.innerWidth * 0.92 / h, window.innerHeight * 0.82 / w);
+    }
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + (scale * fit) + ') rotate(' + rot + 'deg)';
+    img.classList.toggle('zoomed', scale > 1);
+    zoomLabel.style.display = (scale !== 1 || rot !== 0) ? 'block' : 'none';
+    zoomLabel.textContent = 'ZOOM ' + Math.round(scale * 100) + '%' + (rot ? ' · ' + rot + '°' : '');
+  };
+  img._rotate = () => { rot = (rot + 90) % 360; apply(); };
+  img.addEventListener('wheel', e => {
+    e.preventDefault();
+    const old = scale;
+    scale = Math.min(8, Math.max(1, scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    if (scale === old) return;
+    // 以鼠标位置为中心缩放
+    const rect = img.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top - rect.height / 2;
+    const k = scale / old;
+    tx = tx * k - cx * (k - 1);
+    ty = ty * k - cy * (k - 1);
+    if (scale === 1) { tx = 0; ty = 0; }
+    apply();
+  }, { passive: false });
+  // 拖拽平移（放大后）
+  let dragging = false, sx = 0, sy = 0;
+  img.addEventListener('mousedown', e => {
+    if (scale <= 1) return;
+    e.preventDefault();
+    dragging = true;
+    sx = e.clientX - tx; sy = e.clientY - ty;
+    img.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    tx = e.clientX - sx; ty = e.clientY - sy;
+    apply();
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    img.classList.remove('dragging');
+  });
+  // 双击：复位（含旋转）/ 放大到 2 倍
+  img.addEventListener('dblclick', () => {
+    if (scale > 1 || rot !== 0) { scale = 1; tx = 0; ty = 0; rot = 0; }
+    else scale = 2;
+    apply();
+  });
+  // 防止拖拽时选中/拖图
+  img.addEventListener('dragstart', e => e.preventDefault());
+}
+function lbStep(dir) {
+  if (!lightbox.classList.contains('show') || !lbItems.length) return;
+  const next = (lbIndex + dir + lbItems.length) % lbItems.length;
+  openLightbox(next);
+}
+function closeLightbox() {
+  releaseHevc();
+  lightbox.classList.remove('show');
+  document.getElementById('lbMedia').innerHTML = '';
+}
+document.getElementById('lbRotate').addEventListener('click', () => {
+  if (typeof lbRotateFn === 'function') lbRotateFn();
+});
+document.getElementById('lbClose').addEventListener('click', closeLightbox);
+document.getElementById('lbPrev').addEventListener('click', () => lbStep(-1));
+document.getElementById('lbNext').addEventListener('click', () => lbStep(1));
+lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox();
+  else if (e.key === 'ArrowLeft') lbStep(-1);
+  else if (e.key === 'ArrowRight') lbStep(1);
+  else if ((e.key === 'r' || e.key === 'R') && lightbox.classList.contains('show')) {
+    if (typeof lbRotateFn === 'function') lbRotateFn();
+  }
+});
+
+/* ── 事件 ── */
+document.getElementById('search').addEventListener('input', e => {
+  currentSearch = e.target.value.trim().toLowerCase();
+  renderGrid();
+});
+document.querySelectorAll('.filter-btn[data-type]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn[data-type]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentType = btn.dataset.type;
+    renderGrid();
+  });
+});
+document.getElementById('sortBtn').addEventListener('click', () => {
+  sortDesc = !sortDesc;
+  document.getElementById('sortBtn').textContent = sortDesc ? '年份 ↓' : '年份 ↑';
+  renderGrid();
+});
+
+fetch('media.json', { cache: 'no-store' })
+  .then(r => r.json())
+  .then(data => {
+    mediaList = Array.isArray(data) ? data : [];
+    renderTree();
+    renderGrid();
+    document.getElementById('docStatus').textContent = 'CONTROLLED · ' + mediaList.length + ' FILES';
+  })
+  .catch(() => {
+    document.getElementById('gridWrap').innerHTML =
+      '<div class="empty">MEDIA.JSON NOT FOUND<br><small>请先在服务器运行 scan.sh 扫描共享文件夹生成索引</small></div>';
+  });
+</script>
+</body>
+</html>

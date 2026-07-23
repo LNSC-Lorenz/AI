@@ -1,14 +1,17 @@
 <template>
   <div>
-    <h2 class="text-lg font-semibold text-zinc-300 uppercase tracking-wider mb-6">Dashboard</h2>
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-lg font-semibold text-zinc-300 uppercase tracking-wider">Dashboard</h2>
+      <span class="text-xs font-mono text-zinc-600">auto-refresh 10s</span>
+    </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards（点击跳到 Jobs 对应筛选） -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-      <StatsCard :icon="ListChecks"  :value="stats.total"     label="Total"     iconClass="text-zinc-400" />
-      <StatsCard :icon="Loader"      :value="stats.running"   label="Running"   iconClass="text-amber-500" />
-      <StatsCard :icon="Clock"       :value="stats.pending"   label="Pending"   iconClass="text-zinc-500" />
-      <StatsCard :icon="CheckCircle" :value="stats.completed" label="Completed" iconClass="text-emerald-500" />
-      <StatsCard :icon="XCircle"     :value="stats.failed"    label="Failed"    iconClass="text-red-500" />
+      <StatsCard :icon="ListChecks"  :value="stats.total"     label="Total"     iconClass="text-zinc-400"    @click="goJobs('ALL')" />
+      <StatsCard :icon="Loader"      :value="stats.running"   label="Running"   iconClass="text-amber-500"   @click="goJobs('RUNNING')" />
+      <StatsCard :icon="Clock"       :value="stats.pending"   label="Pending"   iconClass="text-zinc-500"    @click="goJobs('PENDING')" />
+      <StatsCard :icon="CheckCircle" :value="stats.completed" label="Completed" iconClass="text-emerald-500" @click="goJobs('COMPLETED')" />
+      <StatsCard :icon="XCircle"     :value="stats.failed"    label="Failed"    iconClass="text-red-500"     @click="goJobs('FAILED')" />
     </div>
 
     <!-- Success Rate Bar -->
@@ -36,7 +39,9 @@
           ALL &rarr;
         </router-link>
       </div>
-      <div v-if="loading" class="p-8 text-center text-zinc-600 font-mono text-sm">Loading...</div>
+      <div v-if="loading && recentJobs.length === 0" class="p-5 space-y-3">
+        <div v-for="i in 5" :key="i" class="skeleton h-8 w-full"></div>
+      </div>
       <div v-else-if="recentJobs.length === 0" class="p-8 text-center text-zinc-600 font-mono text-sm">No jobs</div>
       <table v-else class="w-full">
         <thead>
@@ -82,7 +87,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ListChecks, Loader, Clock, CheckCircle, XCircle } from 'lucide-vue-next'
 import { useJobsStore } from '../stores/jobs'
 import StatsCard from '../components/StatsCard.vue'
@@ -93,9 +99,15 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 dayjs.extend(relativeTime)
 
 const store = useJobsStore()
+const router = useRouter()
 const { loading } = store
 const stats = computed(() => store.stats)
 const recentJobs = computed(() => store.jobs.slice(0, 10))
+let refreshTimer = null
+
+function goJobs(filter) {
+  router.push({ path: '/jobs', query: filter === 'ALL' ? {} : { filter } })
+}
 
 function formatTime(t) {
   return t ? dayjs(t).fromNow() : '-'
@@ -113,5 +125,10 @@ function formatDuration(start, end) {
 
 onMounted(() => {
   store.fetchJobs()
+  refreshTimer = setInterval(() => store.fetchJobs(), 10000)
+})
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
 })
 </script>

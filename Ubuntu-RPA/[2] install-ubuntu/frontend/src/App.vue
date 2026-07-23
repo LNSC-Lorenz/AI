@@ -22,27 +22,36 @@
           {{ item.label }}
         </router-link>
       </nav>
-      <div class="px-5 py-4 border-t border-zinc-800">
+      <div class="px-5 py-4 border-t border-zinc-800 space-y-2">
         <div class="flex items-center gap-2 text-xs font-mono">
-          <span class="w-1.5 h-1.5 rounded-full" :class="healthy ? 'bg-emerald-500' : 'bg-red-500'"></span>
-          <span class="text-zinc-600">{{ healthy ? 'ONLINE' : 'OFFLINE' }}</span>
+          <span class="w-1.5 h-1.5 rounded-full" :class="healthy ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'"></span>
+          <span :class="healthy ? 'text-emerald-600' : 'text-red-500'">{{ healthy ? 'GATEWAY ONLINE' : 'GATEWAY OFFLINE' }}</span>
         </div>
+        <div class="text-xs font-mono text-zinc-700">{{ clock }}</div>
       </div>
     </aside>
 
     <!-- Main -->
     <main class="ml-56 p-8">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { LayoutDashboard, PlayCircle, Boxes, Bot } from 'lucide-vue-next'
 import api from './api'
+import dayjs from 'dayjs'
 
 const healthy = ref(false)
+const clock = ref(dayjs().format('YYYY-MM-DD HH:mm:ss'))
+let healthTimer = null
+let clockTimer = null
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -50,12 +59,23 @@ const navItems = [
   { path: '/deployments', label: 'Deployments', icon: Boxes },
 ]
 
-onMounted(async () => {
+async function checkHealth() {
   try {
     await api.getHealth()
     healthy.value = true
   } catch {
     healthy.value = false
   }
+}
+
+onMounted(() => {
+  checkHealth()
+  healthTimer = setInterval(checkHealth, 15000)
+  clockTimer = setInterval(() => { clock.value = dayjs().format('YYYY-MM-DD HH:mm:ss') }, 1000)
+})
+
+onUnmounted(() => {
+  clearInterval(healthTimer)
+  clearInterval(clockTimer)
 })
 </script>

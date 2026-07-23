@@ -1,5 +1,5 @@
 # ==============================================================================
-# RPA Platform — Windows Agent Setup
+# RPA Platform - Windows Agent Setup
 # Installs Prefect Worker + dependencies on Windows RPA VM
 # Run as Administrator
 # ==============================================================================
@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host " RPA Platform — Windows Agent Setup"       -ForegroundColor Cyan
+Write-Host " RPA Platform - Windows Agent Setup"       -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 # --- Check admin ---
@@ -25,11 +25,27 @@ if (-not $isAdmin) {
 
 # --- Python ---
 Write-Host "`n[1/6] Checking Python..." -ForegroundColor Yellow
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
+
+# Note: "Get-Command python" alone is unreliable because Windows ships a
+# Microsoft Store alias stub. Actually run it and check the output.
+function Test-RealPython {
+    try {
+        $v = & python --version 2>&1
+        return ($LASTEXITCODE -eq 0 -and $v -match "Python 3")
+    } catch {
+        return $false
+    }
+}
+
+if (-not (Test-RealPython)) {
     Write-Host "Installing Python via winget..."
-    winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+    winget install Python.Python.3.12 --source winget --accept-package-agreements --accept-source-agreements
+    # Refresh PATH so python.exe is found in this session
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not (Test-RealPython)) {
+        Write-Host "ERROR: Python still not available. Open a NEW PowerShell window and re-run this script." -ForegroundColor Red
+        exit 1
+    }
 }
 python --version
 
@@ -43,15 +59,18 @@ if (-not (Test-Path $VenvDir)) {
     python -m venv $VenvDir
 }
 
-$pip = "$VenvDir\Scripts\pip.exe"
 $python_venv = "$VenvDir\Scripts\python.exe"
 
 # --- Install packages ---
 Write-Host "`n[3/6] Installing Python packages..." -ForegroundColor Yellow
-& $pip install --upgrade pip
-& $pip install prefect==3.* httpx playwright pywin32 pyautogui
+# Must use "python -m pip" to upgrade pip itself (pip.exe cannot replace itself on Windows)
+& $python_venv -m pip install --upgrade pip
+& $python_venv -m pip install prefect==3.* httpx playwright pywin32 pyautogui
 
-# Install Playwright browsers
+# Install Playwright browsers to a fixed shared path so the SYSTEM service
+# account can find them (default is the installing user's %LOCALAPPDATA%)
+$BrowsersDir = "$AgentDir\browsers"
+$env:PLAYWRIGHT_BROWSERS_PATH = $BrowsersDir
 & $python_venv -m playwright install chromium
 
 # --- Copy flows ---
@@ -91,14 +110,17 @@ if (-not (Test-Path $nssmPath)) {
 
 $ServiceName = "PrefectRPAWorker"
 
-# Remove existing service if present
-& $nssmPath stop $ServiceName 2>$null
-& $nssmPath remove $ServiceName confirm 2>$null
+# Remove existing service if present (nssm writes "Can't open service!" to
+# stderr when it doesn't exist, which kills the script under ErrorActionPreference=Stop)
+if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+    & $nssmPath stop $ServiceName
+    & $nssmPath remove $ServiceName confirm
+}
 
 # Install service
 & $nssmPath install $ServiceName $python_venv "-m" "prefect" "worker" "start" "--pool" $WorkPoolName "--name" $WorkerName
 & $nssmPath set $ServiceName AppDirectory $AgentDir
-& $nssmPath set $ServiceName AppEnvironmentExtra "PREFECT_API_URL=$PrefectApiUrl"
+& $nssmPath set $ServiceName AppEnvironmentExtra "PREFECT_API_URL=$PrefectApiUrl" "PLAYWRIGHT_BROWSERS_PATH=$BrowsersDir"
 & $nssmPath set $ServiceName DisplayName "Prefect RPA Worker"
 & $nssmPath set $ServiceName Description "Prefect 3 Worker for RPA automation tasks"
 & $nssmPath set $ServiceName Start SERVICE_AUTO_START
@@ -112,7 +134,7 @@ New-Item -ItemType Directory -Path "$AgentDir\logs" -Force | Out-Null
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host " Windows Agent Setup Complete"             -ForegroundColor Green
+Write-Host " Windows Agent Setup Complete"            -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host " Agent Dir:    $AgentDir"
 Write-Host " Work Pool:    $WorkPoolName"

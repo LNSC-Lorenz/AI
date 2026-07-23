@@ -1,0 +1,182 @@
+#cloud-config
+# =============================================================
+# Ubuntu 24.04 LTS Autoinstall - ESXi 无人值守安装
+# 主机名: lcnnsc-rpa-l01 | IP: 10.86.180.126 (Linux RPA Worker)
+# =============================================================
+autoinstall:
+  version: 1
+
+  # ── 语言与键盘 ──────────────────────────────────────────────
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # ── 网络（ESXi VMXNET3，网卡名通常为 ens192）───────────────
+  network:
+    version: 2
+    ethernets:
+      ens192:
+        dhcp4: false
+        optional: true
+        match:
+          driver: vmxnet3
+        set-name: ens192
+        addresses: [10.86.180.126/24]
+        routes:
+          - to: default
+            via: 10.86.180.200
+        nameservers:
+          addresses: [10.86.180.1, 10.86.180.2]
+
+  # ── 存储分区 ────────────────────────────────────────────────
+  # 方案：单盘 LVM
+  storage:
+    config:
+      - type: disk
+        id: disk-sda
+        path: /dev/sda
+        wipe: superblock-recursive
+        grub_device: true
+        ptable: msdos
+
+      - type: partition
+        id: part-boot
+        device: disk-sda
+        size: 1G
+        flag: boot
+
+      - type: partition
+        id: part-lvm
+        device: disk-sda
+        size: -1
+
+      - type: format
+        id: fmt-boot
+        volume: part-boot
+        fstype: ext4
+        label: boot
+
+      - type: lvm_volgroup
+        id: vg-system
+        name: vg-system
+        devices: [part-lvm]
+
+      - type: lvm_partition
+        id: lv-root
+        volgroup: vg-system
+        name: lv-root
+        size: 30G
+
+      - type: lvm_partition
+        id: lv-var
+        volgroup: vg-system
+        name: lv-var
+        size: 20G
+
+      - type: lvm_partition
+        id: lv-tmp
+        volgroup: vg-system
+        name: lv-tmp
+        size: 5G
+
+      - type: lvm_partition
+        id: lv-home
+        volgroup: vg-system
+        name: lv-home
+        size: -1
+
+      - type: format
+        id: fmt-root
+        volume: lv-root
+        fstype: ext4
+
+      - type: format
+        id: fmt-var
+        volume: lv-var
+        fstype: ext4
+
+      - type: format
+        id: fmt-tmp
+        volume: lv-tmp
+        fstype: ext4
+
+      - type: format
+        id: fmt-home
+        volume: lv-home
+        fstype: ext4
+
+      - type: mount
+        id: mnt-boot
+        device: fmt-boot
+        path: /boot
+
+      - type: mount
+        id: mnt-root
+        device: fmt-root
+        path: /
+
+      - type: mount
+        id: mnt-var
+        device: fmt-var
+        path: /var
+
+      - type: mount
+        id: mnt-tmp
+        device: fmt-tmp
+        path: /tmp
+
+      - type: mount
+        id: mnt-home
+        device: fmt-home
+        path: /home
+
+  # ── 账户（唯一管理员用户）──────────────────────────────────
+  identity:
+    hostname: lcnnsc-rpa-l01
+    username: rpa
+    # 明文密码: ChangeMe2026!@#
+    # SHA-512 hash (安装阶段临时密码，启动后被 chpasswd 覆盖)
+    password: '$6$exDY1mhS4KUYCE/2$zmn9ToZwTKLhCw.b4/b.ZRTIZM6AtkDqaAl/g7ZFwer0XTwXowbeblM7UK.VW1kMexI.OOkWL5lRTl.6WTwJf.'
+
+  # ── SSH ─────────────────────────────────────────────────────
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+
+  # ── 最小化软件包 ─────────────────────────────────────────────
+  packages:
+    - open-vm-tools
+    - curl
+    - ca-certificates
+
+  # ── 安装完成后执行 ───────────────────────────────────────────
+  late-commands:
+    # 启用 VMware Tools
+    - curtin in-target --target=/target -- systemctl enable open-vm-tools
+    # SSH: 启用密码认证，禁止 root 登录
+    - curtin in-target --target=/target -- sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    - curtin in-target --target=/target -- systemctl enable ssh
+    # 创建脚本上传目录
+    - curtin in-target --target=/target -- mkdir -p /opt/scripts
+    - curtin in-target --target=/target -- chown rpa:rpa /opt/scripts
+    - curtin in-target --target=/target -- chmod 775 /opt/scripts
+    # 强制设置 rpa 密码
+    - curtin in-target --target=/target -- bash -c "echo 'rpa:ChangeMe2026!@#' | chpasswd"
+    # 设置 rpa 无密码 sudo
+    - curtin in-target --target=/target -- bash -c "echo 'rpa ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rpa"
+    - curtin in-target --target=/target -- chmod 440 /etc/sudoers.d/rpa
+    # 最终更新
+    - curtin in-target --target=/target -- apt-get -y -qq dist-upgrade
+    - curtin in-target --target=/target -- apt-get -y -qq autoremove
+
+  user-data:
+    disable_root: true
+    chpasswd:
+      list: |
+        rpa:ChangeMe2026!@#
+      expire: False
+
+  updates: security
+  shutdown: reboot

@@ -1,8 +1,21 @@
 <template>
   <div>
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-lg font-semibold text-zinc-300 uppercase tracking-wider">Jobs</h2>
+      <h2 class="text-lg font-semibold text-zinc-300 uppercase tracking-wider">
+        Jobs
+        <span class="ml-2 text-xs font-mono text-zinc-600 normal-case">{{ filteredJobs.length }} / {{ store.jobs.length }}</span>
+      </h2>
       <div class="flex items-center gap-3">
+        <!-- Search -->
+        <div class="relative">
+          <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" />
+          <input
+            v-model="search"
+            type="text"
+            placeholder="search name / tag"
+            class="pl-8 pr-3 py-1.5 w-52 border border-zinc-700 rounded text-sm bg-zinc-900 text-zinc-300 font-mono placeholder-zinc-600 focus:ring-1 focus:ring-amber-500 focus:border-amber-500 focus:outline-none"
+          />
+        </div>
         <!-- Status Filter -->
         <select
           v-model="filter"
@@ -93,8 +106,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { RefreshCw, Inbox } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { RefreshCw, Inbox, Search } from 'lucide-vue-next'
 import { useJobsStore } from '../stores/jobs'
 import StatusBadge from '../components/StatusBadge.vue'
 import dayjs from 'dayjs'
@@ -103,11 +117,24 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 dayjs.extend(relativeTime)
 
 const store = useJobsStore()
-const filter = ref('ALL')
+const route = useRoute()
+const filter = ref(route.query.filter || 'ALL')
+const search = ref('')
+let refreshTimer = null
 
 const filteredJobs = computed(() => {
-  if (filter.value === 'ALL') return store.jobs
-  return store.jobs.filter(j => j.state?.type === filter.value)
+  let list = store.jobs
+  if (filter.value !== 'ALL') {
+    list = list.filter(j => j.state?.type === filter.value)
+  }
+  const q = search.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(j =>
+      (j.name || '').toLowerCase().includes(q) ||
+      (j.tags || []).some(t => t.toLowerCase().includes(q))
+    )
+  }
+  return list
 })
 
 function formatTime(t) {
@@ -130,5 +157,10 @@ function refresh() {
 
 onMounted(() => {
   store.fetchJobs()
+  refreshTimer = setInterval(() => store.fetchJobs(), 10000)
+})
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
 })
 </script>
