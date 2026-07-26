@@ -32,24 +32,32 @@
 | Database | PostgreSQL 16 | 5432 | Ubuntu (Docker) |
 | API Gateway | FastAPI | 8100 | Ubuntu (systemd) |
 | Frontend | Vue3 + Vite | 80 | Ubuntu (Nginx) |
-| Windows Worker | Prefect Worker | — | Windows VM (SAP + Web + Python) |
-| Linux Worker | Prefect Worker | — | Linux VM (Web + Python) |
+| Windows Worker | Prefect Worker (GUI 模式) | — | Windows VM (SAP GUI + Web + Python) |
+| Linux Worker | Prefect Worker (systemd) | — | Linux VM (Web + Python) |
+
+**主机清单**
+
+| 主机 | IP | 角色 | Work Pool |
+|------|----|----|-----------|
+| lcnnsc-rpa-00 | 10.86.180.120 | Prefect Server + Gateway + 前端 | — |
+| lcnnsc-rpa-w01/w02/w03 | .121/.122/.123 | Windows Worker (SAP GUI) | windows-gui-pool |
+| lcnnsc-rpa-l01/l02/l03 | .126/.127/.128 | Linux Worker (Web/ETL) | linux-rpa-pool |
 
 ## Deployment
 
-### [1] autoinstall — Ubuntu Autoinstall (ESXi VM)
+### 1_autoinstall — Ubuntu Autoinstall (ESXi VM)
 
 ```powershell
-cd "[1] autoinstall"
+cd "1_autoinstall"
 .\Create-CidataISO.ps1
 # 上传 ISO 到 ESXi → 挂载到 VM → 自动安装 Ubuntu 24.04
 # 安装完成后: sudo bash verify.sh
 ```
 
-### [2] install-ubuntu — 服务端安装 (按编号顺序执行)
+### 2_install-worker-server — 服务端安装 (按编号顺序执行)
 
 ```bash
-cd "/opt/scripts/[2] install-ubuntu"
+cd "/opt/scripts/2_install-worker-server"
 sudo bash 00-harden-ubuntu.sh      # CIS 安全加固 (reboot after)
 sudo bash 01-setup-docker.sh       # Docker + 系统依赖
 sudo bash 02-deploy-prefect.sh     # Prefect Server + PostgreSQL
@@ -58,25 +66,22 @@ sudo bash 04-build-frontend.sh     # Vue3 前端构建
 sudo bash 05-setup-nginx.sh        # Nginx 反向代理
 ```
 
-### [3] install-worker-windows — Windows Worker 安装
+### 3_install-worker-windows — Windows Worker 安装 (GUI 模式)
 
 ```powershell
-# Run as Administrator
-.\setup-windows-agent.ps1 -PrefectApiUrl http://10.86.180.120:4200/api
-
-# Register flows
-cd C:\RPA-Agent\flows
-python must_deploy.py
+# Run as Administrator（w01/w02/w03 各自右键管理员运行对应 .cmd）
+.\install-lcnnsc-rpa-w01.cmd
+# 或手动:
+.\setup-windows-agent.ps1 -RpaUser "LECHLER\rpacn01" -PrefectApiUrl http://10.86.180.120:4200/api `
+    -WorkPoolName windows-gui-pool -WorkerName lcnnsc-rpa-w01
+# 安装脚本会自动注册系统 flows (deploy-job)；装完后 RDP 登录一次 rpacn01 即可
 ```
 
-### [4] install-worker-linux — Linux Worker 安装
+### 4_install-worker-linux — Linux Worker 安装
 
 ```bash
-sudo bash setup-linux-agent.sh http://10.86.180.120:4200/api linux-rpa-pool rpa-linux-agent-01
-
-# Register flows
-cd /opt/rpa-agent/flows
-/opt/rpa-agent/.venv/bin/python must_deploy.py
+# l01/l02/l03 各自执行对应脚本（内部调用 setup-linux-agent.sh，含 flows 自动注册）
+sudo bash install-lcnnsc-rpa-l01.sh
 ```
 
 ## 使用说明
@@ -95,15 +100,15 @@ cd /opt/rpa-agent/flows
 #### 第一步：创建 Autoinstall ISO（在 Windows 管理机上）
 
 1. 打开 PowerShell（管理员）
-2. 修改 `[1] autoinstall/user-data` 中的 IP 和主机名（如需更改）
-3. 运行 `.\Create-CidataISO.ps1` 生成 `cidata-rpa.iso`
-4. 将 `cidata-rpa.iso` 上传到 ESXi 数据存储
+2. 修改 `1_autoinstall/user-data` 中的 IP 和主机名（如需更改）
+3. 运行 `.\Create-CidataISO.ps1` 生成 `cidata-lcnnsc-rpa-00.iso`（ISO 名自动取 user-data 里的 hostname）
+4. 将 `cidata-lcnnsc-rpa-00.iso` 上传到 ESXi 数据存储
 
 #### 第二步：自动安装 Ubuntu（在 ESXi 上）
 
 1. 新建 VM：Ubuntu 64-bit、BIOS 启动、VMXNET3 网卡、80GB+ 硬盘
 2. CD/DVD 1 → 挂载 `ubuntu-24.04-live-server-amd64.iso`
-3. CD/DVD 2 → 挂载 `cidata-rpa.iso`
+3. CD/DVD 2 → 挂载 `cidata-lcnnsc-rpa-00.iso`
 4. 启动 VM，等待自动安装完成并重启（约 10-15 分钟）
 5. SSH 登录验证：`ssh rpa@10.86.180.120`（密码 `ChangeMe2026!@#`）
 6. 运行验证脚本：`sudo bash /opt/scripts/verify.sh`（可选）
@@ -111,13 +116,13 @@ cd /opt/rpa-agent/flows
 #### 第三步：上传部署脚本到服务器
 
 ```bash
-scp -r "[2] install-ubuntu" rpa@10.86.180.120:/opt/scripts/
+scp -r "2_install-worker-server" rpa@10.86.180.120:/opt/scripts/
 ```
 
 #### 第四步：服务端部署（SSH 到服务器，按顺序执行）
 
 ```bash
-cd '/opt/scripts/[2] install-ubuntu'
+cd '/opt/scripts/2_install-worker-server'
 
 # 1. 安全加固（完成后重启）
 sudo bash 00-harden-ubuntu.sh
@@ -134,22 +139,15 @@ sudo bash 05-setup-nginx.sh        # Nginx 反向代理配置
 #### 第五步：部署 Windows Worker（在 Windows RPA 机器上）
 
 ```powershell
-# 以管理员身份运行 PowerShell
-.\setup-windows-agent.ps1 -PrefectApiUrl http://10.86.180.120:4200/api
-
-# 注册流程
-cd C:\RPA-Agent\flows
-python must_deploy.py
+# 以管理员身份运行对应机器的一键脚本（w01/w02/w03）
+.\install-lcnnsc-rpa-w01.cmd
+# 装完后 RDP 登录一次 rpacn01：Worker 自启，3 分钟后会话自动转控制台（RDP 窗口关闭、不锁屏）
 ```
 
 #### 第六步：部署 Linux Worker（在 Linux RPA 机器上，可选）
 
 ```bash
-sudo bash setup-linux-agent.sh http://10.86.180.120:4200/api linux-rpa-pool rpa-linux-agent-01
-
-# 注册流程
-cd /opt/rpa-agent/flows
-/opt/rpa-agent/.venv/bin/python must_deploy.py
+sudo bash install-lcnnsc-rpa-l01.sh   # l01/l02/l03 各自对应脚本
 ```
 
 ### 部署后验证
@@ -206,7 +204,7 @@ cd /opt/rpa-agent/flows
 - **Worker** 负责执行：主动向 Server 轮询（pull 模式），拿到任务后在本地执行
 - **Flow** 是任务：一段 Python 代码，用 `@flow` 装饰器标注
 - **Deployment** 是注册：把 Flow 注册到 Server，绑定 Work Pool + 调度计划
-- **Work Pool** 是分组：把 Worker 按能力分组（如 windows-rpa-pool / linux-rpa-pool）
+- **Work Pool** 是分组：把 Worker 按能力分组（如 windows-gui-pool / linux-rpa-pool）
 
 > Worker 到 Server 是 **出站连接**（Worker → Server），不需要 Server 能访问 Worker 网络。
 
@@ -226,112 +224,90 @@ cd /opt/rpa-agent/flows
 
 **无特殊 Windows 版本限制**，只要是 64-bit 且能运行 Python 3.10+ 即可。
 
-### Windows Worker 安装关键步骤
+### Windows Worker 安装关键步骤 (GUI 模式)
+
+SAP GUI 自动化必须在交互桌面会话运行，因此 Worker 不是 Windows 服务，
+而是以 RPA 用户登录会话里的计划任务运行，共三个计划任务：
+
+| 计划任务 | 触发 | 作用 |
+|---------|------|------|
+| PrefectRPAWorker-GUI | rpacn01 登录时 | 启动 Worker（start-worker.cmd） |
+| PrefectRPAWorker-ConsoleRedirect | 登录 + 3 分钟 | tscon 把会话转控制台，RDP 窗口关闭但会话不锁 |
+| PrefectRPAWorker-Watchdog | 每 5 分钟 | Worker 进程死了自动拉起（防掉线池变红） |
 
 ```powershell
-# 1. 将 [3] install-worker-windows 文件夹复制到 Windows 机器
-# 2. 以管理员打开 PowerShell，进入该目录
-cd "C:\path\to\[3] install-worker-windows"
-
-# 3. 一键安装（自动完成：Python → venv → Prefect → 注册服务）
-.\setup-windows-agent.ps1 -PrefectApiUrl http://10.86.180.120:4200/api
-
-# 4. 注册 Flow（告诉 Server 这台机器能跑哪些任务）
-cd C:\RPA-Agent\flows
-C:\RPA-Agent\.venv\Scripts\python.exe must_deploy.py
+# 一键安装（自动：机器级 Python → venv → Prefect+依赖 → 计划任务 → 注册 deploy-job）
+.\install-lcnnsc-rpa-w01.cmd
+# 日常唯一手工步骤：每次重启后 RDP 登录一次 rpacn01（或用 -RpaPassword 启用自动登录实现全无人值守）
 ```
 
 安装完成后：
-- Worker 作为 Windows 服务 `PrefectRPAWorker` 自动运行（开机自启）
-- 日志位于 `C:\RPA-Agent\logs\`
-- Flow 代码位于 `C:\RPA-Agent\flows\`
+- 日志：`C:\RPA-Agent\logs\`（worker-gui.log / watchdog.log / console-redirect.log）
+- Flow 代码：`C:\RPA-Agent\flows\`；PREFECT_HOME：`C:\RPA-Agent\.prefect`
+- SAP GUI 前提：rpacn01 会话内关闭 Scripting 警告（WarnOnAttach/WarnOnConnection=0），
+  并把 SAPUILandscape.xml 复制到 %APPDATA%\SAP\Common\（连接列表）
 
-### Windows Worker 部署实例（lcnnsc-rpa-w01 / lcnnsc-rpa-w02）
+### Windows Worker 部署实例（w01 / w02 / w03）
 
-以两台全新安装的 Windows Server 为例，两台加入同一 Work Pool 实现 HA / 负载分担。
+三台加入同一 `windows-gui-pool` 实现 HA / 负载分担：
 
-**前提**（vCenter 模板克隆 + 自定义规范已完成）：
+| 项目 | w01 | w02 | w03 |
+|------|-----|-----|-----|
+| IP | `.121` | `.122` | `.123` |
+| 安装入口 | `install-lcnnsc-rpa-w01.cmd` | `...w02.cmd` | `...w03.cmd` |
+| RPA 用户 | `LECHLER\rpacn01`（三台相同，域账号） | | |
 
-| 项目 | lcnnsc-rpa-w01 | lcnnsc-rpa-w02 |
-|------|----------------|----------------|
-| 计算机名 | `lcnnsc-rpa-w01` | `lcnnsc-rpa-w02` |
-| IP | `10.86.180.121/24` | `10.86.180.122/24` |
-| 已加域 | ✅（域用户有本地管理员权限） | ✅ |
-| 能访问 Server | `http://10.86.180.120:4200` | 同左 |
+步骤：复制 `3_install-worker-windows/` 到目标机 → 右键管理员运行对应 `.cmd` →
+RDP 登录一次 `rpacn01` → Prefect UI → Work Pools → `windows-gui-pool` 确认 Online。
 
-**第 1 步：复制安装文件夹**
+> Deployment 注册到 Server 是全局的，同一 Work Pool 内多台 Worker 自动分担任务；一台停机，其余继续工作。
 
-把 `[3] install-worker-windows/` 整个复制到 Worker 机器，如 `C:\Temp\install-worker-windows\`
+### SAP 并发控制（重要）
 
-**第 2 步：以管理员运行 PowerShell 执行安装**
-
-```powershell
-# ===== lcnnsc-rpa-w01 上执行 =====
-cd C:\Temp\install-worker-windows
-Set-ExecutionPolicy Bypass -Scope Process -Force
-.\setup-windows-agent.ps1 `
-    -PrefectApiUrl "http://10.86.180.120:4200/api" `
-    -WorkPoolName "windows-rpa-pool" `
-    -WorkerName "lcnnsc-rpa-w01"
-```
+SAP 账号同时只能登录一处 → 用全局并发锁保证 3 台 Worker 上 SAP job 互斥，其它 job 正常并行：
 
 ```powershell
-# ===== lcnnsc-rpa-w02 上执行（仅 WorkerName 不同） =====
-cd C:\Temp\install-worker-windows
-Set-ExecutionPolicy Bypass -Scope Process -Force
-.\setup-windows-agent.ps1 `
-    -PrefectApiUrl "http://10.86.180.120:4200/api" `
-    -WorkPoolName "windows-rpa-pool" `
-    -WorkerName "lcnnsc-rpa-w02"
+# 建锁（一次性）
+prefect global-concurrency-limit create sap-gui --limit 1
 ```
 
-脚本自动完成：Python 3.12 安装 → 虚拟环境 → Prefect + 依赖 → 复制 flows → 注册 Windows 服务（开机自启）。
-
-**第 3 步：验证 Worker 上线**
-
-Prefect UI（http://10.86.180.120:4200）→ **Work Pools** → `windows-rpa-pool` → Workers 列表应显示 `lcnnsc-rpa-w01` 和 `lcnnsc-rpa-w02` 均为 Online。
-
-**第 4 步：首次部署验证（try-on，任选一台执行）**
-
-```powershell
-# 复制 [5] try-on 的 test_deploy.py 到 C:\RPA-Agent\flows\
-cd C:\RPA-Agent\flows
-C:\RPA-Agent\.venv\Scripts\python.exe test_deploy.py
+```python
+# 所有 SAP job 的 flow 代码里，把 SAP 环节包进锁（约定俗成）
+from prefect.concurrency.sync import concurrency
+with concurrency("sap-gui", occupy=1):
+    ...  # SAP GUI 操作
 ```
-
-Prefect UI → **Deployments** → `hello` → **Run** → Flow Runs 显示 `Completed`，日志输出 `Hello from lcnnsc-rpa-w01...`（或 w02，由谁先抢到任务决定）。
-
-**第 5 步：注册正式业务 Flows（任选一台执行一次即可）**
-
-```powershell
-cd C:\RPA-Agent\flows
-C:\RPA-Agent\.venv\Scripts\python.exe must_deploy.py
-```
-
-> Deployment 注册到 Server 是全局的，同一 Work Pool 内两台 Worker 自动分担任务；一台停机，另一台继续工作。
 
 ### 日常使用流程
 
+**方式一：网页一键部署（推荐）**
+
+1. 把 job 整目录打成 zip（内容在根层级，不要多包一层目录）
+2. RPA 前端 → **Deploy** 页 → 拖入 zip → 填 Job 名称 + 注册脚本相对路径 → 勾选目标池 → 一键分发
+3. 每个目标池的 Worker 自动下载解压到 `flows/<Job名>/` 并执行注册（deploy-job 系统 flow）
+4. 前端 **Deployments** 页 Trigger 或设定时调度
+
+**方式二：手工部署**
+
 1. **创建/修改 Flow** → 编辑 `C:\RPA-Agent\flows\` 下的 `.py` 文件
-2. **注册 Flow** → 运行 `must_deploy.py` 将变更同步到 Server
+2. **注册 Flow** → 运行 flow 文件的 deploy() 或 `must_deploy.py` 同步到 Server
 3. **触发执行** → 在 RPA 前端（http://10.86.180.120）点击 "Trigger" 或设置定时调度
 4. **查看结果** → 前端 Dashboard / Jobs 页面查看执行状态和日志
 
 ### 服务管理命令
 
 ```powershell
-# Windows Worker 服务管理
-nssm status PrefectRPAWorker     # 查看状态
-nssm restart PrefectRPAWorker    # 重启
-nssm stop PrefectRPAWorker       # 停止
-
-# 或使用 Windows 服务管理器: services.msc → Prefect RPA Worker
+# Windows Worker 管理（计划任务，非服务）
+Get-ScheduledTask PrefectRPAWorker-GUI | Get-ScheduledTaskInfo   # 状态 (267009=运行中)
+Start-ScheduledTask PrefectRPAWorker-GUI                          # 启动
+Get-Process python | Stop-Process -Force                          # 停止（看门狗 5 分钟内会自动拉起）
+Get-Content C:\RPA-Agent\logs\worker-gui.log -Tail 30            # 日志
 ```
 
 ```bash
 # Ubuntu Server 服务管理
-sudo docker compose -f '/opt/scripts/[2] install-ubuntu/docker-compose.yml' ps      # 查看容器
-sudo docker compose -f '/opt/scripts/[2] install-ubuntu/docker-compose.yml' restart  # 重启
+sudo docker compose -f '/opt/scripts/2_install-worker-server/docker-compose.yml' ps      # 查看容器
+sudo docker compose -f '/opt/scripts/2_install-worker-server/docker-compose.yml' restart  # 重启
 sudo systemctl status rpa-gateway     # Gateway 状态
 sudo systemctl restart rpa-gateway    # 重启 Gateway
 ```
@@ -348,6 +324,7 @@ Vue3 + TailwindCSS 全可视化面板：
 | Jobs | Job 列表 + 状态筛选 + 时间/耗时 + 详情入口 |
 | Job Detail | 单个 Job 详情（参数/状态时间线/Tags） |
 | Deployments | Deployment 卡片 + 一键 Trigger + 调度状态 |
+| Deploy | 拖拽上传 job zip → 选目标池 → 一键分发到 Windows/Linux Worker 并自动注册 |
 
 ## 操作流程
 
@@ -417,13 +394,13 @@ Worker 轮询拿到任务（Running）
 
 ```
 Ubuntu-RPA/
-├── [1] autoinstall/                     # Ubuntu 无人值守安装
+├── 1_autoinstall/                     # Ubuntu 无人值守安装
 │   ├── Create-CidataISO.ps1
 │   ├── meta-data
 │   ├── user-data
 │   └── verify.sh
 │
-├── [2] install-ubuntu/                  # 服务端安装
+├── 2_install-worker-server/                  # 服务端安装
 │   ├── 00-harden-ubuntu.sh
 │   ├── 01-setup-docker.sh
 │   ├── 02-deploy-prefect.sh
@@ -444,25 +421,27 @@ Ubuntu-RPA/
 │   │       ├── views/Dashboard.vue
 │   │       ├── views/Jobs.vue
 │   │       ├── views/JobDetail.vue
-│   │       └── views/Deployments.vue
+│   │       ├── views/Deployments.vue
+│   │       └── views/Deploy.vue         # 网页上传 job 包 + 一键分发注册
 │   └── nginx/
 │       └── rpa.conf
 │
-├── [3] install-worker-windows/          # Windows Worker 安装
-│   ├── setup-windows-agent.ps1
+├── 3_install-worker-windows/          # Windows Worker 安装 (GUI 模式)
+│   ├── setup-windows-agent.ps1          # 主安装脚本（3 个计划任务: Worker/Redirect/Watchdog）
 │   ├── install-lcnnsc-rpa-w01.cmd      # w01 / w02 / w03 一键安装
 │   ├── install-lcnnsc-rpa-w02.cmd
 │   ├── install-lcnnsc-rpa-w03.cmd
 │   └── flows/
-│       ├── must_deploy.py               # 正式业务 Flow 注册（模板）
+│       ├── deploy_job.py                # 系统 Flow: 网页上传包的落地+注册通道
+│       ├── must_deploy.py               # 正式业务 Flow 注册（含 deploy-job）
 │       └── requirements.txt
 │
-├── [4] install-worker-linux/            # Linux Worker 安装
+├── 4_install-worker-linux/            # Linux Worker 安装
 │   ├── setup-linux-agent.sh
 │   ├── install-lcnnsc-rpa-l01.sh       # l01 / l02 / l03 一键安装
 │   ├── install-lcnnsc-rpa-l02.sh
 │   ├── install-lcnnsc-rpa-l03.sh
-│   ├── autoinstall/                     # ESXi 无人值守装机（同 [1] 模式）
+│   ├── autoinstall/                     # ESXi 无人值守装机（同 1_autoinstall 模式）
 │   │   ├── Create-CidataISO.ps1         # -HostName 参数选择主机
 │   │   ├── lcnnsc-rpa-l01/              # .126  user-data + meta-data
 │   │   ├── lcnnsc-rpa-l02/              # .127
@@ -470,11 +449,19 @@ Ubuntu-RPA/
 │   └── flows/
 │       ├── web_flow.py
 │       ├── python_flow.py
+│       ├── deploy_job.py                # 系统 Flow（同 Windows 版）
 │       ├── must_deploy.py
 │       └── requirements.txt
 │
-├── [5] try-on/                          # 首次部署验证
+├── 5_try-on/                          # 首次部署验证 + 首个业务 job 迁移
 │   ├── test_deploy.py                   # 单文件：hello-flow + 注册
+│   ├── test_edge_search.py
+│   ├── RPA01_07/                        # 业务 job: SAP 质量图纸下载（Prefect 化迁移中）
+│   │   ├── 01_Conf/Config_download.xlsx # 邮箱/SAP 账号配置（密码 base64）
+│   │   └── 05_DataJobFile/
+│   │       ├── RPACN01_07_downloadfile.py       # 原业务脚本
+│   │       ├── RPACN01_07_downloadfile_flow.py  # Prefect flow 包装（含 sap-gui 全局锁）
+│   │       └── test_ews.py                      # EWS 邮箱凭据诊断工具
 │   └── README.md
 │
 └── README.md

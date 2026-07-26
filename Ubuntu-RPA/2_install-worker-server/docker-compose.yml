@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rpa-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prefect_rpa_2024}
+      POSTGRES_DB: prefect
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: rpa-prefect-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${POSTGRES_PASSWORD:-prefect_rpa_2024}@postgres:5432/prefect
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_SERVER_API_PORT: "4200"
+      PREFECT_UI_API_URL: http://10.86.180.120:4200/api
+    ports:
+      - "0.0.0.0:4200:4200"
+    command: prefect server start
+
+volumes:
+  pgdata:
