@@ -22,10 +22,10 @@ fi
 
 # --- 部署 Gateway 代码 ---
 echo "[1/4] 部署 Gateway 文件..."
-mkdir -p "$INSTALL_DIR/gateway"
+mkdir -p "$INSTALL_DIR/gateway" "$INSTALL_DIR/packages"
 cp "$SCRIPT_DIR"/gateway/*.py "$INSTALL_DIR/gateway/"
 cp "$SCRIPT_DIR"/gateway/requirements.txt "$INSTALL_DIR/gateway/"
-chown -R "$GATEWAY_USER":"$GATEWAY_USER" "$INSTALL_DIR/gateway"
+chown -R "$GATEWAY_USER":"$GATEWAY_USER" "$INSTALL_DIR/gateway" "$INSTALL_DIR/packages"
 
 # --- Python venv ---
 echo "[2/4] 创建 Python 虚拟环境..."

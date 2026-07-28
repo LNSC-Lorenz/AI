@@ -10,6 +10,24 @@ from typing import Optional
 import json
 
 
+@task(retries=1, retry_delay_seconds=5)
+def web_smoke_test(url: str) -> dict:
+    """Open a page and return its title - verifies browser environment."""
+    logger = get_run_logger()
+    logger.info(f"Smoke test: opening {url}")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        title = page.title()
+        final_url = page.url
+        browser.close()
+
+    logger.info(f"Page loaded OK - title: '{title}'")
+    return {"url": final_url, "title": title}
+
+
 @task(retries=2, retry_delay_seconds=5)
 def web_login(
     url: str,
@@ -111,12 +129,23 @@ def web_fill_form(
 
 @flow(name="web-automation-flow", log_prints=True)
 def web_automation_flow(
-    url: str = "https://example.com/login",
+    url: str = "http://10.86.180.120",
     username: str = "",
     password: str = "",
-    action: str = "login",
+    action: str = "smoke",
 ):
-    """Main web automation flow."""
+    """Main web automation flow.
+
+    action:
+      smoke  - 打开页面取标题，验证浏览器环境（默认）
+      login  - 登录目标网站（需传 username/password 及正确的选择器）
+      scrape - 登录后抓取表格
+    """
+    if action == "smoke":
+        result = web_smoke_test(url=url)
+        print(f"Smoke test OK: {result['title']} ({result['url']})")
+        return result
+
     login_result = web_login(url=url, username=username, password=password)
     print(f"Login result: {login_result['url']}")
 

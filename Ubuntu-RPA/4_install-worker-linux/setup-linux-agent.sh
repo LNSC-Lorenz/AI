@@ -54,7 +54,7 @@ chown -R "$AGENT_USER":"$AGENT_USER" "$AGENT_DIR"
 echo "[4/6] 创建 Python 虚拟环境..."
 sudo -u "$AGENT_USER" python3 -m venv "$AGENT_DIR/.venv"
 "$AGENT_DIR/.venv/bin/pip" install --upgrade pip -q
-"$AGENT_DIR/.venv/bin/pip" install prefect httpx playwright -q
+"$AGENT_DIR/.venv/bin/pip" install -r "$AGENT_DIR/flows/requirements.txt" -q
 
 # Playwright browsers
 sudo -u "$AGENT_USER" "$AGENT_DIR/.venv/bin/python" -m playwright install chromium

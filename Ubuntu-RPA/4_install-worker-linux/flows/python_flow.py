@@ -6,8 +6,10 @@ Can run on either Ubuntu or Windows agent.
 
 from prefect import flow, task, get_run_logger
 from pathlib import Path
+from typing import Optional
 import json
 import csv
+import tempfile
 
 
 @task(retries=2, retry_delay_seconds=5)
@@ -26,7 +28,7 @@ def read_csv_file(file_path: str, encoding: str = "utf-8") -> list:
 
 
 @task
-def transform_data(rows: list, mapping: dict = None) -> list:
+def transform_data(rows: list, mapping: Optional[dict] = None) -> list:
     """Apply transformations to data rows."""
     logger = get_run_logger()
     logger.info(f"Transforming {len(rows)} rows")
@@ -60,8 +62,8 @@ def write_json_output(data: list, output_path: str) -> str:
 def call_external_api(
     url: str,
     method: str = "GET",
-    headers: dict = None,
-    payload: dict = None,
+    headers: Optional[dict] = None,
+    payload: Optional[dict] = None,
 ) -> dict:
     """Call an external API."""
     import httpx
@@ -82,13 +84,35 @@ def call_external_api(
     return resp.json()
 
 
+@task
+def create_sample_csv() -> str:
+    """Create a sample CSV for smoke testing when no input_file is given."""
+    logger = get_run_logger()
+    path = Path(tempfile.gettempdir()) / "etl-smoke-test.csv"
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "name", "value"])
+        writer.writerow(["1", "alpha", "100"])
+        writer.writerow(["2", "beta", "200"])
+    logger.info(f"Sample CSV created: {path}")
+    return str(path)
+
+
 @flow(name="python-etl-flow", log_prints=True)
 def python_etl_flow(
     input_file: str = "",
     output_file: str = "",
-    field_mapping: dict = None,
+    field_mapping: Optional[dict] = None,
 ):
-    """Generic ETL flow: read CSV → transform → write JSON."""
+    """Generic ETL flow: read CSV → transform → write JSON.
+
+    不传参数时为冒烟测试模式：自动生成示例 CSV 并输出到临时目录。
+    """
+    if not input_file:
+        input_file = create_sample_csv()
+    if not output_file:
+        output_file = str(Path(tempfile.gettempdir()) / "etl-smoke-test.json")
+
     rows = read_csv_file(input_file)
     transformed = transform_data(rows, mapping=field_mapping)
     output = write_json_output(transformed, output_file)

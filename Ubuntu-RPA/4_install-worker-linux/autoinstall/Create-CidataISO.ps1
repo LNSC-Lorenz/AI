@@ -3,29 +3,28 @@
 .SYNOPSIS
     Create cloud-init cidata ISO for Ubuntu Autoinstall (Linux RPA Workers)
 .DESCRIPTION
-    Create ISO with label "cidata" containing user-data and meta-data
-    from the per-host subdirectory (lcnnsc-rpa-l01 / l02 / l03).
+    Create ISOs with label "cidata" containing user-data and meta-data
+    from the per-host subdirectories (lcnnsc-rpa-l01 / l02 / l03).
+    By default builds all three ISOs in one run.
     Requires Windows ADK (oscdimg).
 .PARAMETER HostName
-    Worker host name = subdirectory name (default: lcnnsc-rpa-l01)
-.PARAMETER OutputPath
-    Full path for output ISO file (default: cidata-<HostName>.iso in script directory)
+    Build only this worker host (= subdirectory name). Default: all hosts.
+.EXAMPLE
+    .\Create-CidataISO.ps1
+    Creates cidata-lcnnsc-rpa-l01/l02/l03.iso in one run
 .EXAMPLE
     .\Create-CidataISO.ps1 -HostName lcnnsc-rpa-l02
-    Creates cidata-lcnnsc-rpa-l02.iso from .\lcnnsc-rpa-l02\
+    Creates only cidata-lcnnsc-rpa-l02.iso
 #>
 [CmdletBinding()]
 param(
     [Parameter()]
     [ValidateSet("lcnnsc-rpa-l01", "lcnnsc-rpa-l02", "lcnnsc-rpa-l03")]
-    [string]$HostName = "lcnnsc-rpa-l01",
-
-    [Parameter()]
-    [string]$OutputPath = ""
+    [string]$HostName = ""
 )
 
-$SourceDir = Join-Path $PSScriptRoot $HostName
-if ([string]::IsNullOrEmpty($OutputPath)) { $OutputPath = Join-Path $PSScriptRoot "cidata-$HostName.iso" }
+$AllHosts = @("lcnnsc-rpa-l01", "lcnnsc-rpa-l02", "lcnnsc-rpa-l03")
+$Hosts = if ([string]::IsNullOrEmpty($HostName)) { $AllHosts } else { @($HostName) }
 
 $VolumeLabel = "cidata"
 $RequiredFiles = @("user-data", "meta-data")
@@ -129,19 +128,9 @@ function Test-IsoContent {
 
 Write-Host "=============================================================" -ForegroundColor Blue
 Write-Host "  Cloud-init cidata ISO Creator" -ForegroundColor Blue
-Write-Host "  For Ubuntu 24.04 LTS Autoinstall (Linux RPA Worker)" -ForegroundColor Blue
-Write-Host "  Host: $HostName" -ForegroundColor Blue
+Write-Host "  For Ubuntu 24.04 LTS Autoinstall (Linux RPA Workers)" -ForegroundColor Blue
+Write-Host "  Hosts: $($Hosts -join ', ')" -ForegroundColor Blue
 Write-Host "=============================================================" -ForegroundColor Blue
-
-if (-not (Test-Path -LiteralPath $SourceDir)) {
-    Write-Error "Source directory does not exist: $SourceDir"
-    exit 1
-}
-Write-Host "Source: $SourceDir" -ForegroundColor Gray
-Write-Host "Output: $OutputPath" -ForegroundColor Gray
-
-if (-not (Test-RequiredFiles -Directory $SourceDir)) { exit 1 }
-Convert-ToUnixLineEnding -Directory $SourceDir
 
 $toolPath = Find-Oscdimg
 if (-not $toolPath) {
@@ -153,41 +142,71 @@ Install options:
   1. Download from: https://aka.ms/adk
      Run adksetup.exe and select 'Deployment Tools'
   2. Or use WSL/Linux:
-     genisoimage -output cidata-$HostName.iso -volid cidata -joliet -rock user-data meta-data
+     genisoimage -output cidata-<host>.iso -volid cidata -joliet -rock user-data meta-data
 
 "@ -ForegroundColor Yellow
     exit 1
 }
 Write-Host "[OK] Found oscdimg: $toolPath" -ForegroundColor Green
 
-if (Test-Path -LiteralPath $OutputPath) {
-    Write-Host "[Warning] Removing existing ISO file..." -ForegroundColor Yellow
-    Remove-Item -LiteralPath $OutputPath -Force
-}
+$created = @()
+$failed  = @()
+foreach ($h in $Hosts) {
+    Write-Host ""
+    Write-Host "------------- $h -------------" -ForegroundColor Blue
+    $SourceDir  = Join-Path $PSScriptRoot $h
+    $OutputPath = Join-Path $PSScriptRoot "cidata-$h.iso"
 
-try {
-    # Stage only required files to a temp directory
-    $stageDir = Join-Path $env:TEMP "cidata-stage-$(Get-Random)"
-    New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
-    foreach ($file in $RequiredFiles) {
-        Copy-Item -LiteralPath (Join-Path $SourceDir $file) -Destination $stageDir -Force
+    if (-not (Test-Path -LiteralPath $SourceDir)) {
+        Write-Host "[Error] Source directory does not exist: $SourceDir" -ForegroundColor Red
+        $failed += $h
+        continue
     }
-    Write-Host "[Stage] Staged files to: $stageDir" -ForegroundColor Cyan
+    Write-Host "Source: $SourceDir" -ForegroundColor Gray
+    Write-Host "Output: $OutputPath" -ForegroundColor Gray
 
-    New-IsoWithOscdimg -OscdimgPath $toolPath -Source $stageDir -Destination $OutputPath -Label $VolumeLabel
+    if (-not (Test-RequiredFiles -Directory $SourceDir)) { $failed += $h; continue }
+    Convert-ToUnixLineEnding -Directory $SourceDir
 
-    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
-    Test-IsoContent -IsoPath $OutputPath
-    $isoInfo = Get-Item -LiteralPath $OutputPath
-    Write-Host "=============================================================" -ForegroundColor Green
-    Write-Host "  ISO Created: $($isoInfo.FullName)" -ForegroundColor Green
-    Write-Host "  Size: $([math]::Round($isoInfo.Length / 1KB, 2)) KB | Label: $VolumeLabel" -ForegroundColor Green
-    Write-Host "=============================================================" -ForegroundColor Green
-    Write-Host "Usage:" -ForegroundColor Green
-    Write-Host "1. Upload ISO to VMware ESXi datastore" -ForegroundColor Green
-    Write-Host "2. Edit VM ($HostName) - CD/DVD drive - Select this ISO" -ForegroundColor Green
-    Write-Host "3. Boot VM with Ubuntu 24.04 live-server ISO for unattended install" -ForegroundColor Green
-} catch {
-    Write-Error "Failed to create ISO: $_"
-    exit 1
+    if (Test-Path -LiteralPath $OutputPath) {
+        Write-Host "[Warning] Removing existing ISO file..." -ForegroundColor Yellow
+        Remove-Item -LiteralPath $OutputPath -Force
+    }
+
+    try {
+        # Stage only required files to a temp directory
+        $stageDir = Join-Path $env:TEMP "cidata-stage-$(Get-Random)"
+        New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+        foreach ($file in $RequiredFiles) {
+            Copy-Item -LiteralPath (Join-Path $SourceDir $file) -Destination $stageDir -Force
+        }
+        Write-Host "[Stage] Staged files to: $stageDir" -ForegroundColor Cyan
+
+        New-IsoWithOscdimg -OscdimgPath $toolPath -Source $stageDir -Destination $OutputPath -Label $VolumeLabel
+
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+        Test-IsoContent -IsoPath $OutputPath
+        $created += (Get-Item -LiteralPath $OutputPath)
+    } catch {
+        Write-Host "[Error] Failed to create ISO for ${h}: $_" -ForegroundColor Red
+        $failed += $h
+    }
 }
+
+Write-Host ""
+Write-Host "=============================================================" -ForegroundColor Green
+Write-Host "  Summary" -ForegroundColor Green
+Write-Host "=============================================================" -ForegroundColor Green
+foreach ($iso in $created) {
+    Write-Host "  [OK] $($iso.Name)  ($([math]::Round($iso.Length / 1KB, 2)) KB)" -ForegroundColor Green
+}
+foreach ($h in $failed) {
+    Write-Host "  [FAILED] $h" -ForegroundColor Red
+}
+Write-Host ""
+Write-Host "Usage:" -ForegroundColor Green
+Write-Host "1. Upload ISOs to VMware ESXi datastore" -ForegroundColor Green
+Write-Host "2. Edit each VM - CD/DVD drive - Select its matching ISO" -ForegroundColor Green
+Write-Host "3. Boot VM with Ubuntu 24.04 live-server ISO for unattended install" -ForegroundColor Green
+
+if ($failed.Count -gt 0) { exit 1 }

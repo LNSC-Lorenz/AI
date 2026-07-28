@@ -80,9 +80,14 @@ sudo bash 05-setup-nginx.sh        # Nginx 反向代理
 ### 4_install-worker-linux — Linux Worker 安装
 
 ```bash
-# l01/l02/l03 各自执行对应脚本（内部调用 setup-linux-agent.sh，含 flows 自动注册）
+# 1. 系统加固 + 基础应用（CIS 基线，完成后重启；-y 无人值守）
+sudo bash 00-harden-worker.sh -y && sudo reboot
+
+# 2. l01/l02/l03 各自执行对应脚本（内部调用 setup-linux-agent.sh，含 flows 自动注册）
 sudo bash install-lcnnsc-rpa-l01.sh
 ```
+
+> 完整分步说明见下文 [Linux Worker 部署分步指南](#linux-worker-部署分步指南l01--l02--l03)。
 
 ## 使用说明
 
@@ -147,8 +152,11 @@ sudo bash 05-setup-nginx.sh        # Nginx 反向代理配置
 #### 第六步：部署 Linux Worker（在 Linux RPA 机器上，可选）
 
 ```bash
-sudo bash install-lcnnsc-rpa-l01.sh   # l01/l02/l03 各自对应脚本
+sudo bash 00-harden-worker.sh -y && sudo reboot   # 加固 + 基础应用
+sudo bash install-lcnnsc-rpa-l01.sh               # l01/l02/l03 各自对应脚本
 ```
+
+> 详细步骤（含装机、上传文件清单、验收测试、运维）见 [Linux Worker 部署分步指南](#linux-worker-部署分步指南l01--l02--l03)。
 
 ### 部署后验证
 
@@ -277,6 +285,109 @@ from prefect.concurrency.sync import concurrency
 with concurrency("sap-gui", occupy=1):
     ...  # SAP GUI 操作
 ```
+
+### Linux Worker 部署分步指南（l01 / l02 / l03）
+
+三台加入同一 `linux-rpa-pool`，自动分担任务 / 互为 HA：
+
+| 项目 | l01 | l02 | l03 |
+|------|-----|-----|-----|
+| IP | `.126` | `.127` | `.128` |
+| autoinstall 目录 | `lcnnsc-rpa-l01/` | `lcnnsc-rpa-l02/` | `lcnnsc-rpa-l03/` |
+| 安装入口 | `install-lcnnsc-rpa-l01.sh` | `...l02.sh` | `...l03.sh` |
+| Worker 名 | `lcnnsc-rpa-l01` | `lcnnsc-rpa-l02` | `lcnnsc-rpa-l03` |
+
+#### 步骤 1：ESXi 无人值守装机（Windows 管理机）
+
+```powershell
+cd "4_install-worker-linux\autoinstall"
+.\Create-CidataISO.ps1                          # 默认一次生成三台 ISO
+.\Create-CidataISO.ps1 -HostName lcnnsc-rpa-l02  # 或只生成单台
+```
+
+1. 上传 `cidata-lcnnsc-rpa-l0X.iso` 到 ESXi 数据存储
+2. 新建 VM：Ubuntu 64-bit、BIOS 启动、VMXNET3 网卡、80GB+ 硬盘
+3. CD/DVD 1 → `ubuntu-24.04-live-server-amd64.iso`；CD/DVD 2 → 对应 cidata ISO
+4. 启动后自动安装（约 10-15 分钟），完成后 `ssh rpa@10.86.180.126` 验证
+
+#### 步骤 2：上传安装文件（Windows 管理机）
+
+**4 项缺一不可**（`install-*.sh` 只是包装器，依赖同目录的主脚本和 flows/）：
+
+```powershell
+cd "4_install-worker-linux"
+scp 00-harden-worker.sh setup-linux-agent.sh install-lcnnsc-rpa-l01.sh rpa@10.86.180.126:~/
+scp -r flows rpa@10.86.180.126:~/
+# l02 → .127、l03 → .128 同理，换对应 install-*.sh
+```
+
+#### 步骤 3：系统加固 + 基础应用（目标机）
+
+```bash
+sudo bash 00-harden-worker.sh -y && sudo reboot
+```
+
+完成：系统更新、基础工具（git/vim/htop/jq/unzip/chrony）、Python3、CJK 字体（Playwright 中文渲染）、
+CIS 基线（密码策略/SSH 加固/auditd/AIDE/Fail2ban/内核参数）、UFW（仅 SSH 入站）、Swap 4GB。
+报告：`cat /var/log/worker-hardening-report.txt`。
+
+> Worker 到 Server 是出站连接，不需开任何业务端口；/tmp 未加 noexec（pip/Playwright 安装需要）。
+
+#### 步骤 4：安装 Prefect Worker（目标机）
+
+```bash
+sudo bash install-lcnnsc-rpa-l01.sh    # l02/l03 换对应脚本
+```
+
+自动完成：Playwright 系统依赖 → `rpa` 用户 → `/opt/rpa-agent` 目录 → venv（装 `flows/requirements.txt`
+全部依赖 + Chromium）→ Work Pool 创建 → flows 注册 → `prefect-worker` systemd 服务自启。
+
+自动注册的 3 个 deployment：
+
+| Deployment | Flow | 作用 |
+|------------|------|------|
+| `linux-rpa-pool` | deploy-job | **系统 Flow，勿删**：网页上传 job 包的落地+注册通道 |
+| `web-automation-linux` | web-automation-flow | 冒烟测试：默认 smoke 模式打开页面取标题，验证浏览器环境 |
+| `python-etl-linux` | python-etl-flow | 冒烟测试：默认生成示例 CSV → 转换 → 输出 JSON 到 /tmp |
+
+#### 步骤 5：验收测试
+
+```bash
+systemctl status prefect-worker                        # 服务 running
+tail -f /opt/rpa-agent/logs/worker-stdout.log          # Worker 日志
+```
+
+1. Prefect UI → Work Pools → `linux-rpa-pool` → Workers 列表确认三台 Online
+2. UI 里用**默认参数** Run `web-automation-linux` → 日志出现 `Smoke test OK: ...`
+3. 默认参数 Run `python-etl-linux` → 日志出现 `ETL complete: /tmp/etl-smoke-test.json`
+4. 冒烟通过后，两个测试 deployment 可在 UI 删除（无 cron，留着也不占资源）；`deploy-job` 必须保留
+
+#### Linux Worker 日常运维
+
+```bash
+sudo systemctl status|restart prefect-worker           # 服务管理
+sudo journalctl -u prefect-worker -n 50                # 启动失败时看这里
+tail -f /opt/rpa-agent/logs/worker-stdout.log          # 运行日志
+```
+
+| 位置 | 内容 |
+|------|------|
+| `/opt/rpa-agent/flows/` | Flow 代码（Worker 每次运行从磁盘加载） |
+| `/opt/rpa-agent/.venv/` | Python 环境 |
+| `/opt/rpa-agent/logs/` | Worker 日志（logrotate 14 天） |
+
+**更新 flow 代码**（三台共用一个池，`/opt/rpa-agent/flows/` 必须三台保持一致）：
+
+```bash
+# 每台：覆盖代码即可，不用重启 Worker
+sudo cp ~/flows/xxx_flow.py /opt/rpa-agent/flows/ && sudo chown rpa:rpa /opt/rpa-agent/flows/*.py
+
+# 仅当 flow 参数签名变化时，在任一台重新注册一次：
+sudo -u rpa PREFECT_API_URL=http://10.86.180.120:4200/api \
+    /opt/rpa-agent/.venv/bin/python /opt/rpa-agent/flows/must_deploy.py
+```
+
+> 新业务 job 推荐走网页 Deploy 页上传 zip 一键分发，自动保证多台一致（见下文日常使用流程）。
 
 ### 日常使用流程
 
@@ -437,6 +548,7 @@ Ubuntu-RPA/
 │       └── requirements.txt
 │
 ├── 4_install-worker-linux/            # Linux Worker 安装
+│   ├── 00-harden-worker.sh              # CIS 加固 + 基础应用（支持 -y 无人值守）
 │   ├── setup-linux-agent.sh
 │   ├── install-lcnnsc-rpa-l01.sh       # l01 / l02 / l03 一键安装
 │   ├── install-lcnnsc-rpa-l02.sh
@@ -447,11 +559,11 @@ Ubuntu-RPA/
 │   │   ├── lcnnsc-rpa-l02/              # .127
 │   │   └── lcnnsc-rpa-l03/              # .128
 │   └── flows/
-│       ├── web_flow.py
-│       ├── python_flow.py
+│       ├── web_flow.py                  # 冒烟测试: Playwright smoke/login/scrape
+│       ├── python_flow.py               # 冒烟测试: CSV→JSON ETL（默认自带示例数据）
 │       ├── deploy_job.py                # 系统 Flow（同 Windows 版）
-│       ├── must_deploy.py
-│       └── requirements.txt
+│       ├── must_deploy.py               # 注册 deploy-job + 两个冒烟 flow
+│       └── requirements.txt             # venv 全部依赖（含 pandas/exchangelib 等业务包）
 │
 ├── 5_try-on/                          # 首次部署验证 + 首个业务 job 迁移
 │   ├── test_deploy.py                   # 单文件：hello-flow + 注册
