@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "id": "ctms",
+    "name": "CTMS",
+    "desc": "车间刀具出入库管理系统",
+    "url": "/apps/ctms/",
+    "cat": "workshop",
+    "badge": "NEW",
+    "color": "#f59e0b"
+  }
+]

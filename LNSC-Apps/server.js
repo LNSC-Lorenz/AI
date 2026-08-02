@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const http = require('http');
 const https = require('https');
 const { execSync } = require('child_process');
 
@@ -23,6 +24,31 @@ function loadMeta() {
 function saveMeta(data) {
   fs.writeFileSync(META_FILE, JSON.stringify(data, null, 2));
 }
+
+// CTMS 子应用 API 反向代理：/apps/ctms/api/* -> http://127.0.0.1:3001/api/*
+// 必须在 express.json() 之前注册，否则请求体会被提前消费导致代理挂起
+const CTMS_API_PORT = 3001;
+app.use('/apps/ctms/api', (req, res) => {
+  const proxyReq = http.request({
+    hostname: '127.0.0.1',
+    port: CTMS_API_PORT,
+    path: '/api' + req.url,
+    method: req.method,
+    headers: { ...req.headers, host: '127.0.0.1:' + CTMS_API_PORT },
+    timeout: 15000
+  }, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    if (!res.headersSent) res.status(504).json({ error: 'CTMS backend timeout' });
+  });
+  proxyReq.on('error', (e) => {
+    if (!res.headersSent) res.status(502).json({ error: 'CTMS backend unavailable: ' + e.message });
+  });
+  req.pipe(proxyReq);
+});
 
 // 静态文件服务
 app.use(express.static(WEB_ROOT));

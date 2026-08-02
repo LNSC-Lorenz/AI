@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>刀具出入库管理</title>
+    <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+    <div id="app">
+        <!-- 主内容区 -->
+        <main class="content-area">
+            <!-- 主界面柜子布局 -->
+            <div id="mainView" class="main-view">
+                <div class="cabinet-grid" id="cabinetContainer"></div>
+            </div>
+
+            <!-- 详情界面 -->
+            <div id="detailView" class="detail-view" style="display:none;">
+                <div class="detail-content">
+                    <!-- 左侧柜子预览 -->
+                    <div class="detail-left">
+                        <div class="cabinet-preview" id="detailCabinetPreview"></div>
+                    </div>
+
+                    <!-- 中间刀具明细 -->
+                    <div class="detail-center">
+                        <div class="card-container" id="cardContainer"></div>
+                    </div>
+
+                    <!-- 右侧操作区 -->
+                    <div class="detail-right">
+                        <div class="inventory-panel" id="inventoryPanel">
+                            <!-- 人员输入 -->
+                            <input type="text" id="txtPerson" class="person-input" readonly placeholder="人员信息">
+
+                            <!-- 人员ID输入按钮 -->
+                            <div class="person-id-grid">
+                                <button class="pid-btn" onclick="personIdNumClick('1')">1</button>
+                                <button class="pid-btn" onclick="personIdNumClick('2')">2</button>
+                                <button class="pid-btn" onclick="personIdNumClick('3')">3</button>
+                                <button class="pid-btn" onclick="personIdNumClick('4')">4</button>
+                                <button class="pid-btn" onclick="personIdNumClick('5')">5</button>
+                                <button class="pid-btn" onclick="personIdNumClick('6')">6</button>
+                                <button class="pid-btn" onclick="personIdNumClick('7')">7</button>
+                                <button class="pid-btn" onclick="personIdNumClick('8')">8</button>
+                                <button class="pid-btn" onclick="personIdNumClick('9')">9</button>
+                                <button class="pid-btn" onclick="personIdNumClick('0')">0</button>
+                                <button class="pid-btn" onclick="personIdDeleteClick()">←</button>
+                                <button class="pid-btn pid-confirm" onclick="personIdConfirmClick()">✓</button>
+                            </div>
+
+                            <!-- 刀具名称 -->
+                            <textarea id="txtToolName" class="tool-name-input" readonly rows="2">刀具名称</textarea>
+
+                            <!-- 新旧选择 -->
+                            <div class="new-old-selector">
+                                <label class="radio-circle selected" id="rbNew" onclick="selectNewOld(true)">新</label>
+                                <label class="radio-circle" id="rbOld" onclick="selectNewOld(false)">旧</label>
+                            </div>
+
+                            <!-- 库存数量 -->
+                            <div class="inventory-display">
+                                <div class="inv-box">
+                                    <span id="txtInventory">0</span>
+                                </div>
+                                <div class="inv-box">
+                                    <span id="txtChangedInventory">0</span>
+                                </div>
+                                <div class="inv-box">
+                                    <span id="txtOldInventory">0</span>
+                                </div>
+                            </div>
+
+                            <!-- 数字键盘 -->
+                            <div class="numpad">
+                                <div class="numpad-row">
+                                    <button class="num-btn" onclick="numClick('1')">1</button>
+                                    <button class="num-btn" onclick="numClick('2')">2</button>
+                                    <button class="num-btn" onclick="numClick('3')">3</button>
+                                </div>
+                                <div class="numpad-row">
+                                    <button class="num-btn" onclick="numClick('4')">4</button>
+                                    <button class="num-btn" onclick="numClick('5')">5</button>
+                                    <button class="num-btn" onclick="numClick('6')">6</button>
+                                </div>
+                                <div class="numpad-row">
+                                    <button class="num-btn" onclick="numClick('7')">7</button>
+                                    <button class="num-btn" onclick="numClick('8')">8</button>
+                                    <button class="num-btn" onclick="numClick('9')">9</button>
+                                </div>
+                                <div class="numpad-row">
+                                    <button class="num-btn" onclick="numClick('0')">0</button>
+                                    <button class="num-btn" onclick="numClick('00')">00</button>
+                                    <button class="num-btn" onclick="backspaceClick()"><</button>
+                                </div>
+                            </div>
+
+                            <!-- 工单信息输入 -->
+                            <div class="order-inputs">
+                                <div class="order-field">
+                                    <label>工单号</label>
+                                    <input type="text" id="txtOrderNo" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                </div>
+                                <div class="order-field">
+                                    <label>物料名称</label>
+                                    <input type="text" id="txtOrderMaterial">
+                                </div>
+                                <div class="order-field">
+                                    <label>材质</label>
+                                    <input type="text" id="txtOrderTexture">
+                                </div>
+                                <div class="order-field">
+                                    <label>数量</label>
+                                    <input type="text" id="txtOrderQty" inputmode="decimal" oninput="this.value=this.value.replace(/[^0-9.]/g,'').replace(/^(\d*\.\d*)\..*$/,'$1')">
+                                </div>
+                            </div>
+
+                            <!-- 加减按钮 -->
+                            <div class="plus-minus-row">
+                                <button class="circle-btn plus-btn" onclick="plusClick()">+</button>
+                                <div class="spacer"></div>
+                                <button class="circle-btn minus-btn" onclick="minusClick()">-</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部功能按钮栏（主界面） -->
+        <footer id="borderMain" class="bottom-bar">
+            <div class="bottom-buttons">
+                <span class="separator">＞</span>
+                <button class="func-btn" onclick="exportCurrentStock()">生成当前库存</button>
+                <span class="separator">＞</span>
+                <button class="func-btn" onclick="exportHistory()">生成出入库记录</button>
+                <span class="separator">＞</span>
+                <button class="func-btn" onclick="exportBelowSafety()">生成低于安全库存记录</button>
+                <span class="separator">＞</span>
+                <button class="func-btn" onclick="exportNewToolInOut()">新刀具出入记录</button>
+                <span class="separator">＞</span>
+                <button class="func-btn" onclick="generateOAPurchase()">生成OA采购请求</button>
+            </div>
+        </footer>
+
+        <!-- 底部操作栏（详情界面） -->
+        <footer id="borDetail" class="bottom-bar detail-bar" style="display:none;">
+            <div class="detail-nav-buttons">
+                <button class="func-btn no-btn" onclick="noButtonClick(1)">NO01</button>
+                <button class="func-btn no-btn" onclick="noButtonClick(2)">NO02</button>
+                <button class="func-btn no-btn" onclick="noButtonClick(3)">NO03</button>
+                <button class="func-btn no-btn" onclick="noButtonClick(4)">NO04</button>
+                <button class="func-btn no-btn" onclick="noButtonClick(5)">NO05</button>
+            </div>
+            <button class="func-btn back-btn" onclick="backToMain()" title="返回主界面">>></button>
+        </footer>
+
+        <!-- 加载窗口 -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-box">
+                <p>正在加载数据，请稍候…</p>
+                <div class="progress-bar"><div class="progress-bar-inner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Safety: always hide loading overlay after 5s no matter what
+        setTimeout(function() {
+            var el = document.getElementById('loadingOverlay');
+            if (el) el.classList.add('hidden');
+        }, 5000);
+        // 禁止右击菜单
+        document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    </script>
+    <script src="xlsx.full.min.js"></script>
+    <script src="user_info.js"></script>
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
