@@ -1,0 +1,81 @@
+﻿{
+    "generated":  "2026-07-31 08:21:31",
+    "servers":  [
+                    "lcnnsc-print01",
+                    "lcnnsc-print02"
+                ],
+    "printers":  [
+                     {
+                         "server":  "lcnnsc-print01",
+                         "name":  "LNSC-Find-Me-Printing",
+                         "share":  "LNSC-Find-Me-Printing",
+                         "driver":  "Kyocera TASKalfa 3253ci KX",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "10.86.180.61"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_WM_Shipping_TSC_C3",
+                         "share":  "CN_WM_Shipping_TSC_C3",
+                         "driver":  "TSC T-300A",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "10.86.30.41"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_WM_Shipping_TSC_C1",
+                         "share":  "CN_WM_Shipping_TSC_C1",
+                         "driver":  "TSC T-300A",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "10.86.50.41"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_WM_Shipping_SF3",
+                         "share":  "CN_WM_Shipping_SF3",
+                         "driver":  "QR-668E",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "QR-668E_10.86.30.31"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_WM_Shipping_SF2",
+                         "share":  "CN_WM_Shipping_SF2",
+                         "driver":  "QR-668 LABEL",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "10.86.50.32_1"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_OF_SF_2F",
+                         "share":  "CN_OF_SF_2F",
+                         "driver":  "QR-668 LABEL",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "QR_10.86.80.46"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_Loftware-02",
+                         "share":  "CN_Loftware-02",
+                         "driver":  "QR-668E",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "QR-668E_10.86.30.43"
+                     },
+                     {
+                         "server":  "lcnnsc-print02",
+                         "name":  "CN_Loftware-01",
+                         "share":  "CN_Loftware-01",
+                         "driver":  "QR-668E",
+                         "location":  "",
+                         "comment":  "",
+                         "port":  "QR-668E_10.86.30.42"
+                     }
+                 ]
+}

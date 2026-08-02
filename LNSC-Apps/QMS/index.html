@@ -1,0 +1,74 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>QMS受控文件门户</title><link rel="stylesheet" href="style.css"></head><body><header id="topbar">
+  <div class="brand">
+    <div class="logo">QMS</div>
+    <div class="brand-text">
+      <h1>QMS 受控文件门户</h1>
+      <span class="subtitle">Lechler Changzhou · 质量体系受控文件</span>
+    </div>
+  </div>
+  <div class="topbar-status">
+    <span>索引更新时间：<span id="gen-time">加载中…</span></span>
+    <span id="status" class="status">正在加载目录…</span>
+  </div>
+</header>
+
+<section id="summary-cards" class="summary-grid"></section>
+
+<section id="controls">
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="搜索文件编号、名称、部门、第三方、工厂、原始文件名…" autocomplete="off">
+  </div>
+  <div class="filters">
+    <select id="filter-category"><option value="">全部类别</option></select>
+    <select id="filter-department"><option value="">全部部门</option></select>
+    <select id="filter-type"><option value="">全部格式</option></select>
+  </div>
+</section>
+
+<section id="result-bar">
+  <span id="count">显示 0 / 0 个文件</span>
+</section>
+
+<main id="table-wrap">
+  <table id="doc-table">
+    <thead>
+      <tr>
+        <th data-sort="code" class="sortable">文件编号</th>
+        <th data-sort="name" class="sortable">文件名称</th>
+        <th data-sort="category" class="sortable">类别</th>
+        <th data-sort="department" class="sortable">部门</th>
+        <th data-sort="seq" class="sortable">流水号</th>
+        <th data-sort="version" class="sortable">版本</th>
+        <th data-sort="ext" class="sortable">格式</th>
+        <th class="col-actions">操作</th>
+      </tr>
+    </thead>
+    <tbody id="docs-body">
+      <!-- rows injected by JS -->
+    </tbody>
+  </table>
+  <div id="empty" class="empty-state" hidden>
+    <p>没有匹配的文件。</p>
+  </div>
+</main>
+
+<div id="preview-overlay" class="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span id="preview-title">文件预览</span>
+      <div class="modal-head-actions">
+        <a id="preview-download" href="#" class="btn-download">下载</a>
+        <button id="preview-close" title="关闭">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <iframe id="preview-frame" title="文件预览"></iframe>
+    </div>
+  </div>
+</div>
+
+<footer id="foot">
+  <span>QMS 受控文件门户 · 数据来源：<code>catalog.json</code>（由服务器定时扫描生成）</span>
+</footer>
+
+<script src="script.js"></script></body></html>

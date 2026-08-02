@@ -182,12 +182,18 @@ async def upload_package(file: UploadFile = File(...), job_name: str = Form(...)
 
 @app.post("/api/packages/dispatch")
 async def dispatch_package(req: DispatchRequest):
-    """向每个目标池触发 deploy-job flow，由 Worker 自取包、解压、注册。"""
+    """向每个目标池的每台在线 Worker 各触发一次 deploy-job flow（定向到 Worker 专属队列），
+    保证包落地到池内所有 Worker，而不是只有抢到任务的那一台。"""
     if not (PACKAGES_DIR / req.package_file).exists():
         raise HTTPException(404, f"Package '{req.package_file}' not found - upload first")
 
     client = app.state.http_client
     package_url = f"{settings.PUBLIC_BASE_URL}/packages/{req.package_file}"
+    parameters = {
+        "package_url": package_url,
+        "job_name": req.job_name,
+        "register_entrypoint": req.register_entrypoint,
+    }
     results = []
 
     for pool in req.work_pools:
@@ -198,20 +204,41 @@ async def dispatch_package(req: DispatchRequest):
             continue
         deployment_id = resp.json()["id"]
 
-        resp = await client.post(
-            f"/deployments/{deployment_id}/create_flow_run",
-            json={
-                "parameters": {
-                    "package_url": package_url,
-                    "job_name": req.job_name,
-                    "register_entrypoint": req.register_entrypoint,
-                }
-            },
-        )
-        if resp.status_code not in (200, 201):
-            results.append({"pool": pool, "error": "Failed to create flow run"})
+        # 查询池内在线 Worker（Worker 启动时监听 default + 自己名字的专属队列）
+        resp = await client.post(f"/work_pools/{pool}/workers/filter", json={})
+        workers = resp.json() if resp.status_code == 200 else []
+        online = [w["name"] for w in workers if w.get("status") == "ONLINE"]
+
+        if not online:
+            # 兜底：查不到在线 Worker 时按旧行为触发一次（default 队列，单台落地）
+            resp = await client.post(
+                f"/deployments/{deployment_id}/create_flow_run",
+                json={"parameters": parameters},
+            )
+            if resp.status_code not in (200, 201):
+                results.append({"pool": pool, "error": "Failed to create flow run"})
+            else:
+                run = resp.json()
+                results.append({
+                    "pool": pool, "worker": None,
+                    "flow_run_id": run["id"], "status": run["state"]["type"],
+                    "warning": "no online workers found - dispatched once to default queue",
+                })
             continue
-        run = resp.json()
-        results.append({"pool": pool, "flow_run_id": run["id"], "status": run["state"]["type"]})
+
+        # 每台在线 Worker 各一个 flow run，定向到它的专属队列
+        for worker_name in online:
+            resp = await client.post(
+                f"/deployments/{deployment_id}/create_flow_run",
+                json={"parameters": parameters, "work_queue_name": worker_name},
+            )
+            if resp.status_code not in (200, 201):
+                results.append({"pool": pool, "worker": worker_name, "error": "Failed to create flow run"})
+                continue
+            run = resp.json()
+            results.append({
+                "pool": pool, "worker": worker_name,
+                "flow_run_id": run["id"], "status": run["state"]["type"],
+            })
 
     return {"package_url": package_url, "dispatched": results}

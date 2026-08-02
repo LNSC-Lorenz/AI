@@ -1,0 +1,44 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>打印机清单</title><link rel="stylesheet" href="style.css"></head><body>
+<section id="summary-cards" class="summary-grid"></section>
+
+<section id="controls">
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="搜索打印机名称、共享名、位置、驱动…" autocomplete="off">
+  </div>
+  <div class="filters">
+    <select id="filter-server"><option value="">全部服务器</option></select>
+    <select id="filter-location"><option value="">全部位置</option></select>
+  </div>
+</section>
+
+<section id="result-bar">
+  <span id="count">显示 0 / 0 台打印机</span>
+  <span class="rb-right">
+    <span>更新：<span id="gen-time">加载中…</span></span>
+    <span id="status" class="status">正在加载…</span>
+  </span>
+</section>
+
+<main id="table-wrap">
+  <table id="printer-table">
+    <thead>
+      <tr>
+        <th data-sort="name" class="sortable">打印机名称</th>
+        <th data-sort="share" class="sortable">共享名</th>
+        <th data-sort="server" class="sortable">打印服务器</th>
+        <th data-sort="location" class="sortable">位置</th>
+        <th data-sort="driver" class="sortable">驱动</th>
+        <th data-sort="comment" class="sortable">备注</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="printers-body">
+      <!-- rows injected by JS -->
+    </tbody>
+  </table>
+  <div id="empty" class="empty-state" hidden>
+    <p>没有匹配的打印机。</p>
+  </div>
+</main>
+
+<script src="script.js"></script></body></html>

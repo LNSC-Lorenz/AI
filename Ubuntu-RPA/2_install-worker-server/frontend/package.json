@@ -15,7 +15,8 @@
     "axios": "^1.7",
     "@vueuse/core": "^11.0",
     "lucide-vue-next": "^0.460",
-    "dayjs": "^1.11"
+    "dayjs": "^1.11",
+    "jszip": "^3.10"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1",

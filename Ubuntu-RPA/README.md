@@ -340,7 +340,12 @@ sudo bash install-lcnnsc-rpa-l01.sh    # l02/l03 换对应脚本
 ```
 
 自动完成：Playwright 系统依赖 → `rpa` 用户 → `/opt/rpa-agent` 目录 → venv（装 `flows/requirements.txt`
-全部依赖 + Chromium）→ Work Pool 创建 → flows 注册 → `prefect-worker` systemd 服务自启。
+全部依赖 + Chromium）→ Work Pool + 本机专属 Work Queue 创建 → flows 注册 → `prefect-worker` systemd 服务自启。
+
+> Worker 监听 `default` + 自己名字的专属队列（定向 deploy-job 分发用）。**专属队列必须存在**：
+> Prefect 3 Worker 不会自动创建 `--work-queue` 指定的队列，队列缺失会导致轮询持续失败、
+> 所有 deployment 显示 Not Ready（错误在 `worker-stderr.log`）。安装脚本已自动创建；手工补建：
+> `prefect work-queue create <worker名> --pool linux-rpa-pool`
 
 自动注册的 3 个 deployment：
 
@@ -393,9 +398,9 @@ sudo -u rpa PREFECT_API_URL=http://10.86.180.120:4200/api \
 
 **方式一：网页一键部署（推荐）**
 
-1. 把 job 整目录打成 zip（内容在根层级，不要多包一层目录）
-2. RPA 前端 → **Deploy** 页 → 拖入 zip → 填 Job 名称 + 注册脚本相对路径 → 勾选目标池 → 一键分发
-3. 每个目标池的 Worker 自动下载解压到 `flows/<Job名>/` 并执行注册（deploy-job 系统 flow）
+1. 把 job 整目录打成 zip（多包一层目录也可，deploy-job 会自动扁平化）
+2. RPA 前端 → **Deploy** 页 → 拖入 zip → 填 Job 名称 → **下拉选择注册脚本**（自动列出 zip 内 .py 文件）→ 勾选目标池 → 一键分发
+3. 每个目标池的**所有在线 Worker** 各自下载解压到 `flows/<Job名>/` 并执行注册（deploy-job 定向到各 Worker 专属队列）
 4. 前端 **Deployments** 页 Trigger 或设定时调度
 
 **方式二：手工部署**

@@ -65,6 +65,15 @@ def deploy_job_flow(
     zip_path.unlink()
     logger.info(f"Extracted to {target_dir}")
 
+    # 2.1 兼容 zip 多包一层目录的情况：唯一顶层目录时自动扁平化
+    entries = list(target_dir.iterdir())
+    if len(entries) == 1 and entries[0].is_dir():
+        inner = entries[0]
+        logger.info(f"Single top-level dir '{inner.name}' detected - flattening")
+        for item in inner.iterdir():
+            shutil.move(str(item), str(target_dir / item.name))
+        inner.rmdir()
+
     # 3. 注册（用当前 venv 的 python 执行入口脚本）
     if register_entrypoint:
         script = target_dir / register_entrypoint

@@ -66,6 +66,9 @@ sudo -u "$AGENT_USER" "$AGENT_DIR/.venv/bin/prefect" config set PREFECT_API_URL=
 # 创建 work pool (忽略已存在错误)
 sudo -u "$AGENT_USER" "$AGENT_DIR/.venv/bin/prefect" work-pool create "$WORK_POOL_NAME" --type process 2>/dev/null || echo "  Work pool '$WORK_POOL_NAME' 已存在"
 
+# 创建本机专属 work queue (定向 deploy-job 分发用；Worker 不会自动创建)
+sudo -u "$AGENT_USER" "$AGENT_DIR/.venv/bin/prefect" work-queue create "$WORKER_NAME" --pool "$WORK_POOL_NAME" 2>/dev/null || echo "  Work queue '$WORKER_NAME' 已存在"
+
 # 注册系统 flows (deploy-job: 支持网页上传 job 包一键部署)
 sudo -u "$AGENT_USER" PREFECT_API_URL="$PREFECT_API_URL" "$AGENT_DIR/.venv/bin/python" "$AGENT_DIR/flows/must_deploy.py"
 
@@ -81,7 +84,7 @@ Type=simple
 User=$AGENT_USER
 WorkingDirectory=$AGENT_DIR
 Environment=PREFECT_API_URL=$PREFECT_API_URL
-ExecStart=$AGENT_DIR/.venv/bin/prefect worker start --pool $WORK_POOL_NAME --name $WORKER_NAME
+ExecStart=$AGENT_DIR/.venv/bin/prefect worker start --pool $WORK_POOL_NAME --name $WORKER_NAME --work-queue default --work-queue $WORKER_NAME
 Restart=always
 RestartSec=5
 StandardOutput=append:$AGENT_DIR/logs/worker-stdout.log

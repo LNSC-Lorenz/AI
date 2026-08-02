@@ -158,6 +158,14 @@ try {
     Write-Host "Work pool '$WorkPoolName' already exists."
 }
 
+# Create per-worker work queue (targeted deploy-job dispatch; workers do NOT auto-create queues)
+try {
+    & $python_venv -m prefect work-queue create $WorkerName --pool $WorkPoolName
+    Write-Host "Work queue '$WorkerName' created."
+} catch {
+    Write-Host "Work queue '$WorkerName' already exists."
+}
+
 # Register system flows (deploy-job: enables web-based package deployment)
 & $python_venv "$FlowsDir\must_deploy.py"
 
@@ -195,7 +203,7 @@ set PREFECT_API_URL=$PrefectApiUrl
 set PREFECT_HOME=$AgentDir\.prefect
 set PLAYWRIGHT_BROWSERS_PATH=$BrowsersDir
 cd /d $AgentDir
-"$python_venv" -m prefect worker start --pool $WorkPoolName --name $WorkerName >> "$AgentDir\logs\worker-gui.log" 2>&1
+"$python_venv" -m prefect worker start --pool $WorkPoolName --name $WorkerName --work-queue default --work-queue $WorkerName >> "$AgentDir\logs\worker-gui.log" 2>&1
 "@ | Set-Content -Path $startCmd -Encoding ASCII
 
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
@@ -277,7 +285,7 @@ if (Get-ScheduledTask -TaskName $WatchdogTask -ErrorAction SilentlyContinue) {
 }
 $wAction    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$watchdogPs1`""
 $wTrigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
 $wPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $wSettings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 Register-ScheduledTask -TaskName $WatchdogTask -Action $wAction -Trigger $wTrigger `
