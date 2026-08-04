@@ -283,6 +283,13 @@ th.sortable.desc::after { content: " ▼"; color: var(--accent); }
 
 #toast.show { opacity: 1; transform: translateY(0); }
 
+#toast a {
+  color: var(--accent-cyan);
+  pointer-events: auto;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ---------- 空状态 ---------- */
 .empty-state {
   margin: 12px 20px 20px;

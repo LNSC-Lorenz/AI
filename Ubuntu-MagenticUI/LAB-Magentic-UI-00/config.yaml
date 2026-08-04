@@ -1,0 +1,51 @@
+# Magentic-UI 0.1.6 全功能配置（LAB-Magentic-UI-00）
+# 所有模型客户端均指向本地 Ollama OpenAI 桥接（127.0.0.1:11440）
+
+ollama_client: &ollama_client
+  provider: autogen_ext.models.openai.OpenAIChatCompletionClient
+  config:
+    model: qwen3:32b
+    base_url: http://127.0.0.1:11440/v1
+    api_key: ollama
+    max_retries: 5
+    timeout: 600
+
+vision_client: &vision_client
+  provider: autogen_ext.models.openai.OpenAIChatCompletionClient
+  config:
+    model: qwen2.5vl-fast
+    base_url: http://127.0.0.1:11440/v1
+    api_key: ollama
+    max_retries: 5
+    timeout: 600
+    model_info:
+      vision: true
+      json_output: true
+      function_calling: false
+      family: unknown
+      structured_output: false
+      multiple_system_messages: false
+
+model_client_configs:
+  orchestrator: *ollama_client
+  coder: *ollama_client
+  file_surfer: *ollama_client
+  action_guard: *ollama_client
+  web_surfer: *vision_client
+
+# 人机协同：规划、执行、护栏、学习
+cooperative_planning: true
+autonomous_execution: false
+allow_for_replans: true
+approval_policy: auto-conservative
+retrieve_relevant_plans: reuse
+max_turns: 30
+max_actions_per_step: 5
+multiple_tools_per_call: false
+do_bing_search: false
+use_fara_agent: false
+browser_headless: false
+inside_docker: true
+network_name: magentic-00-network
+
+mcp_agent_configs: []

@@ -962,8 +962,7 @@ async function exportCurrentStock() {
             });
         }
 
-        downloadExcel(rows, `当前库存${formatDate()}.xlsx`);
-        showMessage('导出成功。');
+        if (downloadExcel(rows, `当前库存${formatDate()}.xlsx`)) showMessage('导出成功。');
     } catch (ex) {
         showMessage('导出失败：' + ex.message);
     }
@@ -994,8 +993,7 @@ async function exportHistory() {
             };
         });
 
-        downloadExcel(rows, `出入库记录${formatDate()}.xlsx`);
-        showMessage('导出成功。');
+        if (downloadExcel(rows, `出入库记录${formatDate()}.xlsx`)) showMessage('导出成功。');
     } catch (ex) {
         showMessage('导出失败：' + ex.message);
     }
@@ -1036,8 +1034,7 @@ async function exportBelowSafety() {
             }
         }
 
-        downloadExcel(rows, `低于安全库存记录${formatDate()}.xlsx`);
-        showMessage('导出成功。');
+        if (downloadExcel(rows, `低于安全库存记录${formatDate()}.xlsx`)) showMessage('导出成功。');
     } catch (ex) {
         showMessage('导出失败：' + ex.message);
     }
@@ -1080,8 +1077,7 @@ async function exportNewToolInOut() {
                 });
             });
 
-        downloadExcel(rows, `新刀具出入记录${formatDate()}.xlsx`);
-        showMessage('导出成功。');
+        if (downloadExcel(rows, `新刀具出入记录${formatDate()}.xlsx`)) showMessage('导出成功。');
     } catch (ex) {
         showMessage('导出失败：' + ex.message);
     }
@@ -1093,10 +1089,18 @@ function generateOAPurchase() {
 
 // ===== Utility Functions =====
 function downloadExcel(data, filename) {
+    if (typeof XLSX === 'undefined') {
+        throw new Error('XLSX 库未加载（xlsx.full.min.js 未部署或加载失败）');
+    }
+    if (!data || !data.length) {
+        showMessage('没有数据可导出。');
+        return false;
+    }
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     XLSX.writeFile(wb, filename);
+    return true;
 }
 
 function formatDate() {

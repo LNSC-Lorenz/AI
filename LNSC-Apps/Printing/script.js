@@ -100,7 +100,7 @@ function renderTable() {
       '<td>' + esc(p.location || '-') + '</td>' +
       '<td class="td-driver">' + esc(p.driver || '-') + '</td>' +
       '<td>' + esc(p.comment || '-') + '</td>' +
-      '<td><button class="btn-add" data-idx="' + idx + '">添加打印机</button></td>' +
+      '<td><button class="btn-add" data-idx="' + idx + '">连接打印机</button></td>' +
     '</tr>';
   }).join('');
   $('printers-body').innerHTML = rows;
@@ -108,36 +108,33 @@ function renderTable() {
   $('empty').hidden = state.filtered.length > 0;
 }
 
-/* ---------- 添加打印机（下载 .bat，双击自动连接安装） ---------- */
-function showToast(msg) {
+/* ---------- 连接打印机（file:// UNC 直连，需 Edge + IntranetFileLinksEnabled 策略） ---------- */
+function showToast(html) {
   let t = $('toast');
   if (!t) {
     t = document.createElement('div');
     t.id = 'toast';
     document.body.appendChild(t);
   }
-  t.textContent = msg;
+  t.innerHTML = html;
   t.classList.add('show');
   clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(() => t.classList.remove('show'), 4000);
+  showToast._timer = setTimeout(() => t.classList.remove('show'), 8000);
 }
 
-function downloadBat(p) {
-  const unc = '\\\\' + p.server + '\\' + (p.share || p.name);
-  const bat = '@echo off\r\n' +
-    'title Add Printer ' + unc + '\r\n' +
-    'echo Connecting printer ' + unc + ' ...\r\n' +
-    'rundll32 printui.dll,PrintUIEntry /in /n "' + unc + '"\r\n' +
-    'if %errorlevel%==0 (echo Done. Printer installed.) else (echo FAILED. Please contact IT.)\r\n' +
-    'pause\r\n';
-  const blob = new Blob(['﻿' + bat], { type: 'application/octet-stream' });
+function connectPrinter(p) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'add-printer-' + (p.share || p.name).replace(/[\\/:*?"<>|]/g, '_') + '.bat';
+  a.href = 'file://///' + p.server + '/' + (p.share || p.name);
+  a.target = '_blank';
+  a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  showToast('安装脚本已下载，请在浏览器下载栏或「下载」文件夹中双击运行 ' + a.download);
+  a.remove();
+  showToast(
+    '正在通过系统连接 <b>' + esc(p.name) + '</b> …<br>' +
+    '若无反应：请使用 <b>Edge</b> 浏览器，并确认域策略 IntranetFileLinksEnabled 已下发；' +
+    '也可按 Win+R 手动运行 <code>\\\\' + esc(p.server) + '\\' + esc(p.share || p.name) + '</code>'
+  );
 }
 
 /* ---------- 事件绑定 ---------- */
@@ -162,7 +159,7 @@ function bindEvents() {
     const btn = e.target.closest('button.btn-add');
     if (!btn) return;
     const p = state.printers[Number(btn.dataset.idx)];
-    if (p) downloadBat(p);
+    if (p) connectPrinter(p);
   });
 }
 
