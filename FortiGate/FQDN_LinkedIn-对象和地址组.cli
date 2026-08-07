@@ -1,0 +1,36 @@
+config firewall address
+    edit "FQDN_LinkedIn_linkedin-com"
+        set type fqdn
+        set fqdn "*.linkedin.com"
+    next
+    edit "FQDN_LinkedIn_licdn-com"
+        set type fqdn
+        set fqdn "*.licdn.com"
+    next
+    edit "FQDN_LinkedIn_lnkd-in"
+        set type fqdn
+        set fqdn "*.lnkd.in"
+    next
+    edit "FQDN_LinkedIn_linkedinlearning-com"
+        set type fqdn
+        set fqdn "*.linkedinlearning.com"
+    next
+    edit "FQDN_LinkedIn_lynda-com"
+        set type fqdn
+        set fqdn "*.lynda.com"
+    next
+    edit "FQDN_LinkedIn_slideshare-net"
+        set type fqdn
+        set fqdn "*.slideshare.net"
+    next
+    edit "FQDN_LinkedIn_bizographics-com"
+        set type fqdn
+        set fqdn "*.bizographics.com"
+    next
+end
+
+config firewall addrgrp
+    edit "G_FQDN_LinkedIn"
+        set member "FQDN_LinkedIn_linkedin-com" "FQDN_LinkedIn_licdn-com" "FQDN_LinkedIn_lnkd-in" "FQDN_LinkedIn_linkedinlearning-com" "FQDN_LinkedIn_lynda-com" "FQDN_LinkedIn_slideshare-net" "FQDN_LinkedIn_bizographics-com"
+    next
+end
