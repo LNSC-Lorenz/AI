@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+#===============================================================================
+# bach_POClosing_SAP — 【第二阶段】SAP NW RFC SDK + pyrfc（启用 PO 收货核查）
+#
+# 前提：已完成第一阶段（sudo bash install/bach_POClosing）
+#
+# 用法：
+#   sudo bash install/bach_POClosing_SAP --with-sdk /path/SAPNWRFC.zip  # 装 SDK + pyrfc
+#   sudo bash install/bach_POClosing_SAP --with-sdk                     # 自动查找 zip
+#   sudo bash install/bach_POClosing_SAP                                # SDK 已就绪，仅装 pyrfc + 定时任务
+#   sudo bash install/bach_POClosing_SAP --uninstall                    # 卸载 pyrfc + RFC 定时任务（保留 SDK）
+#
+# 内容：
+#   1.（可选）安装 SAP NW RFC SDK 到 /usr/local/sap/nwrfcsdk（注册 ldconfig + 环境变量）
+#   2. 在第一阶段 venv 中编译安装 pyrfc 并验证
+#   3. 追加 cron：每周一 08:00 用 RFC 刷新 result.csv（csv 数据源）
+#   4. 提示把 .env 的 POCLOSE_DATA_SOURCE 切为 csv / rfc
+#===============================================================================
+set -euo pipefail
+
+# 工作目录 = 门户挂载目录（与 bach_POClosing 一致，单一路径）
+APP_DIR=/var/www/lnsc-apps/apps/po-closing
+LOG_DIR=/var/log/poclose
+ENV_FILE=$APP_DIR/.env
+CRON_FILE=/etc/cron.d/poclose
+SDK_HOME=/usr/local/sap/nwrfcsdk
+SDK_PROFILE=/etc/profile.d/nwrfcsdk.sh
+SDK_LDCONF=/etc/ld.so.conf.d/nwrfcsdk.conf
+
+WITH_SDK=0
+SDK_ZIP=""
+UNINSTALL=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --with-sdk) WITH_SDK=1
+                if [ $# -ge 2 ] && [ "${2#--}" = "$2" ]; then SDK_ZIP="$2"; shift; fi ;;
+    --uninstall) UNINSTALL=1 ;;
+    -h|--help)  sed -n '2,17p' "$0"; exit 0 ;;
+    *) echo "未知参数: $1（用 --help 查看用法）"; exit 1 ;;
+  esac
+  shift
+done
+
+log(){ echo "[bach_POClosing_SAP] $*"; }
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "请以 root 运行：sudo bash install/bach_POClosing_SAP"; exit 1
+fi
+
+# ---------- 卸载（--uninstall）：移除 pyrfc 与 RFC 定时任务，保留 SDK ----------
+if [ "$UNINSTALL" -eq 1 ]; then
+  log "卸载第二阶段组件…"
+  if [ -f "$CRON_FILE" ] && grep -q "po_gr_check" "$CRON_FILE"; then
+    sed -i '/po_gr_check/d' "$CRON_FILE"
+    sed -i '/RFC 刷新 PO 收货结果/d' "$CRON_FILE"
+    log "已移除 $CRON_FILE 中的 RFC 刷新任务"
+  else
+    log "无 RFC 定时任务，跳过"
+  fi
+  if [ -x "$APP_DIR/venv/bin/pip" ]; then
+    "$APP_DIR/venv/bin/pip" uninstall -y pyrfc >/dev/null 2>&1 && log "pyrfc 已卸载" || log "pyrfc 未安装，跳过"
+  fi
+  log "SAP NW RFC SDK 保留于 $SDK_HOME（如需删除：sudo rm -rf $SDK_HOME $SDK_PROFILE $SDK_LDCONF && sudo ldconfig）"
+  log "卸载完成"
+  exit 0
+fi
+
+[ -f "$APP_DIR/server.py" ] || { echo "未检测到第一阶段安装（$APP_DIR 缺失），请先运行 install/bach_POClosing"; exit 1; }
+if [ ! -x "$APP_DIR/venv/bin/python" ]; then
+  log "创建 venv（pyrfc 构建环境）…"
+  python3 -m venv "$APP_DIR/venv"
+fi
+PYBIN="$APP_DIR/venv/bin/python"
+
+# ---------- 1. SAP NW RFC SDK（可选安装） ----------
+install_sdk() {
+  local zip="$SDK_ZIP"
+  if [ -z "$zip" ]; then
+    zip=$(ls sapnwrfc*.zip SAPNWRFC*.zip /opt/sapnwrfc*.zip /opt/SAPNWRFC*.zip 2>/dev/null | head -1 || true)
+  fi
+  if [ -z "$zip" ] || [ ! -f "$zip" ]; then
+    log "未找到 SDK zip（从 SAP for Me 下载 Linux x86_64 版后：--with-sdk /path/to/zip）"
+    return 1
+  fi
+  log "安装 SAP NW RFC SDK: $zip"
+  command -v unzip >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y unzip; }
+  local tmp; tmp=$(mktemp -d)
+  unzip -q "$zip" -d "$tmp"
+  local src
+  if [ -d "$tmp/nwrfcsdk/lib" ]; then src="$tmp/nwrfcsdk"
+  elif [ -d "$tmp/lib" ]; then src="$tmp"
+  else log "zip 结构不识别（未找到 lib 目录）"; rm -rf "$tmp"; return 1; fi
+  mkdir -p "$(dirname "$SDK_HOME")"
+  rm -rf "$SDK_HOME"
+  mv "$src" "$SDK_HOME"
+  chmod -R 755 "$SDK_HOME"
+  echo "$SDK_HOME/lib" > "$SDK_LDCONF"
+  ldconfig
+  cat > "$SDK_PROFILE" <<EOF
+export SAPNWRFC_HOME=$SDK_HOME
+export LD_LIBRARY_PATH=$SDK_HOME/lib:\${LD_LIBRARY_PATH:-}
+EOF
+  chmod 644 "$SDK_PROFILE"
+  rm -rf "$tmp"
+  log "SDK 部署完成: $SDK_HOME"
+}
+
+if [ "$WITH_SDK" -eq 1 ]; then
+  install_sdk || log "SDK 未安装，如已手动部署可忽略"
+fi
+
+# 已手动部署过 SDK 的情况下直接复用
+if [ -z "${SAPNWRFC_HOME:-}" ] && [ -f "$SDK_PROFILE" ]; then
+  . "$SDK_PROFILE"
+fi
+if [ ! -f "${SAPNWRFC_HOME:-/nonexistent}/lib/libsapnwrfc.so" ]; then
+  log "警告：未检测到 libsapnwrfc.so（SAPNWRFC_HOME=${SAPNWRFC_HOME:-未设置}），pyrfc 可能构建失败"
+fi
+
+# ---------- 2. 安装并验证 pyrfc ----------
+log "安装 pyrfc …"
+"$APP_DIR/venv/bin/pip" install -q --upgrade pip
+"$PYBIN" -m pip install -q pyrfc
+"$PYBIN" -c "from pyrfc import Connection; print('[ok] pyrfc 可用')" \
+  && log "pyrfc 验证通过" \
+  || { log "pyrfc 安装/验证失败，请检查 SDK 与编译工具链（apt install build-essential python3-dev）"; exit 1; }
+
+# ---------- 3. 追加 RFC 刷新定时任务（幂等） ----------
+if ! grep -q "po_gr_check" "$CRON_FILE" 2>/dev/null; then
+  cat >> "$CRON_FILE" <<EOF
+# 每周一 08:00 用 RFC 刷新 PO 收货结果 CSV（csv 数据源）
+0 8 * * 1  root  set -a; . $ENV_FILE; set +a; cd $APP_DIR && $PYBIN rfc/po_gr_check.py po_list.csv result.csv >> $LOG_DIR/po_gr_check.log 2>&1
+EOF
+  chmod 644 "$CRON_FILE"
+  log "已追加 RFC 定时刷新任务（每周一 08:00）"
+else
+  log "RFC 定时任务已存在，跳过"
+fi
+
+# ---------- 4. 完成提示 ----------
+log "================================================"
+log "第二阶段安装完成（SAP NW RFC SDK + pyrfc）"
+log "下一步："
+log "  1) SAP 侧部署 Z_RFC_PO_GR_STATUS（见 rfc/README.md，需 ABAP/Basis 配合）"
+log "  2) 编辑 $ENV_FILE：填 SAP_* 连接参数；POCLOSE_DATA_SOURCE 切为 csv（或 rfc 实时）"
+log "  3) systemctl restart poclose"
+log "  4) 首跑验证：cd $APP_DIR && $PYBIN rfc/po_gr_check.py po_list.csv result.csv"

@@ -1,0 +1,6 @@
+__pycache__/
+poclose.db
+result.csv
+*.log
+last_sync.json
+*.env

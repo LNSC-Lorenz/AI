@@ -1,0 +1,2 @@
+# 本 Web 服务仅使用 Python 标准库，无需安装任何第三方包（Python >= 3.8）
+# 仅当使用 rfc 数据源模式时，才需在设备上额外安装 pyrfc（依赖 SAP NW RFC SDK，见 ../rfc/README.md）

@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+#===============================================================================
+# bach_POClosing — PO-Closing 平台 Ubuntu 一键安装
+# 【第一阶段】平台 + Exchange 发票抓取（邮件 → CSV）
+#
+# 用法（在 PO-Closing 根目录执行）：
+#   sudo bash install/bach_POClosing              # 安装/更新：标准动作 = 全部上传后执行本脚本
+#                                                 #   自动保留 exchange.env、invoices_*.csv、poclose.db 等运行数据
+#                                                 #   并重启服务加载新代码
+#   sudo bash install/bach_POClosing --verify     # 发票链路验收（连接验证→演练→正式抓取→摘要）
+#   sudo bash install/bach_POClosing --uninstall  # 卸载服务与定时任务（保留数据目录）
+#
+# SAP 收货核查（NW RFC SDK / pyrfc）属第二阶段：install/bach_POClosing_SAP
+#
+# 安装内容：
+#   1. /var/www/lnsc-apps/apps/po-closing  平台文件（Web 服务 + invoice/ + rfc/）
+#   2. /var/www/lnsc-apps/apps/po-closing/.env  配置模板（已存在则不覆盖）
+#   3. /etc/systemd/system/poclose.service   常驻 Web 服务（开机自启）
+#   4. /etc/cron.d/poclose     定时任务：03:00 / 12:00 抓取 Exchange 发票邮件
+#                              （平台内置核查 03:33 / 12:33 自动衔接）
+#   5. /var/log/poclose/       日志目录
+#===============================================================================
+set -euo pipefail
+
+# 工作目录 = 门户挂载目录（单一路径：发布面与运行时合一）
+APP_DIR=/var/www/lnsc-apps/apps/po-closing
+LOG_DIR=/var/log/poclose
+ENV_FILE=$APP_DIR/.env
+SERVICE_FILE=/etc/systemd/system/poclose.service
+CRON_FILE=/etc/cron.d/poclose
+SRC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# 源目录与工作目录相同时（从工作目录内直接执行）跳过拷贝
+SAME_DIR=0
+[ "$(readlink -f "$SRC_DIR")" = "$(readlink -f "$APP_DIR")" ] && SAME_DIR=1
+
+UNINSTALL=0
+VERIFY=0
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) UNINSTALL=1 ;;
+    --verify)    VERIFY=1 ;;
+    -h|--help)   sed -n '2,20p' "$0"; exit 0 ;;
+    *) echo "未知参数: $arg（用 --help 查看用法）"; exit 1 ;;
+  esac
+done
+
+log(){ echo "[bach_POClosing] $*"; }
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "请以 root 运行：sudo bash install/bach_POClosing"; exit 1
+fi
+
+# ---------- 卸载 ----------
+if [ "$UNINSTALL" -eq 1 ]; then
+  log "停止并卸载服务…"
+  systemctl disable --now poclose 2>/dev/null || true
+  rm -f "$SERVICE_FILE" "$CRON_FILE"
+  systemctl daemon-reload
+  log "已移除服务与定时任务。数据保留于 $APP_DIR 与 $LOG_DIR（彻底清除请手动 rm -rf）"
+  exit 0
+fi
+
+# ---------- 验收模式（--verify）：不安装，只跑发票链路验收 ----------
+if [ "$VERIFY" -eq 1 ]; then
+  EXCH_ENV=$APP_DIR/invoice/exchange.env
+  SCRIPT=$APP_DIR/invoice/exchange_invoice_sync.py
+  PYBIN=$APP_DIR/venv/bin/python
+  [ -f "$EXCH_ENV" ] || { log "缺少 $EXCH_ENV（请先运行 install/bach_POClosing）"; exit 1; }
+  [ -f "$SCRIPT" ]   || { log "缺少 $SCRIPT（请先运行 install/bach_POClosing）"; exit 1; }
+  if [ ! -x "$PYBIN" ]; then
+    PYBIN=$(command -v python3)
+    log "提示：未发现 venv，改用系统 python3"
+  fi
+  # 密码未填则交互录入（写回 600 文件，不留 shell 历史）
+  if grep -q '^EXCH_PASS=CHANGE_ME' "$EXCH_ENV"; then
+    read -rsp "请输入 auto@lechler.com.cn 的邮箱密码: " PW
+    echo
+    # 原样写入（不加引号、不转义）：env 文件仅由 Python 脚本读取，密码可含任意字符
+    tmp=$(mktemp)
+    grep -v '^EXCH_PASS=' "$EXCH_ENV" > "$tmp" || true
+    printf 'EXCH_PASS=%s\n' "$PW" >> "$tmp"
+    cat "$tmp" > "$EXCH_ENV"; rm -f "$tmp"
+    chmod 600 "$EXCH_ENV"
+    log "密码已写入 $EXCH_ENV（600 权限）"
+  fi
+  cd "$APP_DIR/invoice"
+  log "① 连接与密码验证（--check）…"
+  if ! "$PYBIN" "$SCRIPT" --check; then
+    log "失败。排错：401=密码错/无 EWS 权限（可试 EXCH_AUTH=basic）；AccessDenied=无邮箱权限；超时=EXCH_SERVER 地址；CERTIFICATE_VERIFY_FAILED=证书与 IP 不匹配（设 EXCH_TLS_VERIFY=0）"
+    exit 1
+  fi
+  log "② 演练解析最近邮件（--dry-run --limit 5，不写文件）…"
+  "$PYBIN" "$SCRIPT" --dry-run --limit 5
+  log "③ 正式抓取并写分年 CSV …"
+  "$PYBIN" "$SCRIPT"
+  log "④ 结果摘要："
+  ls -lh "$APP_DIR"/invoice/invoices_*.csv 2>/dev/null || log "（无分年 CSV 产出——近期可能无发票邮件）"
+  [ -f "$APP_DIR/invoice/last_sync.json" ] && { log "last_sync.json："; cat "$APP_DIR/invoice/last_sync.json"; echo; }
+  log "验收完成。平台页面页头「邮件读取」应显示本次时间 [✓]"
+  exit 0
+fi
+
+# ---------- 0. 前置检查：脚本必须位于 PO-Closing/install/ 内，平台文件在其上一级 ----------
+if [ ! -f "$SRC_DIR/server.py" ] || [ ! -f "$SRC_DIR/index.html" ]; then
+  echo "错误：未在 $SRC_DIR 找到平台文件（server.py / index.html）"
+  echo "本脚本按「install/ 的上一级 = 平台根目录」定位文件。"
+  echo "请在 PO-Closing 根目录执行："
+  echo "  cd /home/<user>/PO-Closing && sudo bash install/bach_POClosing"
+  exit 1
+fi
+
+# ---------- 1. 系统依赖 ----------
+log "检查 python3 …"
+if ! command -v python3 >/dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y python3 python3-venv
+fi
+python3 --version
+# Ubuntu/Debian 常见情况：有 python3 但缺 venv 子包（ensurepip 不可用）
+if ! python3 -c "import ensurepip" >/dev/null 2>&1; then
+  log "缺少 python3-venv（ensurepip 不可用），自动安装…"
+  apt-get update -qq && apt-get install -y python3-venv
+fi
+
+# ---------- 2. 部署文件 ----------
+mkdir -p "$APP_DIR" "$LOG_DIR"
+if [ "$SAME_DIR" = "1" ]; then
+  log "源目录即工作目录（$APP_DIR），文件已在位，跳过拷贝"
+else
+log "部署平台文件到 $APP_DIR …"
+cp "$SRC_DIR"/{server.py,config.py,matching.py,data_source.py,invoices.py,storage.py,notifier.py,index.html,requirements.txt} "$APP_DIR"/
+# invoice/ 逐个拷贝：跳过凭据与运行产物，重复安装不会冲掉服务器上的真实数据
+mkdir -p "$APP_DIR/invoice"
+for f in "$SRC_DIR/invoice"/*; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in
+    exchange.env|last_sync.json|invoices_*.csv)
+      log "  保留服务器现有文件：$(basename "$f")" ;;
+    *) cp "$f" "$APP_DIR/invoice/" ;;
+  esac
+done
+if [ -d "$SRC_DIR/rfc" ]; then
+  cp -r "$SRC_DIR/rfc" "$APP_DIR"/
+else
+  log "提示：源目录无 rfc/，跳过（第一阶段不需要；第二阶段 SAP 对接前需补齐上传）"
+fi
+[ -f "$SRC_DIR/README.md" ] && cp "$SRC_DIR/README.md" "$APP_DIR"/ || true
+fi  # /SAME_DIR 跳过拷贝
+
+# ---------- 3. 配置模板（已存在则不覆盖） ----------
+if [ ! -f "$ENV_FILE" ]; then
+  cat > "$ENV_FILE" <<'EOF'
+# ---- PO-Closing Web ----
+POCLOSE_HOST=0.0.0.0
+POCLOSE_PORT=8088
+# 第一阶段尚无 SAP：csv 模式下点「批量查询 SAP」会提示缺 result.csv（第二阶段生成）；
+# 想先看页面演示效果可临时改为 mock（演示状态，非真实数据）
+POCLOSE_DATA_SOURCE=csv
+POCLOSE_SCHEDULE_TIMES=03:33,12:33
+POCLOSE_SCHEDULE_NOTIFY=0
+# 通知仅内部记录（SQLite 通知日志 + 服务日志），无任何外部通信
+# Exchange 凭据独立存放于 invoice/exchange.env（600，仅发票任务读取，Web 服务不加载）
+EOF
+  chmod 600 "$ENV_FILE"
+  log "已生成配置模板 $ENV_FILE"
+else
+  log "保留已有配置 $ENV_FILE"
+fi
+
+# ---------- 3.5 Exchange 凭据独立文件（600，仅发票抓取任务读取） ----------
+EXCH_ENV=$APP_DIR/invoice/exchange.env
+if [ ! -f "$EXCH_ENV" ]; then
+  cat > "$EXCH_ENV" <<'EOF'
+# 内网 Exchange 发票抓取凭据 —— 仅 cron 发票任务读取；Web 服务不加载本文件
+# 邮箱为 auto@lechler.com.cn（接收 ap-invoice 共享邮箱转发来的发票邮件）
+EXCH_SERVER=mail.lechler.com.cn
+EXCH_ACCOUNT=auto@lechler.com.cn
+EXCH_USER=auto@lechler.com.cn
+# 密码原样填写、不要加引号：本文件仅由 Python 脚本读取，可含任意字符（引号/括号/$/&/空格等）
+EXCH_PASS=CHANGE_ME
+EXCH_AUTH=ntlm
+EXCH_TLS_VERIFY=0
+EXCH_FOLDER=Inbox
+EXCH_SINCE_DAYS=365
+EXCH_SUBJECT_FILTER=发票
+EOF
+  chmod 600 "$EXCH_ENV"
+  log "已生成 Exchange 凭据模板 $EXCH_ENV（600，仅 root 可读；请填入真实密码）"
+else
+  log "保留已有 $EXCH_ENV"
+fi
+
+# ---------- 4. venv + exchangelib + pdfminer.six（EWS 抓取 + 文字型数电票 PDF 解析） ----------
+log "创建 venv 并安装 exchangelib / pdfminer.six …"
+python3 -m venv "$APP_DIR/venv"
+"$APP_DIR/venv/bin/pip" install -q --upgrade pip
+"$APP_DIR/venv/bin/pip" install -q exchangelib "pdfminer.six"
+PYBIN="$APP_DIR/venv/bin/python"
+
+# ---------- 5. systemd 服务 ----------
+log "配置 systemd 服务 poclose.service …"
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=PO-Closing Web
+After=network.target
+
+[Service]
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$PYBIN $APP_DIR/server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable poclose
+systemctl restart poclose    # 重启加载新代码：重复执行本脚本 = 更新部署
+
+# ---------- 6. 定时任务（Exchange 发票 → CSV） ----------
+log "配置 cron 定时任务 $CRON_FILE …"
+cat > "$CRON_FILE" <<EOF
+# PO-Closing 定时任务（第一阶段：内网 Exchange 发票邮件 → 分年 CSV）
+# 03:00 / 12:00 抓取（平台内置核查 03:33 / 12:33 自动衔接）
+0 3 * * *  root  cd $APP_DIR/invoice && $PYBIN exchange_invoice_sync.py >> $LOG_DIR/inv_sync.log 2>&1
+0 12 * * * root  cd $APP_DIR/invoice && $PYBIN exchange_invoice_sync.py >> $LOG_DIR/inv_sync.log 2>&1
+EOF
+chmod 644 "$CRON_FILE"
+
+# ---------- 6.5 防火墙放行 8088（前端直连后端，CTMS 同模式） ----------
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow 8088/tcp >/dev/null 2>&1 && log "已放行 8088/tcp（ufw）" || true
+fi
+
+# 兼容旧装：已存在的 .env 若是 127.0.0.1，自动改为 0.0.0.0（直连模式需要）
+if [ -f "$ENV_FILE" ] && grep -q '^POCLOSE_HOST=127.0.0.1' "$ENV_FILE"; then
+  sed -i 's/^POCLOSE_HOST=127.0.0.1/POCLOSE_HOST=0.0.0.0/' "$ENV_FILE"
+  log "已将 $ENV_FILE 的 POCLOSE_HOST 调整为 0.0.0.0（前端直连需要）"
+fi
+
+# ---------- 7. 完成 ----------
+log "================================================"
+log "第一阶段安装完成（平台 + Exchange 发票抓取）"
+systemctl is-active --quiet poclose \
+  && log "服务状态: active → http://127.0.0.1:8088" \
+  || log "服务状态异常，请检查: journalctl -u poclose -e"
+log "下一步："
+log "  1) 编辑 $EXCH_ENV 填入 auto@lechler.com.cn 的真实密码"
+log "  2) 手动验证密码与抓取（演练不写文件，脚本自行加载 exchange.env）："
+log "     cd $APP_DIR/invoice && $PYBIN exchange_invoice_sync.py --check"
+log "  3) nginx 站点 root 直指 $APP_DIR + 反代 /api/（见 install/README.md §0）"
+log "第二阶段（SAP 收货核查）：sudo bash install/bach_POClosing_SAP --with-sdk <zip>"

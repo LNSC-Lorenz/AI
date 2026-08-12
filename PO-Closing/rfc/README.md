@@ -82,23 +82,23 @@
 
 ```bash
 # 前提：NW RFC SDK 已在 /usr/local/sap/nwrfcsdk，且 export SAPNWRFC_HOME=/usr/local/sap/nwrfcsdk
-sudo mkdir -p /opt/pocheck && cd /opt/pocheck
+sudo mkdir -p /var/www/lnsc-apps/apps/po-closing && cd /var/www/lnsc-apps/apps/po-closing
 python3 -m venv venv
 ./venv/bin/pip install pyrfc          # Linux 源码构建，依赖 SDK 环境变量
 # 上传脚本与 PO 清单
-scp po_gr_check.py po_list.csv user@<device>:/opt/pocheck/
+scp po_gr_check.py po_list.csv user@<device>:/var/www/lnsc-apps/apps/po-closing/
 
 # 连接参数走环境变量（勿写死密码在脚本里）
 export SAP_ASHOST=<sap-host> SAP_SYSNR=00 SAP_CLIENT=100
 export SAP_RFC_USER=RFC_PO_QUERY SAP_RFC_PASS='***'
 
-/opt/pocheck/venv/bin/python /opt/pocheck/po_gr_check.py po_list.csv result.csv
+/var/www/lnsc-apps/apps/po-closing/venv/bin/python /var/www/lnsc-apps/apps/po-closing/po_gr_check.py po_list.csv result.csv
 ```
 
 **每周定时（crontab）**：
 
 ```cron
-0 8 * * 1  cd /opt/pocheck && ./venv/bin/python po_gr_check.py po_list.csv result_$(date +\%Y\%m\%d).csv >> /var/log/pocheck.log 2>&1
+0 8 * * 1  cd /var/www/lnsc-apps/apps/po-closing && ./venv/bin/python po_gr_check.py po_list.csv result_$(date +\%Y\%m\%d).csv >> /var/log/pocheck.log 2>&1
 ```
 
 ## 3. 验收清单（设备端首跑）

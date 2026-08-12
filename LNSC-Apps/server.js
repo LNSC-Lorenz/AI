@@ -50,6 +50,31 @@ app.use('/apps/ctms/api', (req, res) => {
   req.pipe(proxyReq);
 });
 
+// PO-Closing 子应用 API 反向代理：/apps/po-closing/api/* -> http://127.0.0.1:8088/api/*
+// 新增子应用时仿照本段追加即可；超时 610s 覆盖邮件抓取接口（/api/mail_sync 后端最长 600 秒）
+const POCLOSING_API_PORT = 8088;
+app.use('/apps/po-closing/api', (req, res) => {
+  const proxyReq = http.request({
+    hostname: '127.0.0.1',
+    port: POCLOSING_API_PORT,
+    path: '/api' + req.url,
+    method: req.method,
+    headers: { ...req.headers, host: '127.0.0.1:' + POCLOSING_API_PORT },
+    timeout: 610000
+  }, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    if (!res.headersSent) res.status(504).json({ error: 'PO-Closing backend timeout' });
+  });
+  proxyReq.on('error', (e) => {
+    if (!res.headersSent) res.status(502).json({ error: 'PO-Closing backend unavailable: ' + e.message });
+  });
+  req.pipe(proxyReq);
+});
+
 // 静态文件服务
 app.use(express.static(WEB_ROOT));
 app.use(express.json());
@@ -59,9 +84,10 @@ const upload = multer({
   dest: path.join(__dirname, '.uploads_tmp'),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB per file
   fileFilter: (req, file, cb) => {
-    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.wasm', '.sh'];
+    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.env','.wasm', '.sh', '.abap', '.c', '.cpp', '.h', '.mf', '.smf', '.so', '.50', '.gitignore'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
+    // 无扩展名文件（bash 安装脚本、SDK 工具等）放行
+    if (ext === '' || allowed.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error('File type not allowed: ' + ext));

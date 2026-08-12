@@ -1,0 +1,40 @@
+# ===== CTMS nginx 配置示例 =====
+# 用法：把下面两个 location 块合并到站点 server {} 配置中
+# （如 /etc/nginx/sites-enabled/default 或 /etc/nginx/conf.d/lnsc-apps.conf），
+# 然后执行: sudo nginx -t && sudo systemctl reload nginx
+#
+# 前提：CTMS 后端已启动（node /opt/ctms/server.js 3001）
+# 验证：curl http://127.0.0.1:3001/api/health  应返回 {"ok":true}
+
+server {
+    listen 80;
+    server_name _;
+
+    # LNSC-Apps 门户静态文件根目录（按实际路径修改）
+    root /var/www/lnsc-apps;
+    index index.html;
+
+    # ---- 关键：CTMS API 反代到 Node 后端 ----
+    # 注意 proxy_pass 末尾的 /api/ 会把 /apps/ctms/api/ 前缀替换为 /api/
+    #   /apps/ctms/api/states  ->  http://127.0.0.1:3001/api/states
+    # 如果写成 proxy_pass http://127.0.0.1:3001; （不带路径），
+    # 后端会收到 /apps/ctms/api/states，同样会 404！
+    location /apps/ctms/api/ {
+        proxy_pass http://127.0.0.1:3001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 30s;
+    }
+
+    # ---- 静态文件 ----
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+# ===== 验证步骤 =====
+# 1. 后端直连:  curl http://127.0.0.1:3001/api/health        -> {"ok":true}
+# 2. 经 nginx:  curl http://<服务器IP>/apps/ctms/api/health  -> {"ok":true}
+# 3. 浏览器打开 /apps/ctms/ 点导出，F12 Network 中 api/states 应返回 200 JSON

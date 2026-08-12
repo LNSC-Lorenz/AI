@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>采购订单收货核对 · PO-Closing</title>
+<style>
+:root{
+  /* 黑白主题：语义色全部映射为黑/白/灰层次，强调态=纯黑 */
+  --navy:#111111; --navy2:#333333; --bg:#f5f5f5; --card:#ffffff; --border:#e2e2e2;
+  --txt:#111111; --txt2:#555555; --muted:#999999;
+  --green:#111111; --green-bg:#ececec; --green-row:#f3f3f3;
+  --gray-bg:#f0f0f0; --err:#111111; --radius:2px;
+  --shadow:0 1px 3px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg); color:var(--txt); font-family:Consolas,"Segoe UI",-apple-system,"Microsoft YaHei",sans-serif; font-size:13.5px; line-height:1.55}
+/* 全站数字统一 Consolas：中文自动回退雅黑；表单控件默认不继承字体，需显式继承 */
+input,select,textarea,button{font-family:inherit}
+.page{max-width:1280px; margin:0 auto; padding:28px 24px 20px; display:grid; gap:18px}
+/* ---- 页头 ---- */
+.page-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap}
+.page-head h1{font-size:20px; font-weight:600; letter-spacing:.5px}
+.subtitle{font-size:12.5px; color:var(--txt2); margin-top:3px}
+.head-meta{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.conn{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--txt2); background:#fff; border:1px solid var(--border); border-radius:2px; padding:4px 12px}
+.conn i{width:8px; height:8px; border-radius:50%; background:var(--muted)}
+.conn.ok i{background:var(--green)}
+.conn.err i{background:#fff; border:1.5px solid #111}
+.conn.busy i{background:var(--navy); animation:pulse 1s infinite alternate}
+@keyframes pulse{from{opacity:.35}to{opacity:1}}
+.meta-text{font-size:12px; color:var(--muted)}
+.st-ok{color:#1e8e4f; font-weight:700}
+.st-err{color:#dc2626; font-weight:700}
+#mailStat,#sapStat{cursor:pointer}
+#mailStat:hover,#sapStat:hover{text-decoration:underline}
+#sdLog{background:#f7f7f7; border:1px solid var(--border); border-radius:2px; padding:10px; font:12px Consolas,monospace; max-height:240px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px}
+
+/* ---- KPI ---- */
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px}
+.kpi{background:var(--card); border:1px solid var(--border); border-left:6px solid #111; border-radius:2px; padding:16px 18px; box-shadow:0 2px 10px rgba(0,0,0,.07)}
+/* KPI 状态色点缀（整页仅此一处彩色） */
+.kpis .kpi:nth-child(1){border-left-color:#4763a7}
+.kpis .kpi:nth-child(2){border-left-color:#1e8e4f}
+.kpis .kpi:nth-child(3){border-left-color:#d97706}
+.kpis .kpi:nth-child(4){border-left-color:#dc2626}
+.kpis .kpi:nth-child(1) .kico{background:#eef1f7; color:#4763a7}
+.kpis .kpi:nth-child(2) .kico{background:#e7f4ec; color:#1e8e4f}
+.kpis .kpi:nth-child(3) .kico{background:#fdf3e3; color:#b57e12}
+.kpis .kpi:nth-child(4) .kico{background:#fdecec; color:#dc2626}
+.kpis .kpi:nth-child(2) .val{color:#1e8e4f}
+.kpis .kpi:nth-child(3) .val{color:#d97706}
+.kpis .kpi:nth-child(4) .val{color:#dc2626}
+.kpi .lbl{font-size:14px; font-weight:700; color:#333}
+.kpi .val{font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:4px}
+.kpi .foot{font-size:12px; color:var(--muted); margin-top:3px}
+.kpi.accent .val{color:#111}
+/* ---- Fluent 图标 ---- */
+.btn{display:inline-flex; align-items:center; gap:7px}
+.btn svg{width:16px; height:16px; flex:none; stroke-width:1.7}
+#btnMail svg{color:#2563eb}
+#btnClose svg{color:#1e8e4f}
+#btnClose:hover svg{color:#fff}
+.kpi-top{display:flex; align-items:center; gap:8px}
+.kico{width:26px; height:26px; border-radius:2px; background:#f0f0f0; color:var(--navy); display:inline-flex; align-items:center; justify-content:center}
+.kico svg{width:15px; height:15px}
+.kpi.accent .kico{background:var(--green-bg); color:var(--green)}
+.x svg{width:13px; height:13px; display:block; stroke-width:1.8}
+.search svg{width:14px; height:14px; flex:none; stroke-width:1.6}
+.empty .ico svg{width:30px; height:30px; stroke-width:1.5}
+/* 操作进度条 / 错误条 */
+.opbar{margin:0 20px; padding:10px 0 0; display:flex; align-items:center; gap:10px}
+.opbar[hidden]{display:none}
+.op-track{flex:1; max-width:420px; height:8px; border-radius:2px; background:#edf0f4; overflow:hidden}
+.op-track i{display:block; height:100%; width:40%; background:#111; border-radius:2px; animation:indet 1.1s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
+.op-text{font-size:12px; color:var(--txt2)}
+.op-err{margin:10px 20px 0; padding:9px 12px; background:#fdecec; border-left:3px solid #dc2626; border-radius:2px; font-size:12.5px; display:flex; gap:10px; align-items:flex-start}
+.op-err[hidden]{display:none}
+.op-err b{color:#dc2626; flex:none}
+.op-err .msg{flex:1; word-break:break-all; white-space:pre-wrap; color:#7a1f1f}
+.op-x{flex:none; border:1px solid #e5b8b8; background:#fff; border-radius:2px; padding:1px 10px; font-size:11px; cursor:pointer; color:#7a1f1f}
+.op-x:hover{background:#fef0f0}
+/* ---- 设置 ---- */
+.icon-btn{display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border:1px solid var(--border); background:#fff; border-radius:2px; cursor:pointer; color:var(--txt2)}
+.icon-btn:hover{background:#f2f2f2; color:#111}
+.icon-btn svg{width:16px; height:16px; stroke-width:1.6}
+#btnSettings svg{color:#4763a7}
+#btnAbout svg{color:#2563eb}
+.fld{display:grid; gap:5px; margin-bottom:14px}
+.fld-lbl{font-size:12.5px; font-weight:600}
+.fld-in{border:1px solid var(--border); border-radius:2px; padding:8px 10px; font-size:13px; font-family:inherit}
+.fld-in:focus{outline:2px solid rgba(0,0,0,.15); border-color:#111}
+.fld-hint{font-size:11.5px; color:var(--muted); line-height:1.5}
+.fld-status{font-size:12px; color:var(--txt2); min-height:16px}
+/* 关于（Markdown 风格：有序列表 + 代码标签 + 引用块脚注） */
+.about-md{font-size:13px; line-height:1.8; color:var(--txt)}
+.about-md ol{margin:0; padding-left:22px}
+.about-md li{margin:8px 0; padding-left:4px}
+.about-md li::marker{font-weight:700}
+.about-md code{font-family:Consolas,monospace; font-size:12px; background:#f4f4f4; border:1px solid var(--border); border-radius:2px; padding:1px 5px; white-space:nowrap}
+.about-md blockquote{margin:14px 0 0; padding:8px 12px; border-left:3px solid #111; background:#f7f7f7; color:var(--txt2); font-size:12px; line-height:1.7}
+/* ---- 卡片 / 工具栏 ---- */
+.card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
+.card-head{display:flex; align-items:center; gap:10px; padding:16px 20px 0}
+.card-head h2{font-size:15px; font-weight:600}
+.cnt{margin-left:auto; font-size:12px; color:var(--muted)}
+.toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--border)}
+.search{flex:0 1 200px; display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:2px; padding:0 10px; color:var(--muted)}
+.search input{border:0; outline:0; padding:8px 0; font-size:13px; width:100%}
+.sel{border:1px solid var(--border); border-radius:2px; padding:8px 12px; font-size:13px; background:#fff; color:var(--txt)}
+.date-range{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--txt2)}
+.date-in{padding:7px 10px; font-size:12.5px}
+.status-sel{width:150px; padding:7px 8px; font-size:12.5px}
+.grow{flex:1}
+.btn{border:1px solid var(--border); background:#fff; color:var(--txt); border-radius:2px; padding:8px 16px; font-size:13px; cursor:pointer}
+.btn:hover{background:#f2f2f2}
+.btn.primary{background:var(--navy); border-color:var(--navy); color:#fff}
+.btn.primary:hover{background:var(--navy2)}
+.btn.green{background:#fff; border-color:#111; color:#111}
+.btn.green:hover{background:#111; color:#fff}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+/* ---- 表格 ---- */
+.table-wrap{position:relative; overflow:auto; max-height:560px}
+table.inv{width:100%; border-collapse:collapse; table-layout:fixed}
+table.inv th{position:sticky; top:0; background:#f7f7f7; z-index:2; font-size:12px; color:var(--txt2); font-weight:600; text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); white-space:nowrap}
+th.sortable{cursor:pointer; user-select:none}
+th.sortable:hover{color:var(--navy)}
+th .arrow{font-size:9px; color:var(--navy)}
+table.inv td{padding:7px 6px; border-bottom:1px solid #ececec; font-size:14px; font-variant-numeric:tabular-nums; vertical-align:middle; white-space:nowrap}
+table.inv tbody tr:hover{background:#f5f5f5}
+
+tr.full td{background:var(--green-row)}
+tr.full{box-shadow:inset 3px 0 0 var(--green)}
+td.num,th.num{text-align:right}
+td.center,th.center{text-align:center}
+.invno{color:var(--navy)}
+.cell-trunc{display:block; max-width:148px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; font-size:13px}
+/* 发票悬浮信息卡 */
+#invTip{position:fixed; z-index:80; display:none; background:#fff; border:1px solid #111; border-radius:2px; box-shadow:0 6px 20px rgba(0,0,0,.18); padding:12px 14px; font-size:12px; width:max-content; max-width:min(860px,92vw); max-height:calc(100vh - 24px); overflow:auto; user-select:text; cursor:text}
+#invTip .tt-title{font-weight:700; font-size:13px; margin-bottom:6px}
+#invTip table{width:100%; border-collapse:collapse}
+#invTip td{padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top}
+#invTip td:first-child{color:var(--txt2)}
+#invTip .tt-sec{margin:8px 0 4px; font-weight:600; color:var(--txt2); font-size:11px; border-top:1px solid var(--border); padding-top:6px}
+.pono{font-family:Consolas,monospace; font-weight:600; font-size:12.5px}
+.copy-btn{display:inline-flex; align-items:center; border:0; background:none; color:var(--muted); cursor:pointer; padding:0; margin-left:6px; opacity:.6; vertical-align:middle}
+.copy-btn:hover{opacity:1; color:var(--txt)}
+.copy-btn svg{width:15px; height:15px; display:block; stroke-width:1.6}
+.amt{font-family:Consolas,monospace; font-weight:700; font-size:15.5px}
+.amt .dec{font-size:.68em; font-weight:700; color:var(--txt2); vertical-align:super; letter-spacing:.5px}
+/* fixed 布局下的显式列宽：未指定的「供应商」列吸收剩余宽度 */
+table.inv th:nth-child(1),table.inv td:nth-child(1){width:36px}
+table.inv th:nth-child(2),table.inv td:nth-child(2){width:160px}
+table.inv th:nth-child(3),table.inv td:nth-child(3){width:114px}
+table.inv th:nth-child(4),table.inv td:nth-child(4){width:80px}
+table.inv th:nth-child(6),table.inv td:nth-child(6){width:102px}
+table.inv th:nth-child(7),table.inv td:nth-child(7){width:118px}
+table.inv th:nth-child(8),table.inv td:nth-child(8){width:150px}
+table.inv th:nth-child(9),table.inv td:nth-child(9){width:108px}
+table.inv th:nth-child(10),table.inv td:nth-child(10){width:88px}
+table.inv td{overflow:hidden}
+/* 供应商编号：靠右、小字、淡色 */
+.vcode{font-family:Consolas,monospace; font-size:10px; font-weight:700; color:var(--muted); text-align:right}
+.vcode-tilt{display:inline-block; transform:rotate(-6deg)}
+.pbar{display:flex; align-items:center; gap:8px; justify-content:flex-end}
+.pbar .track{width:100px; height:7px; border-radius:2px; background:#eeeeee; overflow:hidden}
+.pbar .fill{height:100%; border-radius:2px; background:#b8b8b8}
+.pbar .fill.full{background:var(--green)}
+.pbar .pct{font-family:Consolas,monospace; font-size:13px; font-weight:600; color:var(--txt); width:48px; text-align:right}
+.pill{display:inline-flex; align-items:center; gap:6px; padding:3px 12px; border-radius:2px; font-size:12px; font-weight:600}
+.pill i{width:6px; height:6px; border-radius:50%; background:currentColor}
+.p-FULL{background:var(--green-bg); color:var(--green)}
+.p-PARTIAL,.p-NONE,.p-MISS,.p-WAIT{background:var(--gray-bg); color:var(--txt2)}
+.p-NOPO{background:#fff; color:var(--txt2); border:1px dashed #b8b8b8}   /* 缺 PO 号：需人工补录，永不参与 SAP 查询 */
+.p-MARKED{background:#e4e4e4; color:#111}
+.lnk{border:1px solid var(--border); background:#fff; border-radius:2px; padding:5px 12px; font-size:12px; cursor:pointer}
+.lnk:hover{background:#f2f2f2}
+input[type=checkbox]{width:15px; height:15px; accent-color:var(--navy); cursor:pointer; vertical-align:middle; display:block; margin:0 auto}
+input[type=checkbox]:disabled{cursor:not-allowed; opacity:.4}
+.empty{padding:48px 0; text-align:center; color:var(--muted)}
+.empty .ico{font-size:26px; display:block; margin-bottom:8px}
+.loading{position:absolute; inset:0; background:rgba(255,255,255,.78); display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; color:var(--txt2); z-index:5}
+.loading[hidden]{display:none}
+.spinner{width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--navy); border-radius:50%; animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.table-foot{display:flex; align-items:center; gap:12px; padding:10px 20px; border-top:1px solid var(--border); font-size:12px; color:var(--txt2)}
+.mini-sel{padding:4px 8px; font-size:12px}
+.pg-btn{width:26px; height:26px; border:1px solid var(--border); background:#fff; border-radius:2px; cursor:pointer; font-size:14px; line-height:1; color:var(--txt2); display:inline-flex; align-items:center; justify-content:center}
+.pg-btn:hover{background:#f2f2f2; color:#111}
+.pg-btn:disabled{opacity:.35; cursor:not-allowed}
+.sel-info b{color:var(--navy)}
+
+/* ---- 弹窗 / 确认框 / Toast / 页脚 ---- */
+#modal,#confirm,#settings,#about,#statDlg{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50}
+#modal[hidden],#confirm[hidden],#settings[hidden],#about[hidden],#statDlg[hidden]{display:none}
+.dialog{background:#fff; border-radius:2px; width:780px; max-width:94vw; max-height:84vh; overflow:auto; box-shadow:0 8px 30px rgba(0,0,0,.2)}
+.dialog.small{width:440px}
+.dlg-head{display:flex; align-items:center; padding:16px 20px 0}
+.dlg-head h3{font-size:15px}
+.x{margin-left:auto; border:0; background:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1}
+.x:hover{color:var(--txt)}
+.dlg-body{padding:12px 20px}
+.meta{font-size:12px; color:var(--txt2)}
+.dlg-foot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px 18px}
+.confirm-text{font-size:13.5px; padding:14px 20px 0; line-height:1.7}
+table.sub{width:100%; border-collapse:collapse; margin-top:10px}
+table.sub th{font-size:11px; color:var(--txt2); text-align:left; padding:8px 10px; background:#f4f4f4; border-bottom:1px solid var(--border)}
+table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; font-variant-numeric:tabular-nums}
+#toast{position:fixed; right:24px; bottom:24px; background:#111; color:#fff; padding:12px 18px; border-radius:2px; font-size:13px; box-shadow:0 6px 18px rgba(0,0,0,.25); opacity:0; transition:opacity .25s; z-index:99; max-width:380px; pointer-events:none}
+#toast.show{opacity:1}
+#toast.err{background:#fff; color:#111; border:1px solid #111}
+.page-foot{text-align:center; font-size:12px; color:var(--muted); padding:4px 0 8px}
+@media(max-width:768px){.page{padding:16px 12px}.page-head h1{font-size:17px}}
+/* 1080p 适配：加宽内容区、表格高度随视口伸展 */
+@media(min-width:1500px){
+  .page{max-width:1600px}
+  .kpis{grid-template-columns:repeat(4,1fr)}
+  .table-wrap{max-height:calc(100vh - 400px)}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>采购订单收货核对</h1>
+      <p class="subtitle">发票清单 × SAP 采购订单收货核查台账</p>
+    </div>
+    <div class="head-meta">
+      <span class="meta-text" id="mailStat" title="上一次邮件读取（内网 Exchange 抓取）">邮件读取 —</span>
+      <span class="meta-text" id="sapStat" title="上一次 SAP 查询（定时核查/手动）">SAP查询 —</span>
+      <span class="conn" id="connTag"><i></i><span id="envTag">未查询</span></span>
+      <span class="meta-text" id="lastRunText"></span>
+      <button class="icon-btn" id="btnSettings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></button>
+      <button class="icon-btn" id="btnAbout" title="关于"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.4v3.4M8 5.1v.2"/></svg></button>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><div class="kpi-top"><span class="kico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="2.5" width="9" height="11" rx="1.5"/><path d="M6 6h4M6 8.7h4M6 11.4h2.4"/></svg></span><span class="lbl">发票 PO 总数</span></div><div class="val" id="kTotal">0</div><div class="foot">当前清单记录</div></div>
+    <div class="kpi accent"><div class="kpi-top"><span class="kico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 8.6l3.2 3 7.2-7.2"/></svg></span><span class="lbl">完整收货（可关闭）</span></div><div class="val" id="kFull">0</div><div class="foot" id="kFullFoot">勾选后可批量关闭</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.3"/><path d="M8 5.4V8l2 1.6"/></svg></span><span class="lbl">部分收货</span></div><div class="val" id="kPart">0</div><div class="foot">需跟进供应商补足</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6l6 10.4H2z"/><path d="M8 6.6v2.8M8 11.2v.4"/></svg></span><span class="lbl">未收货 / 待确认</span></div><div class="val" id="kNone">0</div><div class="foot">含未查询、查无此单、无 PO 号</div></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>发票 PO 列表</h2><span class="cnt" id="cnt">共 0 条记录</span></div>
+    <div class="toolbar">
+      <div class="search"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2L14 14"/></svg><input id="q" placeholder="搜索 PO 号、发票号、供应商"></div>
+      <div class="date-range">
+        <input type="date" id="dFrom" class="sel date-in" title="开票日期起">
+        <span>至</span>
+        <input type="date" id="dTo" class="sel date-in" title="开票日期止">
+      </div>
+      <select class="sel status-sel" id="fStatus">
+        <option value="ALL">全部状态</option>
+        <option value="FULL">完整收货</option>
+        <option value="PARTIAL">部分收货</option>
+        <option value="PENDING">未收货 / 待确认</option>
+        <option value="MISS">查无此单</option>
+        <option value="MARKED">已标记关闭</option>
+      </select>
+      <span class="grow"></span>
+      <button class="btn" id="btnMail"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="12" height="9" rx="1"/><path d="M2.5 4.5L8 9l5.5-4.5"/></svg>读取邮件</button>
+      <button class="btn primary" id="btnQuery"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.6v3h-3"/></svg>批量查询 SAP</button>
+      <button class="btn green" id="btnClose"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 8.6l3.2 3 7.2-7.2"/></svg>标记关闭选中 PO</button>
+      <button class="btn" id="btnExport"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7M5 7l3 3 3-3M2.5 12.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5"/></svg>导出</button>
+    </div>
+    <div class="opbar" id="opbar" hidden>
+      <div class="op-track"><i></i></div>
+      <span class="op-text" id="opText">处理中…</span>
+    </div>
+    <div class="op-err" id="opErr" hidden>
+      <b id="opErrTitle">操作失败</b>
+      <span class="msg" id="opErrMsg"></span>
+      <button class="op-x" id="opErrX">关闭</button>
+    </div>
+    <div class="table-wrap">
+      <table class="inv">
+        <thead><tr>
+          <th class="center"><input type="checkbox" id="ckAll" title="全选可关闭行"></th>
+          <th>发票号</th>
+          <th class="sortable" data-k="EBELN">PO 号 <span class="arrow"></span></th>
+          <th class="num"><span class="vcode-tilt">供应商编号</span></th>
+          <th>供应商名称</th>
+          <th class="sortable" data-k="INV_DATE">开票日期 <span class="arrow"></span></th>
+          <th class="num sortable" data-k="AMOUNT">发票金额 <span class="arrow"></span></th>
+          <th class="num sortable" data-k="RATE">收货进度 <span class="arrow"></span></th>
+          <th class="center">SAP 收货状态</th>
+          <th class="center">操作</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="loading" class="loading" hidden><span class="spinner"></span>正在查询 SAP 收货数据…</div>
+    </div>
+    <div class="table-foot">
+      <span id="selInfo" class="sel-info" hidden>已选 <b id="selN">0</b> 项</span>
+      <span class="meta-text" id="rangeInfo">—</span>
+      <span class="grow"></span>
+      <span class="meta-text">每页</span>
+      <select id="pageSize" class="sel mini-sel">
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+      </select>
+      <button class="pg-btn" id="pgPrev" title="上一页">‹</button>
+      <span id="pgInfo" class="meta-text">1 / 1</span>
+      <button class="pg-btn" id="pgNext" title="下一页">›</button>
+      <span id="footInfo" class="meta-text">—</span>
+    </div>
+  </section>
+
+  <footer class="page-foot">PO-Closing v1.0 · 数据源 <span id="footSrc">—</span> · 定时核查 <span id="footTimes">03:33 / 12:33</span> · 仅供内部财务核对使用</footer>
+</div>
+
+<div id="modal" hidden>
+  <div class="dialog">
+    <div class="dlg-head"><h3 id="mTitle">PO 收货详情</h3><button class="x" id="mCloseX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+    <div class="dlg-body">
+      <div class="meta" id="mMeta"></div>
+      <div id="mBody"></div>
+    </div>
+    <div class="dlg-foot"><button class="btn" id="mClose">关闭</button></div>
+  </div>
+</div>
+
+<div id="confirm" hidden>
+  <div class="dialog small">
+    <div class="dlg-head"><h3>确认标记关闭</h3><button class="x" id="cX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+    <p class="confirm-text" id="cText"></p>
+    <div class="dlg-foot">
+      <button class="btn" id="cCancel">取消</button>
+      <button class="btn green" id="cOk">确认标记</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings" hidden>
+  <div class="dialog small">
+    <div class="dlg-head"><h3>设置</h3><button class="x" id="sX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+    <div class="dlg-body">
+      <label class="fld">
+        <span class="fld-lbl">同步时间（每日定时核查）</span>
+        <input id="setTimes" class="fld-in" placeholder="03:33,12:33" autocomplete="off">
+        <span class="fld-hint">HH:MM 格式，多个用逗号分隔；留空则关闭定时核查。保存后即时生效</span>
+      </label>
+      <label class="fld">
+        <span class="fld-lbl">通知接收邮箱</span>
+        <input id="setEmails" class="fld-in" placeholder="fin@example.com, ap@example.com" autocomplete="off">
+        <span class="fld-hint">多个邮箱用逗号分隔；仅登记在内部通知记录中，不会对外发送任何消息</span>
+      </label>
+      <div class="fld-status" id="setStatus"></div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" id="sCancel">取消</button>
+      <button class="btn primary" id="sSave">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<div id="about" hidden>
+  <div class="dialog">
+    <div class="dlg-head"><h3>关于 · PO-Closing 平台逻辑</h3><button class="x" id="aX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+    <div class="dlg-body">
+      <div class="about-md">
+        <ol>
+          <li><b>发票进</b>　ap-invoice 共享邮箱的发票统一转发到内网 Exchange 邮箱 <code>auto@lechler.com.cn</code> →「读取邮件」（手动，或每天 03:00 / 12:00 定时）→ 解析 XML 附件 → 按年写入 <code>invoice/*.csv</code></li>
+          <li><b>载入</b>　打开页面自动合并读取 invoice 文件夹全部 CSV（发票号 / PO号 / 供应商 / 金额 / 日期 / 编号 / 开票内容），去重展示</li>
+          <li><b>核查</b>　「批量查询 SAP」按 PO 查净收货（收货 − 冲销退货，含容差），判定 <b>完整收货 / 部分收货 / 未收货 / 查无此单</b>；每天 03:33 / 12:33 自动核查（⚙ 设置里可改时间）</li>
+          <li><b>关闭</b>　完整收货行（浅底+黑条）勾选 →「标记关闭选中 PO」→ 服务端 SQLite 留痕；真实写 SAP 关单（<code>BAPI_PO_CHANGE</code>）属第二阶段</li>
+          <li><b>留痕 / 导出</b>　通知日志、核查结果、设置全部存本机 SQLite；「导出」把当前筛选结果生成 Excel</li>
+        </ol>
+        <blockquote>技术原则：除内网 Exchange / SAP 外零外部通信；前端纯展示，全部判定逻辑在服务端 · <b>PO-Closing v1.0</b></blockquote>
+      </div>
+    </div>
+    <div class="dlg-foot"><button class="btn" id="aClose">关闭</button></div>
+  </div>
+</div>
+
+<div id="statDlg" hidden>
+  <div class="dialog">
+    <div class="dlg-head"><h3 id="sdTitle">执行详情</h3><button class="x" id="sdX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+    <div class="dlg-body">
+      <table class="sub" id="sdTable"></table>
+      <div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--txt2)">执行过程</div>
+      <pre id="sdLog"></pre>
+    </div>
+    <div class="dlg-foot"><button class="btn" id="sdClose">关闭</button></div>
+  </div>
+</div>
+
+<div id="invTip"></div>
+<div id="toast"></div>
+<script>
+"use strict";
+/* 纯展示层：所有判定/聚合/留痕均在服务端完成 */
+const $=id=>document.getElementById(id);
+const state={rows:[], filter:"ALL", q:"", dFrom:"", dTo:"", selected:new Set(), sortK:null, sortAsc:true, page:1, pageSize:50};
+
+function headers(){return {"Content-Type":"application/json"};}
+/* API 直连后端 8088（与 CTMS 同模式：浏览器直连后端端口，不经门户转发）。
+   自动取当前主机名：门户/独立/局域网 IP 访问均适用。 */
+const API_ORIGIN=location.protocol+"//"+location.hostname+":8088";
+function relApi(path){path=String(path);return API_ORIGIN+(path.startsWith("/")?path:"/"+path);}
+async function api(path,payload){
+  const r=await fetch(relApi(path),{method:"POST",headers:headers(),body:JSON.stringify(payload||{})});
+  const d=await r.json().catch(()=>({ok:false,error:"响应解析失败"}));
+  if(!r.ok||d.ok===false)throw new Error(d.error||("HTTP "+r.status));
+  return d;
+}
+async function apiGet(path){
+  const r=await fetch(relApi(path),{headers:headers()});
+  const d=await r.json().catch(()=>({ok:false,error:"响应解析失败"}));
+  if(!r.ok||d.ok===false)throw new Error(d.error||("HTTP "+r.status));
+  return d;
+}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function toast(t,err){const e=$("toast");e.textContent=t;e.className="show"+(err?" err":"");setTimeout(()=>{e.className=""},3400);}
+function fmt(n){return (Math.round((+n||0)*1000)/1000).toLocaleString("zh-CN");}
+function fmtAmt(n){return "¥ "+(+n||0).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});}
+/* 金额单元格：整数部分正常字号，小数部分缩小淡化 */
+function amtCell(n){
+  const c=el("td","num amt");
+  if(!n){c.textContent="—";return c;}
+  const s=(+n).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const dot=s.lastIndexOf(".");
+  c.appendChild(document.createTextNode("¥ "+s.slice(0,dot+1)));   // 整数+小数点
+  c.appendChild(el("span","dec",s.slice(dot+1)));                  // 分位上标
+  return c;
+}
+function setConn(mode,text){
+  $("connTag").className="conn"+(mode?" "+mode:"");
+  const e=$("envTag");
+  if(mode==="ok")e.innerHTML=text+' [<b class="st-ok">✓</b>]';
+  else if(mode==="err")e.innerHTML=text+' [<b class="st-err">✗</b>]';
+  else e.textContent=text;
+}
+function setLoading(on){$("loading").hidden=!on;}
+const ICON_COPY='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3.5 11V3.5a1 1 0 0 1 1-1H11"/></svg>';
+function copyText(t){
+  const done=()=>toast("已复制 PO 号："+t);
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done));
+  else fallbackCopy(t,done);
+}
+function fallbackCopy(t,done){
+  const ta=document.createElement("textarea");
+  ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{document.execCommand("copy");done();}catch(e){toast("复制失败",true);}
+  document.body.removeChild(ta);
+}
+const ICON_TRAY='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.4 9.6V12a1.4 1.4 0 0 0 1.4 1.4h8.4a1.4 1.4 0 0 0 1.4-1.4V9.6"/><path d="M2.4 9.6l1.5-4.9a1.4 1.4 0 0 1 1.3-1h5.6a1.4 1.4 0 0 1 1.3 1l1.5 4.9"/><path d="M2.4 9.6h3.4a2.2 2.2 0 0 0 4.4 0h3.4"/></svg>';
+
+function nowLocal(){   // 本地时间 YYYY-MM-DD HH:MM（toISOString 是 UTC，勿用）
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function statHtml(label,rec){
+  if(!rec||!rec.ran_at)return label+" —";
+  const t=String(rec.ran_at).replace("T"," ").slice(5,16);
+  const ok=rec.ok!==false;
+  return label+" "+t+' [<b class="'+(ok?"st-ok":"st-err")+'">'+(ok?"✓":"✗")+"</b>]";
+}
+/* 状态标签持久化：刷新不丢失（localStorage），服务端有数据时再覆盖 */
+function setStat(id,label,rec){
+  $(id).innerHTML=statHtml(label,rec);
+  if(rec&&rec.ran_at){try{localStorage.setItem("poclose_"+id,JSON.stringify(rec));}catch(e){}}
+}
+function restoreStats(){
+  for(const [id,label] of [["mailStat","邮件读取"],["sapStat","SAP查询"]]){
+    try{
+      const s=localStorage.getItem("poclose_"+id);
+      if(s)$(id).innerHTML=statHtml(label,JSON.parse(s));
+    }catch(e){}
+  }
+}
+function blankRow(r){
+  return Object.assign({queried:false,missing:false,PO_STATUS:"",STATUS_TEXT:"",RATE:0,
+    ORDER_QTY:0,NET_GR_QTY:0,ITEM_COUNT:0,ITEMS:[],CLOSE_MARKED:"",INV_DATE:"",VENDOR_CODE:"",INV_ITEMS:[]}, r);
+}
+/* CSV 兜底解析（仅在后端不可达时启用）：发票号,PO号,供应商,金额,开票日期 */
+function normDate(s){
+  const m=String(s||"").match(/^(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})日?$/);
+  return m ? m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0") : "";
+}
+function splitCsv(line){   // 支持双引号包裹字段（第 7 列开票内容 JSON 含逗号）
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(q){if(c==='"'){if(line[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=c;}
+    else if(c===','){out.push(cur);cur="";}
+    else if(c==='"'){q=true;}
+    else cur+=c;}
+  out.push(cur);return out.map(s=>s.trim());
+}
+function parseItemsJson(s){try{const v=JSON.parse(s);return Array.isArray(v)?v:[];}catch(e){return[];}}
+function parseCsvText(text){
+  const rows=[];
+  for(const line of String(text||"").split(/\r?\n/)){
+    const p=splitCsv(line);
+    if(p.length>=2 && /^\d{6,12}$/.test(p[1]))
+      rows.push(blankRow({INV_NO:p[0],EBELN:p[1],VENDOR:p[2]||"",AMOUNT:parseFloat(p[3])||0,INV_DATE:normDate(p[4]||""),VENDOR_CODE:p[5]||"",INV_ITEMS:parseItemsJson(p[6]||"")}));
+  }
+  return rows;
+}
+/* 纯双击打开（file://）时的最终兜底：测试数据已移除，仅保留表头 */
+const EMBEDDED_CSV="发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容";
+function mergeRun(run){
+  const map={}; (run.pos||[]).forEach(p=>map[p.EBELN]=p);
+  const miss=new Set(run.missing||[]);
+  for(const r of state.rows){
+    const p=map[r.EBELN];
+    r.queried=true;
+    if(p)Object.assign(r,{missing:false,ITEM_COUNT:p.ITEM_COUNT,ORDER_QTY:p.ORDER_QTY,
+      NET_GR_QTY:p.NET_GR_QTY,RATE:p.RATE,PO_STATUS:p.PO_STATUS,STATUS_TEXT:p.STATUS_TEXT,
+      ITEMS:p.ITEMS||[],CLOSE_MARKED:p.CLOSE_MARKED||""});
+    else{r.missing=miss.has(r.EBELN);r.PO_STATUS="";r.STATUS_TEXT="";r.RATE=0;r.ITEMS=[];}
+  }
+}
+/* ---- KPI / 筛选 / 排序 ---- */
+function stOf(r){ if(r.CLOSE_MARKED==="X")return "MARKED"; if(!r.EBELN)return "NOPO"; if(!r.queried)return "WAIT"; if(r.missing)return "MISS"; return r.PO_STATUS; }
+function visibleRows(){
+  let rows=state.rows;
+  const f=state.filter;
+  if(f==="FULL")rows=rows.filter(r=>stOf(r)==="FULL");
+  else if(f==="PARTIAL")rows=rows.filter(r=>stOf(r)==="PARTIAL");
+  else if(f==="PENDING")rows=rows.filter(r=>["NONE","WAIT","NOPO"].includes(stOf(r)));
+  else if(f==="MISS")rows=rows.filter(r=>stOf(r)==="MISS");
+  else if(f==="MARKED")rows=rows.filter(r=>stOf(r)==="MARKED");
+  if(state.q){const q=state.q.toLowerCase();
+    rows=rows.filter(r=>(r.EBELN.includes(q)||(r.INV_NO||"").toLowerCase().includes(q)||(r.VENDOR||"").toLowerCase().includes(q)||(r.VENDOR_CODE||"").includes(q)));}
+  if(state.dFrom)rows=rows.filter(r=>r.INV_DATE&&r.INV_DATE>=state.dFrom);
+  if(state.dTo)rows=rows.filter(r=>r.INV_DATE&&r.INV_DATE<=state.dTo);
+  if(state.sortK){
+    const k=state.sortK,dir=state.sortAsc?1:-1;
+    rows=rows.slice().sort((a,b)=>{
+      if(k==="EBELN"||k==="INV_DATE")return String(a[k]||"").localeCompare(String(b[k]||""))*dir;
+      const va=a.queried?(+a[k]||0):-1, vb=b.queried?(+b[k]||0):-1;
+      return (va-vb)*dir;
+    });
+  }
+  return rows;
+}
+function renderKpis(){
+  const rows=state.rows;
+  const full=rows.filter(r=>stOf(r)==="FULL").length;
+  const part=rows.filter(r=>stOf(r)==="PARTIAL").length;
+  const marked=rows.filter(r=>stOf(r)==="MARKED").length;
+  $("kTotal").textContent=rows.length;
+  $("kFull").textContent=full;
+  $("kPart").textContent=part;
+  $("kNone").textContent=rows.length-full-part-marked;
+  $("kFullFoot").textContent=marked?("已标记关闭 "+marked+" 笔"):"勾选后可批量关闭";
+}
+function updateSel(){
+  const n=state.selected.size;
+  $("selInfo").hidden=n===0;
+  $("selN").textContent=n;
+}
+
+/* ---- 主表 ---- */
+const PILL_TXT={FULL:"完整收货",PARTIAL:"部分收货",NONE:"未收货",MISS:"查无此单",WAIT:"待查询",MARKED:"已标记关闭",NOPO:"无 PO 号"};
+function pillEl(r){
+  const st=stOf(r);
+  const p=el("span","pill p-"+st);
+  p.appendChild(el("i"));
+  p.appendChild(document.createTextNode(PILL_TXT[st]||st));
+  return p;
+}
+const GROUP_COLORS=["#2563eb","#d97706","#059669","#7c3aed","#dc2626","#0891b2"];  // 一票多PO分组色板（循环使用）
+function invGroupColors(){
+  const cnt={}, color={}; let gi=0;
+  for(const r of state.rows){ if(r.INV_NO) cnt[r.INV_NO]=(cnt[r.INV_NO]||0)+1; }
+  for(const r of state.rows){ const k=r.INV_NO; if(k&&cnt[k]>1&&!(k in color)) color[k]=GROUP_COLORS[gi++%GROUP_COLORS.length]; }
+  return color;
+}
+function renderTable(){
+  const rows=visibleRows();
+  const gColors=invGroupColors();   // 同一发票号多行 → 同色标识
+  const total=rows.length;
+  const pages=Math.max(1,Math.ceil(total/state.pageSize));
+  if(state.page>pages)state.page=pages;
+  const start=(state.page-1)*state.pageSize;
+  const pageRows=rows.slice(start,start+state.pageSize);
+  $("cnt").textContent="共 "+total+" 条记录";
+  $("rangeInfo").textContent=total?("第 "+(start+1)+"–"+(start+pageRows.length)+" 条"):"第 0 条";
+  $("pgInfo").textContent=state.page+" / "+pages;
+  $("pgPrev").disabled=state.page<=1;
+  $("pgNext").disabled=state.page>=pages;
+  const tb=$("tbody"); tb.textContent="";
+  if(!pageRows.length){
+    const tr=el("tr");
+    const c=el("td"); c.colSpan=10;
+    const box=el("div","empty");
+    const ico=el("span","ico"); ico.innerHTML=ICON_TRAY;
+    box.appendChild(ico);
+    box.appendChild(document.createTextNode(state.rows.length?"无匹配记录，请调整筛选条件":"暂无发票清单数据——请将 CSV 放入 invoice 文件夹后刷新"));
+    c.appendChild(box); tr.appendChild(c); tb.appendChild(tr);
+    updateSel(); return;
+  }
+  for(const r of pageRows){
+    const st=stOf(r);
+    const tr=el("tr",st==="FULL"?"full":"");
+    const ckC=el("td","center");
+    const ck=el("input"); ck.type="checkbox";
+    const closable=(st==="FULL");
+    ck.disabled=!closable;
+    ck.checked=closable&&state.selected.has(r.EBELN);
+    if(closable)ck.onchange=()=>{ck.checked?state.selected.add(r.EBELN):state.selected.delete(r.EBELN);updateSel();};
+    ckC.appendChild(ck); tr.appendChild(ckC);
+    const ic=el("td","invno");
+    const gc=gColors[r.INV_NO];
+    if(gc){ ic.style.borderLeft="3px solid "+gc; ic.style.background=gc+"14"; ic.title="一票多单：该发票含多个 PO（同色为一组）"; }
+    const isp=el("span","cell-trunc",r.INV_NO||"—");
+    isp.addEventListener("mouseenter",ev=>showInvTip(ev,r));
+    isp.addEventListener("mouseleave",hideInvTipSoon);
+    ic.appendChild(isp);
+    tr.appendChild(ic);
+    const ptc=el("td","pono");
+    ptc.appendChild(document.createTextNode(r.EBELN));
+    const cp=el("button","copy-btn");
+    cp.title="复制 PO 号";
+    cp.innerHTML=ICON_COPY;
+    cp.onclick=ev=>{ev.stopPropagation();copyText(r.EBELN);};
+    ptc.appendChild(cp);
+    tr.appendChild(ptc);
+    const vc=el("td","vcode");
+    vc.appendChild(el("span","vcode-tilt",r.VENDOR_CODE||"—"));
+    tr.appendChild(vc);
+    tr.appendChild(el("td","",r.VENDOR||"—"));
+    tr.appendChild(el("td","",r.INV_DATE||"—"));
+    tr.appendChild(amtCell(r.AMOUNT));
+    const pc=el("td","num");
+    if(r.queried&&!r.missing){
+      const w=el("div","pbar");
+      const track=el("div","track");
+      const fill=el("div","fill"+(r.PO_STATUS==="FULL"?" full":""));
+      fill.style.width=r.RATE+"%";
+      track.appendChild(fill);
+      w.appendChild(track); w.appendChild(el("span","pct",r.RATE+"%"));
+      pc.appendChild(w);
+    }else pc.textContent="—";
+    tr.appendChild(pc);
+    const sc=el("td","center"); sc.appendChild(pillEl(r)); tr.appendChild(sc);
+    const oc=el("td","center");
+    if(r.queried&&!r.missing){
+      const b=el("button","lnk","查看详情");
+      b.onclick=()=>showDetail(r);
+      oc.appendChild(b);
+    }else oc.textContent="—";
+    tr.appendChild(oc);
+    tb.appendChild(tr);
+  }
+  updateSel();
+}
+function renderAll(){ renderKpis(); renderTable(); }
+
+/* ---- 发票悬浮信息卡（可交互：鼠标可移入选择复制，内容全量显示） ---- */
+function tipRows(pairs){return pairs.map(p=>"<tr><td>"+p[0]+"</td><td>"+p[1]+"</td></tr>").join("");}
+function buildTipHtml(r){
+  const e=escXml;
+  let h='<div class="tt-title">发票 '+e(r.INV_NO||"—")+'</div><table>'
+    +tipRows([
+      ["PO 号",e(r.EBELN)],
+      ["供应商编号",e(r.VENDOR_CODE||"—")],
+      ["供应商名称",e(r.VENDOR||"—")],
+      ["开票日期",e(r.INV_DATE||"—")],
+      ["发票金额",r.AMOUNT?e(fmtAmt(r.AMOUNT)):"—"],
+    ])+"</table>";
+  if(r.INV_ITEMS&&r.INV_ITEMS.length){
+    const stTxt=!r.queried?"待查询":(r.missing?"查无此单":(PILL_TXT[stOf(r)]||""));
+    h+='<div class="tt-sec">开票内容</div><table>';
+    for(const it of r.INV_ITEMS){
+      h+="<tr><td>"+e(it.name||"")+"</td><td>×"+fmt(it.qty||1)+" ｜ "+e(fmtAmt(+(it.total!=null?it.total:it.amount)||0))+" ｜ "+e(stTxt)+"</td></tr>";
+    }
+    h+="</table>";
+  }
+  if(r.ITEMS&&r.ITEMS.length){
+    h+='<div class="tt-sec">行项目明细</div><table>';
+    for(const it of r.ITEMS){
+      h+="<tr><td>"+e(it.EBELP)+"</td><td>"+e(it.MATNR||"")+" ｜ 订单 "+fmt(it.ORDER_QTY)+" / 已收 "+fmt(it.NET_GR_QTY)+" "+e(it.MEINS||"")+" ｜ "+e(it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))))+"</td></tr>";
+    }
+    h+="</table>";
+  }
+  return h;
+}
+let tipTimer=null;
+function showInvTip(ev,r){
+  clearTimeout(tipTimer);
+  const tip=$("invTip");
+  tip.innerHTML=buildTipHtml(r);
+  tip.style.display="block";
+  const rect=ev.currentTarget.getBoundingClientRect();
+  let x=rect.left, y=rect.bottom+6;
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  if(x+tw>innerWidth-12)x=innerWidth-tw-12;
+  if(y+th>innerHeight-12)y=rect.top-th-6;   // 下方放不下则翻到上方
+  if(y<12)y=Math.max(12,innerHeight-th-12); // 上方也放不下（卡片很高）则贴底钳位
+  if(x<12)x=12;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function hideInvTip(){clearTimeout(tipTimer); $("invTip").style.display="none";}
+function hideInvTipSoon(){clearTimeout(tipTimer); tipTimer=setTimeout(hideInvTip,180);}  // 留出鼠标移入卡片的时间窗
+
+/* ---- 详情弹窗 ---- */
+function showDetail(r){
+  $("mTitle").textContent="PO 收货详情 · "+r.EBELN;
+  $("mMeta").textContent="发票号 "+(r.INV_NO||"—")+" ｜ 开票日期 "+(r.INV_DATE||"—")+" ｜ 供应商 "+(r.VENDOR||"—")+" ｜ 发票金额 "+(r.AMOUNT?fmtAmt(r.AMOUNT):"—")
+    +" ｜ 订单总量 "+fmt(r.ORDER_QTY)+" ｜ 累计收货 "+fmt(r.NET_GR_QTY)+" ｜ "+r.STATUS_TEXT;
+  const t=el("table","sub");
+  const hr=el("tr");
+  ["行项目","物料","工厂","订单数","净收货","差异","交货完成","状态"].forEach((h,i)=>hr.appendChild(el("th",(i>=3&&i<=5)?"num":"",h)));
+  const head=el("thead"); head.appendChild(hr); t.appendChild(head);
+  const body=el("tbody");
+  for(const it of r.ITEMS){
+    const tr=el("tr");
+    [it.EBELP,it.MATNR,it.WERKS,fmt(it.ORDER_QTY),fmt(it.NET_GR_QTY),fmt(it.DIFF_QTY),
+     it.ELIKZ||"",
+     it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货")))]
+      .forEach((v,i)=>tr.appendChild(el("td",(i>=3&&i<=5)?"num":"",v)));
+    body.appendChild(tr);
+  }
+  t.appendChild(body);
+  const mb=$("mBody"); mb.textContent=""; mb.appendChild(t);
+  $("modal").hidden=false;
+}
+/* ---- 操作进度条 / 错误条 ---- */
+function opStart(text){
+  $("opErr").hidden=true;
+  $("opText").textContent=text;
+  $("opbar").hidden=false;
+}
+function opDone(){$("opbar").hidden=true;}
+function opFail(title,msg){
+  $("opbar").hidden=true;
+  $("opErrTitle").textContent=title;
+  $("opErrMsg").textContent=msg||"未知错误";
+  $("opErr").hidden=false;
+}
+
+/* ---- 主流程：批量查询 SAP ---- */
+async function querySAP(){
+  if(!state.rows.length){toast("清单为空——请将发票 CSV 放入 invoice 文件夹后刷新",true);return;}
+  const pos=[...new Set(state.rows.map(r=>r.EBELN).filter(Boolean))];   // 无 PO 号行不参与查询
+  if(!pos.length){toast("清单中没有可查询的 PO 号（均为「无 PO 号」行，需人工补录）",true);return;}
+  $("btnQuery").disabled=true; setLoading(true); setConn("busy","查询中…");
+  opStart("正在批量查询 SAP 收货（"+pos.length+" 笔 PO）……");
+  try{
+    const d=await api("/api/po_status",{po_text:pos.join("\n")});
+    mergeRun(d);
+    opDone();
+    setConn("ok","SAP · "+d.source);
+    $("footSrc").textContent=d.source;
+    $("footInfo").textContent="数据更新于 "+new Date().toLocaleTimeString("zh-CN",{hour12:false});
+    setStat("sapStat","SAP查询",{ran_at:nowLocal(),ok:true,source:d.source,summary:d.summary});
+    toast("核查完毕：完整收货 "+d.summary.full+" / "+pos.length+" 笔");
+  }catch(e){
+    opFail("SAP 查询失败",e.message);
+    setConn("err","连接失败");
+    setStat("sapStat","SAP查询",{ran_at:nowLocal(),ok:false,error:e.message});
+    toast("查询失败："+e.message,true);
+  }finally{
+    state.selected.clear();
+    state.page=1;
+    renderAll(); setLoading(false);
+    $("btnQuery").disabled=false;
+  }
+}
+
+/* ---- 标记关闭（带确认） ---- */
+function closeSelected(){
+  const pos=[...state.selected];
+  if(!pos.length){toast("请先勾选「完整收货」的 PO 行",true);return;}
+  $("cText").textContent="将对 "+pos.length+" 笔已完整收货的 PO 执行标记关闭（服务端留痕，不写 SAP）。确认执行？";
+  $("confirm").hidden=false;
+}
+async function doClose(){
+  $("confirm").hidden=true;
+  const pos=[...state.selected];
+  if(!pos.length)return;
+  $("btnClose").disabled=true;
+  try{
+    await api("/api/close",{pos});
+    for(const r of state.rows)if(state.selected.has(r.EBELN))r.CLOSE_MARKED="X";
+    toast("已标记关闭 "+pos.length+" 笔 PO（服务端已留痕）");
+  }catch(e){
+    toast("标记失败："+e.message,true);
+  }finally{
+    state.selected.clear();
+    renderAll();
+    $("btnClose").disabled=false;
+  }
+}
+
+/* ---- 启动三级兜底：① 后端 API（含最近核查结果）② 直读 invoice CSV ③ 内嵌快照 ---- */
+async function initLoad(){
+  setLoading(true); setConn("busy","载入中…");
+  state.page=1;
+  try{   // ① 后端服务在线
+    const inv=await apiGet("/api/invoices");
+    state.rows=inv.invoices.map(blankRow);
+    if(!state.rows.length){
+      setConn("err","清单为空");
+      renderAll();
+      toast("invoice 文件夹中暂无发票清单",true);
+      setLoading(false);
+      return;
+    }
+    setConn("ok","清单："+(inv.files.join("、")||"invoice"));
+    try{
+      const last=await apiGet("/api/last_run");
+      if(last.run){
+        mergeRun(last.run);
+        setConn("ok","上次自动核查 "+String(last.run.ran_at).slice(5,16));
+        $("lastRunText").textContent="定时核查 "+String(last.run.ran_at).replace("T"," ").slice(0,16);
+        $("footSrc").textContent=last.run.source;
+        $("footInfo").textContent="数据更新于 "+String(last.run.ran_at).replace("T"," ").slice(5,16);
+      }
+    }catch(e2){/* 尚无历史核查结果 */}
+    try{   // 页头：上一次邮件读取 / SAP 查询 状态
+      const s=await apiGet("/api/sync_status");
+      if(s.mail)setStat("mailStat","邮件读取",s.mail);
+      if(s.sap)setStat("sapStat","SAP查询",s.sap);
+    }catch(e3){}
+    renderAll();
+    toast("已载入 "+state.rows.length+" 条发票（invoice 文件夹）");
+    setLoading(false);
+    return;
+  }catch(e){/* 后端不可达，进入 ② */}
+  try{   // ② 静态托管场景：直接读 CSV 文件
+    const t=await (await fetch("invoice/invoices.csv")).text();
+    state.rows=parseCsvText(t);
+    if(!state.rows.length)throw new Error("CSV 无有效行");
+    setConn("","CSV 直读 · 未核查");
+    renderAll();
+    toast("已从 invoice/invoices.csv 载入 "+state.rows.length+" 条（后端未连接，收货状态未核查）");
+    setLoading(false);
+    return;
+  }catch(e2){/* file:// 限制，进入 ③ */}
+  // ③ 纯双击打开：内嵌快照
+  state.rows=parseCsvText(EMBEDDED_CSV);
+  setConn("err","服务未连接");
+  renderAll();
+  toast("后端未连接，已载入内嵌清单快照；收货核查需启动服务端",true);
+  setLoading(false);
+}
+
+/* ---- 设置 ---- */
+function footTimesText(t){ $("footTimes").textContent = t ? t.replace(/,/g," / ") : "已关闭"; }
+async function openSettings(){
+  $("setStatus").textContent="";
+  try{
+    const d=await apiGet("/api/settings");
+    $("setTimes").value=d.schedule_times||"";
+    $("setEmails").value=d.notify_emails||"";
+    footTimesText(d.schedule_times);
+    $("setStatus").textContent="通知方式：内部日志记录（零外部通信）";
+  }catch(e){
+    $("setStatus").textContent="读取设置失败："+e.message;
+  }
+  $("settings").hidden=false;
+}
+async function saveSettings(){
+  $("sSave").disabled=true;
+  try{
+    const d=await api("/api/settings",{schedule_times:$("setTimes").value, notify_emails:$("setEmails").value});
+    $("settings").hidden=true;
+    footTimesText(d.schedule_times);
+    toast("设置已保存并即时生效");
+  }catch(e){
+    $("setStatus").textContent=e.message;
+  }finally{
+    $("sSave").disabled=false;
+  }
+}
+
+/* ---- 导出 Excel（手写最小 xlsx：ZIP STORE + CRC32 + inlineStr，零依赖） ---- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function colLetter(i){let s="";i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=(i-1-m)/26;}return s;}
+function escXml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+function zipStore(files){
+  const enc=new TextEncoder(), parts=[], central=[];
+  let offset=0;
+  for(const f of files){
+    const nb=enc.encode(f.name), data=f.data, crc=crc32(data);
+    const h=new Uint8Array(30), dv=new DataView(h.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true);
+    dv.setUint16(12,0x21,true); dv.setUint32(14,crc,true);
+    dv.setUint32(18,data.length,true); dv.setUint32(22,data.length,true);
+    dv.setUint16(26,nb.length,true);
+    parts.push(h,nb,data);
+    central.push({nb,crc,size:data.length,offset});
+    offset+=30+nb.length+data.length;
+  }
+  const cdStart=offset;
+  for(const c of central){
+    const h=new Uint8Array(46), dv=new DataView(h.buffer);
+    dv.setUint32(0,0x02014b50,true); dv.setUint16(4,20,true); dv.setUint16(6,20,true);
+    dv.setUint16(14,0x21,true); dv.setUint32(16,c.crc,true);
+    dv.setUint32(20,c.size,true); dv.setUint32(24,c.size,true);
+    dv.setUint16(28,c.nb.length,true); dv.setUint32(42,c.offset,true);
+    parts.push(h,c.nb);
+    offset+=46+c.nb.length;
+  }
+  const eocd=new Uint8Array(22), dv=new DataView(eocd.buffer);
+  dv.setUint32(0,0x06054b50,true);
+  dv.setUint16(8,central.length,true); dv.setUint16(10,central.length,true);
+  dv.setUint32(12,offset-cdStart,true); dv.setUint32(16,cdStart,true);
+  parts.push(eocd);
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+
+function buildXlsx(data){
+  const enc=new TextEncoder();
+  let rowsXml="";
+  data.forEach((row,ri)=>{
+    let cells="";
+    row.forEach((v,ci)=>{
+      if(v===""||v===null||v===undefined)return;
+      const ref=colLetter(ci)+(ri+1);
+      if(typeof v==="object"&&"n" in v)cells+='<c r="'+ref+'"><v>'+v.n+'</v></c>';
+      else cells+='<c r="'+ref+'" t="inlineStr"><is><t>'+escXml(v)+'</t></is></c>';
+    });
+    rowsXml+='<row r="'+(ri+1)+'">'+cells+'</row>';
+  });
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const sheet=H+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+rowsXml+'</sheetData></worksheet>';
+  const ct=H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>';
+  const rels=H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const wb=H+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="PO收货核对" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  const wbrels=H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
+  return zipStore([
+    {name:"[Content_Types].xml",data:enc.encode(ct)},
+    {name:"_rels/.rels",data:enc.encode(rels)},
+    {name:"xl/workbook.xml",data:enc.encode(wb)},
+    {name:"xl/_rels/workbook.xml.rels",data:enc.encode(wbrels)},
+    {name:"xl/worksheets/sheet1.xml",data:enc.encode(sheet)},
+  ]);
+}
+
+function exportXlsx(){
+  const rows=visibleRows();
+  if(!rows.length){toast("当前筛选无数据可导出",true);return;}
+  const data=[["发票号","PO号","供应商编号","供应商","开票日期","发票金额","订单总量","累计收货","收货进度%","状态"]];
+  for(const r of rows){
+    const q=r.queried&&!r.missing;
+    data.push([r.INV_NO||"",r.EBELN,r.VENDOR_CODE||"",r.VENDOR||"",r.INV_DATE||"",
+      r.AMOUNT?{n:Math.round(r.AMOUNT*100)/100}:"",
+      q?{n:r.ORDER_QTY}:"", q?{n:r.NET_GR_QTY}:"", q?{n:r.RATE}:"",
+      PILL_TXT[stOf(r)]||""]);
+  }
+  const blob=buildXlsx(data);
+  const d=new Date();
+  const fname="PO收货核对_"+d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")+".xlsx";
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("已导出 "+rows.length+" 条 → "+fname);
+}
+
+/* ---- 读取邮件（触发服务端内网 Exchange 抓取，状态直写页头「邮件读取」，完成后刷新清单） ---- */
+async function mailSync(){
+  $("btnMail").disabled=true; setConn("busy","读取邮件中…");
+  opStart("正在读取邮件（内网 Exchange 抓取中，通常需数十秒）……");
+  try{
+    const d=await api("/api/mail_sync",{});
+    setStat("mailStat","邮件读取",{ran_at:nowLocal(),ok:d.ok,log:d.output||""});   // 状态直写页头并持久化（含过程日志）
+    if(d.ok){opDone();toast("邮件读取完成");}
+    else{opFail("邮件读取失败",d.output||"未知错误");}
+    await initLoad();
+  }catch(e){
+    opFail("邮件读取失败",e.message);
+    setStat("mailStat","邮件读取",{ran_at:nowLocal(),ok:false,error:e.message});
+    setConn("err","读取失败");
+    toast("读取失败："+e.message,true);
+  }finally{
+    $("btnMail").disabled=false;
+  }
+}
+
+/* ---- 状态标签点击：执行详情弹窗 ---- */
+function showStatDetail(kind){
+  const id=kind==="mail"?"mailStat":"sapStat";
+  const label=kind==="mail"?"邮件读取":"SAP查询";
+  let rec=null;
+  try{rec=JSON.parse(localStorage.getItem("poclose_"+id)||"null");}catch(e){}
+  $("sdTitle").textContent=label+" · 执行详情";
+  const rows=[];
+  if(!rec){
+    rows.push(["状态","暂无记录"]);
+  }else{
+    rows.push(["执行时间",String(rec.ran_at).replace("T"," ").slice(0,19)]);
+    rows.push(["结果",rec.ok===false?"失败":"成功"]);
+    if(rec.messages!=null)rows.push(["邮件 / 附件 / 发票",rec.messages+" / "+rec.attachments+" / "+rec.invoices]);
+    if(rec.summary)rows.push(["PO 总数 / 完整收货",rec.summary.total+" / "+rec.summary.full]);
+    if(rec.source)rows.push(["数据源",rec.source]);
+    if(rec.note)rows.push(["备注",rec.note]);
+    if(rec.error)rows.push(["错误",rec.error]);
+  }
+  $("sdTable").innerHTML=rows.map(r=>"<tr><td>"+escXml(r[0])+"</td><td>"+escXml(r[1])+"</td></tr>").join("");
+  $("sdLog").textContent=(rec&&(rec.log||rec.output))?(rec.log||rec.output):"（无过程日志）";
+  $("statDlg").hidden=false;
+}
+
+/* ---- 事件绑定 ---- */
+$("btnMail").onclick=mailSync;
+$("opErrX").onclick=()=>{$("opErr").hidden=true;};
+$("mailStat").onclick=()=>showStatDetail("mail");
+$("sapStat").onclick=()=>showStatDetail("sap");
+$("sdClose").onclick=$("sdX").onclick=()=>{$("statDlg").hidden=true;};
+$("statDlg").onclick=e=>{if(e.target.id==="statDlg")$("statDlg").hidden=true;};
+$("btnExport").onclick=exportXlsx;
+$("btnQuery").onclick=querySAP;
+$("btnClose").onclick=closeSelected;
+$("cOk").onclick=doClose;
+$("cCancel").onclick=$("cX").onclick=()=>{$("confirm").hidden=true;};
+$("q").oninput=e=>{state.q=e.target.value.trim();state.page=1;renderTable();};
+
+$("fStatus").onchange=e=>{state.filter=e.target.value;state.page=1;renderTable();};
+$("dFrom").onchange=e=>{state.dFrom=e.target.value;state.page=1;renderTable();};
+$("dTo").onchange=e=>{state.dTo=e.target.value;state.page=1;renderTable();};
+$("pageSize").onchange=e=>{state.pageSize=+e.target.value;state.page=1;renderTable();};
+$("pgPrev").onclick=()=>{if(state.page>1){state.page--;renderTable();}};
+$("pgNext").onclick=()=>{state.page++;renderTable();};
+$("ckAll").onchange=e=>{
+  const on=e.target.checked;
+  for(const r of visibleRows())if(stOf(r)==="FULL"){on?state.selected.add(r.EBELN):state.selected.delete(r.EBELN);}
+  renderTable();
+};
+document.querySelectorAll("table.inv th.sortable").forEach(th=>{
+  th.onclick=()=>{
+    const k=th.dataset.k;
+    if(state.sortK===k)state.sortAsc=!state.sortAsc;
+    else{state.sortK=k;state.sortAsc=true;}
+    document.querySelectorAll("table.inv th .arrow").forEach(a=>a.textContent="");
+    th.querySelector(".arrow").textContent=state.sortAsc?"▲":"▼";
+    renderTable();
+  };
+});
+$("mClose").onclick=$("mCloseX").onclick=()=>{$("modal").hidden=true;};
+$("modal").onclick=e=>{if(e.target.id==="modal")$("modal").hidden=true;};
+$("confirm").onclick=e=>{if(e.target.id==="confirm")$("confirm").hidden=true;};
+$("btnSettings").onclick=openSettings;
+$("sSave").onclick=saveSettings;
+$("sCancel").onclick=$("sX").onclick=()=>{$("settings").hidden=true;};
+$("settings").onclick=e=>{if(e.target.id==="settings")$("settings").hidden=true;};
+$("btnAbout").onclick=()=>{$("about").hidden=false;};
+$("aClose").onclick=$("aX").onclick=()=>{$("about").hidden=true;};
+$("about").onclick=e=>{if(e.target.id==="about")$("about").hidden=true;};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("modal").hidden=true;$("confirm").hidden=true;$("settings").hidden=true;$("about").hidden=true;$("statDlg").hidden=true;hideInvTip();}});
+document.querySelector(".table-wrap").addEventListener("scroll",hideInvTip);
+$("invTip").addEventListener("mouseenter",()=>clearTimeout(tipTimer));  // 鼠标在卡片上：保持显示
+$("invTip").addEventListener("mouseleave",hideInvTipSoon);              // 鼠标离开卡片：延迟收起
+restoreStats();   // 先恢复上次的状态标签（刷新不丢）
+initLoad();
+</script>
+</body>
+</html>
