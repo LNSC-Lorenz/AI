@@ -153,12 +153,20 @@ if [ ! -f "$ENV_FILE" ]; then
 POCLOSE_HOST=0.0.0.0
 POCLOSE_PORT=8088
 # 第一阶段尚无 SAP：csv 模式下点「批量查询 SAP」会提示缺 result.csv（第二阶段生成）；
-# 想先看页面演示效果可临时改为 mock（演示状态，非真实数据）
+# 想先看页面演示效果可临时改为 mock（演示状态，非真实数据）；
+# SAP 侧就绪后改为 rfc（实时直连，无需 result.csv）
 POCLOSE_DATA_SOURCE=csv
 POCLOSE_SCHEDULE_TIMES=03:33,12:33
 POCLOSE_SCHEDULE_NOTIFY=0
 # 通知仅内部记录（SQLite 通知日志 + 服务日志），无任何外部通信
 # Exchange 凭据独立存放于 invoice/exchange.env（600，仅发票任务读取，Web 服务不加载）
+# ---- SAP RFC 连接参数（rfc 模式启用时必填；csv 快照模式无需配置）----
+# 改 POCLOSE_DATA_SOURCE=rfc 后取消注释并填写；systemd EnvironmentFile 自动加载
+# SAP_ASHOST=sap.example.com      # SAP 应用服务器主机名/IP
+# SAP_SYSNR=00                    # 实例编号
+# SAP_CLIENT=100                  # 集团/客户端
+# SAP_RFC_USER=RFC_PO_QUERY       # RFC 通讯用户（只需 Z_OA_GET_POGR_STATUS 执行权限）
+# SAP_RFC_PASS=CHANGE_ME          # 密码原样填写；含空格/特殊字符时用双引号包裹
 EOF
   chmod 600 "$ENV_FILE"
   log "已生成配置模板 $ENV_FILE"

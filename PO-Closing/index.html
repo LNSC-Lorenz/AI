@@ -34,7 +34,7 @@ input,select,textarea,button{font-family:inherit}
 .st-err{color:#dc2626; font-weight:700}
 #mailStat,#sapStat{cursor:pointer}
 #mailStat:hover,#sapStat:hover{text-decoration:underline}
-#sdLog{background:#f7f7f7; border:1px solid var(--border); border-radius:2px; padding:10px; font:12px Consolas,monospace; max-height:240px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px}
+#sdLog{background:#f7f7f7; border:1px solid var(--border); border-radius:2px; padding:10px; font:12px Consolas,monospace; max-height:280px; overflow:auto; white-space:pre; margin-top:8px}   /* pre 不折行：列对齐不崩，超长横向滚动 */
 
 /* ---- KPI ---- */
 .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px}
@@ -65,7 +65,7 @@ input,select,textarea,button{font-family:inherit}
 .kico{width:26px; height:26px; border-radius:2px; background:#f0f0f0; color:var(--navy); display:inline-flex; align-items:center; justify-content:center}
 .kico svg{width:15px; height:15px}
 .kpi.accent .kico{background:var(--green-bg); color:var(--green)}
-.x svg{width:13px; height:13px; display:block; stroke-width:1.8}
+.x svg{width:17px; height:17px; display:block; stroke-width:2.6}
 .search svg{width:14px; height:14px; flex:none; stroke-width:1.6}
 .empty .ico svg{width:30px; height:30px; stroke-width:1.5}
 /* 操作进度条 / 错误条 */
@@ -93,20 +93,36 @@ input,select,textarea,button{font-family:inherit}
 .fld-in:focus{outline:2px solid rgba(0,0,0,.15); border-color:#111}
 .fld-hint{font-size:11.5px; color:var(--muted); line-height:1.5}
 .fld-status{font-size:12px; color:var(--txt2); min-height:16px}
-/* 关于（Markdown 风格：有序列表 + 代码标签 + 引用块脚注） */
-.about-md{font-size:13px; line-height:1.8; color:var(--txt)}
-.about-md ol{margin:0; padding-left:22px}
-.about-md li{margin:8px 0; padding-left:4px}
+/* 关于（软件版本迭代风：应用头 + 版本区块 + 特性列表 + 底部支持） */
+.about-md{font-size:13px; line-height:1.65; color:var(--txt)}
+.about-hero{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-bottom:12px; margin-bottom:14px; border-bottom:1px solid var(--border)}
+.ah-name{font-size:20px; font-weight:700; letter-spacing:.3px}
+.ah-ver{font-family:Consolas,monospace; font-size:12px; font-weight:700; background:#111; color:#fff; border-radius:2px; padding:2px 8px}
+.ah-sub{width:100%; font-size:12px; color:var(--txt2)}
+.rel-head{display:flex; align-items:center; gap:10px; margin-bottom:8px}
+.rel-ver{font-family:Consolas,monospace; font-size:12.5px; font-weight:700; border:1px solid #111; border-radius:2px; padding:1px 8px}
+.rel-date{font-size:12px; color:var(--muted)}
+.about-md ul{margin:0; padding-left:20px}
+.about-md li{margin:5px 0; padding-left:4px}
 .about-md li::marker{font-weight:700}
 .about-md code{font-family:Consolas,monospace; font-size:12px; background:#f4f4f4; border:1px solid var(--border); border-radius:2px; padding:1px 5px; white-space:nowrap}
-.about-md blockquote{margin:14px 0 0; padding:8px 12px; border-left:3px solid #111; background:#f7f7f7; color:var(--txt2); font-size:12px; line-height:1.7}
+.about-principle{margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--txt2); line-height:1.7}
+.about-principle b{color:var(--txt)}
+.about-support{margin-top:10px; font-size:12.5px; color:var(--txt2); display:flex; align-items:center; gap:6px}
+.about-support a,.about-support .chip{font-family:Consolas,monospace; font-size:12.5px; background:#f4f4f4; border:1px solid var(--border); border-radius:2px; padding:4px 9px; color:var(--navy); text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; line-height:1.4}
+.about-support .chip{color:var(--txt2); cursor:default}
+.about-support a:hover{text-decoration:underline}
+.about-support a.teams{padding:5px 9px}
+/* 信息弹窗无底部按钮后，内容区底部补呼吸空间 */
+#modal .dlg-body,#about .dlg-body,#statDlg .dlg-body{padding-bottom:20px}
+.about-support a.teams:hover{text-decoration:none; background:#e8eaf6}
 /* ---- 卡片 / 工具栏 ---- */
 .card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
 .card-head{display:flex; align-items:center; gap:10px; padding:16px 20px 0}
 .card-head h2{font-size:15px; font-weight:600}
 .cnt{margin-left:auto; font-size:12px; color:var(--muted)}
 .toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--border)}
-.search{flex:0 1 200px; display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:2px; padding:0 10px; color:var(--muted)}
+.search{flex:0 1 300px; display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:2px; padding:0 10px; color:var(--muted)}
 .search input{border:0; outline:0; padding:8px 0; font-size:13px; width:100%}
 .sel{border:1px solid var(--border); border-radius:2px; padding:8px 12px; font-size:13px; background:#fff; color:var(--txt)}
 .date-range{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--txt2)}
@@ -127,55 +143,58 @@ table.inv th{position:sticky; top:0; background:#f7f7f7; z-index:2; font-size:12
 th.sortable{cursor:pointer; user-select:none}
 th.sortable:hover{color:var(--navy)}
 th .arrow{font-size:9px; color:var(--navy)}
-table.inv td{padding:7px 6px; border-bottom:1px solid #ececec; font-size:14px; font-variant-numeric:tabular-nums; vertical-align:middle; white-space:nowrap}
+table.inv td{padding:5px 6px; border-bottom:1px solid #ececec; font-size:14px; font-variant-numeric:tabular-nums; vertical-align:middle; white-space:nowrap}
 table.inv tbody tr:hover{background:#f5f5f5}
 
 tr.full td{background:var(--green-row)}
 tr.full{box-shadow:inset 3px 0 0 var(--green)}
 td.num,th.num{text-align:right}
 td.center,th.center{text-align:center}
+table.inv thead th.num{text-align:right}   /* 覆盖 table.inv th 的左对齐：数字列表头与单元格同向右对齐 */
+table.inv thead th.center{text-align:center}   /* 同理：勾选/版式/操作列表头与内容同向居中 */
 .invno{color:var(--navy)}
-.cell-trunc{display:block; max-width:148px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; font-size:13px}
+.cell-trunc{display:inline-block; max-width:155px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; font-size:13px; text-align:right; vertical-align:bottom}
 /* 发票悬浮信息卡 */
 #invTip{position:fixed; z-index:80; display:none; background:#fff; border:1px solid #111; border-radius:2px; box-shadow:0 6px 20px rgba(0,0,0,.18); padding:12px 14px; font-size:12px; width:max-content; max-width:min(860px,92vw); max-height:calc(100vh - 24px); overflow:auto; user-select:text; cursor:text}
 #invTip .tt-title{font-weight:700; font-size:13px; margin-bottom:6px}
 #invTip table{width:100%; border-collapse:collapse}
 #invTip td{padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top}
+#invTip td.tq,#invTip td.tp{font-family:Consolas,monospace; text-align:right}   /* 数量/单价独立列：分隔符按最长内容对齐 */
+#invTip td.tsep{color:#c9c9c9; text-align:center; padding:2px 2px}
 #invTip td:first-child{color:var(--txt2)}
 #invTip .tt-sec{margin:8px 0 4px; font-weight:600; color:var(--txt2); font-size:11px; border-top:1px solid var(--border); padding-top:6px}
 .pono{font-family:Consolas,monospace; font-weight:600; font-size:12.5px}
+.src-badge{color:var(--muted); font-weight:700; font-size:9px; letter-spacing:.4px; font-family:Consolas,monospace; margin-left:1px}
 .copy-btn{display:inline-flex; align-items:center; border:0; background:none; color:var(--muted); cursor:pointer; padding:0; margin-left:6px; opacity:.6; vertical-align:middle}
 .copy-btn:hover{opacity:1; color:var(--txt)}
 .copy-btn svg{width:15px; height:15px; display:block; stroke-width:1.6}
 .amt{font-family:Consolas,monospace; font-weight:700; font-size:15.5px}
 .amt .dec{font-size:.68em; font-weight:700; color:var(--txt2); vertical-align:super; letter-spacing:.5px}
-/* fixed 布局下的显式列宽：未指定的「供应商」列吸收剩余宽度 */
-table.inv th:nth-child(1),table.inv td:nth-child(1){width:36px}
-table.inv th:nth-child(2),table.inv td:nth-child(2){width:160px}
-table.inv th:nth-child(3),table.inv td:nth-child(3){width:114px}
-table.inv th:nth-child(4),table.inv td:nth-child(4){width:80px}
-table.inv th:nth-child(6),table.inv td:nth-child(6){width:102px}
-table.inv th:nth-child(7),table.inv td:nth-child(7){width:118px}
-table.inv th:nth-child(8),table.inv td:nth-child(8){width:150px}
-table.inv th:nth-child(9),table.inv td:nth-child(9){width:108px}
-table.inv th:nth-child(10),table.inv td:nth-child(10){width:88px}
+/* 列宽统一由 <colgroup> 控制（table-layout:fixed 下优先生效）；供应商名称列吸收剩余宽度 */
 table.inv td{overflow:hidden}
 /* 供应商编号：靠右、小字、淡色 */
 .vcode{font-family:Consolas,monospace; font-size:10px; font-weight:700; color:var(--muted); text-align:right}
 .vcode-tilt{display:inline-block; transform:rotate(-6deg)}
-.pbar{display:flex; align-items:center; gap:8px; justify-content:flex-end}
-.pbar .track{width:100px; height:7px; border-radius:2px; background:#eeeeee; overflow:hidden}
-.pbar .fill{height:100%; border-radius:2px; background:#b8b8b8}
-.pbar .fill.full{background:var(--green)}
-.pbar .pct{font-family:Consolas,monospace; font-size:13px; font-weight:600; color:var(--txt); width:48px; text-align:right}
-.pill{display:inline-flex; align-items:center; gap:6px; padding:3px 12px; border-radius:2px; font-size:12px; font-weight:600}
-.pill i{width:6px; height:6px; border-radius:50%; background:currentColor}
+.pbar{display:flex; align-items:center; gap:6px; justify-content:flex-end}
+.pbar .track{width:56px; height:7px; border-radius:2px; background:#d9d9d9; overflow:hidden}
+.pbar .fill{height:100%; border-radius:2px; background:repeating-linear-gradient(45deg,#9e9e9e 0 4px,#e2e2e2 4px 7px)}   /* 未满：斜纹（与实心一眼区分） */
+.pbar .fill.full{background:var(--green)}   /* 完整收货：实心 */
+.pbar .pct{font-family:Consolas,monospace; font-size:13px; font-weight:600; color:var(--txt); width:44px; text-align:right}
+.pill{display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:2px; font-size:11px; font-weight:600}
+.pill i{width:5px; height:5px; border-radius:50%; background:currentColor}
 .p-FULL{background:var(--green-bg); color:var(--green)}
 .p-PARTIAL,.p-NONE,.p-MISS,.p-WAIT{background:var(--gray-bg); color:var(--txt2)}
 .p-NOPO{background:#fff; color:var(--txt2); border:1px dashed #b8b8b8}   /* 缺 PO 号：需人工补录，永不参与 SAP 查询 */
 .p-MARKED{background:#e4e4e4; color:#111}
-.lnk{border:1px solid var(--border); background:#fff; border-radius:2px; padding:5px 12px; font-size:12px; cursor:pointer}
+.lnk{border:1px solid var(--border); background:#fff; border-radius:2px; padding:4px 7px; font-size:12px; cursor:pointer; font-family:inherit}
 .lnk:hover{background:#f2f2f2}
+/* 空值内联补录（PO号/供应商编号）：浅色输入框 + 确认即写 CSV */
+.patch{display:inline-flex; align-items:center; gap:4px}
+.patch input{border:1px dashed #c9c9c9; border-radius:2px; padding:3px 6px; font-size:12px; font-family:Consolas,monospace; color:var(--txt); background:#fafafa; outline:none}
+.patch input:focus{border-color:var(--navy); border-style:solid; background:#fff}
+.patch input::placeholder{color:#b9b9c4; font-family:inherit}
+.patch-ok{border:1px solid #c9c9c9; background:#f4f4f4; color:var(--txt2); border-radius:2px; padding:2px 7px; font-size:12px; cursor:pointer; line-height:1.4}
+.patch-ok:hover{background:#111; color:#fff; border-color:#111}
 input[type=checkbox]{width:15px; height:15px; accent-color:var(--navy); cursor:pointer; vertical-align:middle; display:block; margin:0 auto}
 input[type=checkbox]:disabled{cursor:not-allowed; opacity:.4}
 .empty{padding:48px 0; text-align:center; color:var(--muted)}
@@ -196,6 +215,7 @@ input[type=checkbox]:disabled{cursor:not-allowed; opacity:.4}
 #modal[hidden],#confirm[hidden],#settings[hidden],#about[hidden],#statDlg[hidden]{display:none}
 .dialog{background:#fff; border-radius:2px; width:780px; max-width:94vw; max-height:84vh; overflow:auto; box-shadow:0 8px 30px rgba(0,0,0,.2)}
 .dialog.small{width:440px}
+.dialog.wide{width:1120px}   /* 执行详情：日志列对齐需要更宽 */
 .dlg-head{display:flex; align-items:center; padding:16px 20px 0}
 .dlg-head h3{font-size:15px}
 .x{margin-left:auto; border:0; background:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1}
@@ -207,6 +227,7 @@ input[type=checkbox]:disabled{cursor:not-allowed; opacity:.4}
 table.sub{width:100%; border-collapse:collapse; margin-top:10px}
 table.sub th{font-size:11px; color:var(--txt2); text-align:left; padding:8px 10px; background:#f4f4f4; border-bottom:1px solid var(--border)}
 table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; font-variant-numeric:tabular-nums}
+table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的左对齐，表头与数值同向 */
 #toast{position:fixed; right:24px; bottom:24px; background:#111; color:#fff; padding:12px 18px; border-radius:2px; font-size:13px; box-shadow:0 6px 18px rgba(0,0,0,.25); opacity:0; transition:opacity .25s; z-index:99; max-width:380px; pointer-events:none}
 #toast.show{opacity:1}
 #toast.err{background:#fff; color:#111; border:1px solid #111}
@@ -231,7 +252,6 @@ table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; 
       <span class="meta-text" id="mailStat" title="上一次邮件读取（内网 Exchange 抓取）">邮件读取 —</span>
       <span class="meta-text" id="sapStat" title="上一次 SAP 查询（定时核查/手动）">SAP查询 —</span>
       <span class="conn" id="connTag"><i></i><span id="envTag">未查询</span></span>
-      <span class="meta-text" id="lastRunText"></span>
       <button class="icon-btn" id="btnSettings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></button>
       <button class="icon-btn" id="btnAbout" title="关于"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 7.4v3.4M8 5.1v.2"/></svg></button>
     </div>
@@ -278,16 +298,28 @@ table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; 
     </div>
     <div class="table-wrap">
       <table class="inv">
+        <colgroup>
+          <col style="width:34px">          <!-- 勾选 -->
+          <col style="width:11.6%">         <!-- 发票号（-1/9） -->
+          <col style="width:9.6%">          <!-- PO 号（+1/20） -->
+          <col style="width:7%">            <!-- 供应商编号 -->
+          <col>                             <!-- 供应商名称：弹性占余量 -->
+          <col style="width:7.5%">          <!-- 开票日期（-1/6） -->
+          <col style="width:9%">            <!-- 发票金额 -->
+          <col style="width:118px">         <!-- 收货进度 -->
+          <col style="width:92px">          <!-- SAP 收货状态 -->
+          <col style="width:76px">          <!-- 操作 -->
+        </colgroup>
         <thead><tr>
           <th class="center"><input type="checkbox" id="ckAll" title="全选可关闭行"></th>
-          <th>发票号</th>
+          <th>发票号</th>   <!-- 表头左对齐；票号数字内容靠右（td.num 不变） -->
           <th class="sortable" data-k="EBELN">PO 号 <span class="arrow"></span></th>
           <th class="num"><span class="vcode-tilt">供应商编号</span></th>
           <th>供应商名称</th>
           <th class="sortable" data-k="INV_DATE">开票日期 <span class="arrow"></span></th>
           <th class="num sortable" data-k="AMOUNT">发票金额 <span class="arrow"></span></th>
           <th class="num sortable" data-k="RATE">收货进度 <span class="arrow"></span></th>
-          <th class="center">SAP 收货状态</th>
+          <th class="num">SAP 收货状态</th>
           <th class="center">操作</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
@@ -320,7 +352,6 @@ table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; 
       <div class="meta" id="mMeta"></div>
       <div id="mBody"></div>
     </div>
-    <div class="dlg-foot"><button class="btn" id="mClose">关闭</button></div>
   </div>
 </div>
 
@@ -359,33 +390,37 @@ table.sub td{padding:8px 10px; border-bottom:1px solid #ececec; font-size:13px; 
 </div>
 
 <div id="about" hidden>
-  <div class="dialog">
-    <div class="dlg-head"><h3>关于 · PO-Closing 平台逻辑</h3><button class="x" id="aX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
+  <div class="dialog wide">
+    <div class="dlg-head"><h3>关于</h3><button class="x" id="aX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
     <div class="dlg-body">
       <div class="about-md">
-        <ol>
-          <li><b>发票进</b>　ap-invoice 共享邮箱的发票统一转发到内网 Exchange 邮箱 <code>auto@lechler.com.cn</code> →「读取邮件」（手动，或每天 03:00 / 12:00 定时）→ 解析 XML 附件 → 按年写入 <code>invoice/*.csv</code></li>
+        <div class="about-hero">
+          <span class="ah-name">PO-Closing</span><span class="ah-ver">v1.0</span>
+          <span class="ah-sub">发票清单 × SAP 采购订单收货核查台账</span>
+        </div>
+        <div class="rel-head"><span class="rel-ver">v1.0</span><span class="rel-date">2026-08 · 当前版本</span></div>
+        <ul>
+          <li><b>发票进</b>　ap-invoice 共享邮箱的发票统一转发到内网 Exchange 邮箱 <code>auto@lechler.com.cn</code> →「读取邮件」（手动，或每天 03:00 / 12:00 定时）→ 解析 XML / PDF 附件 → 按年写入 <code>invoice/*.csv</code></li>
           <li><b>载入</b>　打开页面自动合并读取 invoice 文件夹全部 CSV（发票号 / PO号 / 供应商 / 金额 / 日期 / 编号 / 开票内容），去重展示</li>
           <li><b>核查</b>　「批量查询 SAP」按 PO 查净收货（收货 − 冲销退货，含容差），判定 <b>完整收货 / 部分收货 / 未收货 / 查无此单</b>；每天 03:33 / 12:33 自动核查（⚙ 设置里可改时间）</li>
           <li><b>关闭</b>　完整收货行（浅底+黑条）勾选 →「标记关闭选中 PO」→ 服务端 SQLite 留痕；真实写 SAP 关单（<code>BAPI_PO_CHANGE</code>）属第二阶段</li>
           <li><b>留痕 / 导出</b>　通知日志、核查结果、设置全部存本机 SQLite；「导出」把当前筛选结果生成 Excel</li>
-        </ol>
-        <blockquote>技术原则：除内网 Exchange / SAP 外零外部通信；前端纯展示，全部判定逻辑在服务端 · <b>PO-Closing v1.0</b></blockquote>
+        </ul>
+        <div class="about-principle"><b>技术原则</b>　除内网 Exchange / SAP 外零外部通信；前端纯展示，全部判定逻辑在服务端</div>
+        <div class="about-support">支持：<a href="mailto:lorenz.zhang@lechler.com.cn"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3.5" width="13" height="9" rx="1"/><path d="M2.2 4.6 8 9.2l5.8-4.6"/></svg>lorenz.zhang@lechler.com.cn</a> <a class="teams" href="https://teams.microsoft.com/l/chat/0/0?users=lorenz.zhang@lechler.com.cn" target="_blank" rel="noopener" title="打开 Teams 对话"><svg viewBox="0 0 16 16" width="21" height="21"><rect x="1" y="2.5" width="10.5" height="10.5" rx="1.8" fill="#4F5BA9"/><text x="6.2" y="10.6" font-size="7" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif">T</text><circle cx="13" cy="5.6" r="1.9" fill="#7C85C0"/><path d="M10.8 13.5v-3.2c0-.9.9-1.5 2.2-1.5s2.2.6 2.2 1.5v3.2z" fill="#7C85C0"/></svg></a> <span class="chip"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 2h2.6l1.1 3.4-1.7 1.3a9.8 9.8 0 0 0 4.1 4.1l1.3-1.7L14 10.2v2.6a1.2 1.2 0 0 1-1.2 1.2A11.8 11.8 0 0 1 2 3.2 1.2 1.2 0 0 1 3.2 2z"/></svg>8021</span></div>
       </div>
     </div>
-    <div class="dlg-foot"><button class="btn" id="aClose">关闭</button></div>
   </div>
 </div>
 
 <div id="statDlg" hidden>
-  <div class="dialog">
+  <div class="dialog wide">
     <div class="dlg-head"><h3 id="sdTitle">执行详情</h3><button class="x" id="sdX" title="关闭"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></button></div>
     <div class="dlg-body">
       <table class="sub" id="sdTable"></table>
       <div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--txt2)">执行过程</div>
       <pre id="sdLog"></pre>
     </div>
-    <div class="dlg-foot"><button class="btn" id="sdClose">关闭</button></div>
   </div>
 </div>
 
@@ -417,7 +452,9 @@ async function apiGet(path){
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
 function toast(t,err){const e=$("toast");e.textContent=t;e.className="show"+(err?" err":"");setTimeout(()=>{e.className=""},3400);}
 function fmt(n){return (Math.round((+n||0)*1000)/1000).toLocaleString("zh-CN");}
+function strip0(s){s=String(s||"").trim();return /^\d+$/.test(s)?(s.replace(/^0+/,"")||"0"):s;}   // 纯数字物料号去前导零
 function fmtAmt(n){return "¥ "+(+n||0).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtNum(n){return (+n||0).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});}   // 纯数字（无货币符号）
 /* 金额单元格：整数部分正常字号，小数部分缩小淡化 */
 function amtCell(n){
   const c=el("td","num amt");
@@ -437,6 +474,7 @@ function setConn(mode,text){
 }
 function setLoading(on){$("loading").hidden=!on;}
 const ICON_COPY='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3.5 11V3.5a1 1 0 0 1 1-1H11"/></svg>';
+const ICON_PENCIL='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M11.3 2.7a1.4 1.4 0 0 1 2 2L5.8 12.2l-2.8.8.8-2.8 7.5-7.5z"/></svg>';
 function copyText(t){
   const done=()=>toast("已复制 PO 号："+t);
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done));
@@ -476,7 +514,7 @@ function restoreStats(){
 }
 function blankRow(r){
   return Object.assign({queried:false,missing:false,PO_STATUS:"",STATUS_TEXT:"",RATE:0,
-    ORDER_QTY:0,NET_GR_QTY:0,ITEM_COUNT:0,ITEMS:[],CLOSE_MARKED:"",INV_DATE:"",VENDOR_CODE:"",INV_ITEMS:[]}, r);
+    ORDER_QTY:0,NET_GR_QTY:0,ITEM_COUNT:0,ITEMS:[],CLOSE_MARKED:"",INV_DATE:"",VENDOR_CODE:"",INV_ITEMS:[],MANUAL_PO:0,MANUAL_VC:0,SRC:""}, r);
 }
 /* CSV 兜底解析（仅在后端不可达时启用）：发票号,PO号,供应商,金额,开票日期 */
 function normDate(s){
@@ -498,7 +536,7 @@ function parseCsvText(text){
   for(const line of String(text||"").split(/\r?\n/)){
     const p=splitCsv(line);
     if(p.length>=2 && /^\d{6,12}$/.test(p[1]))
-      rows.push(blankRow({INV_NO:p[0],EBELN:p[1],VENDOR:p[2]||"",AMOUNT:parseFloat(p[3])||0,INV_DATE:normDate(p[4]||""),VENDOR_CODE:p[5]||"",INV_ITEMS:parseItemsJson(p[6]||"")}));
+      rows.push(blankRow({INV_NO:p[0],EBELN:p[1],VENDOR:p[2]||"",AMOUNT:parseFloat(p[3])||0,INV_DATE:normDate(p[4]||""),VENDOR_CODE:p[5]||"",INV_ITEMS:parseItemsJson(p[6]||""),SRC:/^(XML|PDF)$/i.test(p[8]||"")?p[8].toUpperCase():""}));
   }
   return rows;
 }
@@ -509,11 +547,16 @@ function mergeRun(run){
   const miss=new Set(run.missing||[]);
   for(const r of state.rows){
     const p=map[r.EBELN];
-    r.queried=true;
-    if(p)Object.assign(r,{missing:false,ITEM_COUNT:p.ITEM_COUNT,ORDER_QTY:p.ORDER_QTY,
-      NET_GR_QTY:p.NET_GR_QTY,RATE:p.RATE,PO_STATUS:p.PO_STATUS,STATUS_TEXT:p.STATUS_TEXT,
-      ITEMS:p.ITEMS||[],CLOSE_MARKED:p.CLOSE_MARKED||""});
-    else{r.missing=miss.has(r.EBELN);r.PO_STATUS="";r.STATUS_TEXT="";r.RATE=0;r.ITEMS=[];}
+    if(p){   // 本次/上次核查覆盖到的行：套用完备状态
+      r.queried=true;
+      Object.assign(r,{missing:false,ITEM_COUNT:p.ITEM_COUNT,ORDER_QTY:p.ORDER_QTY,
+        NET_GR_QTY:p.NET_GR_QTY,RATE:p.RATE,PO_STATUS:p.PO_STATUS,STATUS_TEXT:p.STATUS_TEXT,
+        ITEMS:p.ITEMS||[],CLOSE_MARKED:p.CLOSE_MARKED||""});
+    }else if(miss.has(r.EBELN)){   // 查过但 SAP 无此单
+      r.queried=true; r.missing=true; r.PO_STATUS=""; r.STATUS_TEXT=""; r.RATE=0; r.ITEMS=[];
+    }else{   // 上次核查之后才入库的新行：保持「待查询」（不能显示空白状态）
+      r.queried=false; r.missing=false; r.PO_STATUS=""; r.STATUS_TEXT=""; r.RATE=0; r.ITEMS=[];
+    }
   }
 }
 /* ---- KPI / 筛选 / 排序 ---- */
@@ -573,6 +616,45 @@ function invGroupColors(){
   for(const r of state.rows){ const k=r.INV_NO; if(k&&cnt[k]>1&&!(k in color)) color[k]=GROUP_COLORS[gi++%GROUP_COLORS.length]; }
   return color;
 }
+/* 空值内联补录：浅色输入框 + 确认 → POST /api/patch 写回 CSV；prefill 模式 = 再次编辑（带 ✕ 取消） */
+function makePatchInput(r,field,ph,w,prefill){
+  const wrap=el("span","patch");
+  const inp=el("input"); inp.placeholder=ph; inp.style.width=w+"px";
+  inp.title=prefill?"修改后回车/✓ 写入 CSV；清空并确认 = 删除该值回空状态":"输入后回车或点 ✓，写入 invoice CSV";
+  if(prefill)inp.value=prefill;
+  const ok=el("button","patch-ok","✓"); ok.title="确认写入 CSV";
+  const submit=async()=>{
+    const v=inp.value.trim();
+    if(!v&&!prefill)return;   // 新增模式不允许空；编辑模式允许清空（回空状态）
+    ok.disabled=true;
+    try{
+      await api("/api/patch",{inv_no:r.INV_NO, old_po:r.EBELN||"", field, value:v});
+      if(field==="EBELN"){r.EBELN=v; r.queried=false; r.MANUAL_PO=v?1:0;} else {r.VENDOR_CODE=v; r.MANUAL_VC=v?1:0;}
+      r._edit=null;
+      toast(v?"已写入 CSV":"已清除该值（CSV 已更新）");
+      renderAll();
+    }catch(e){ toast("补录失败："+e.message,true); ok.disabled=false; }
+  };
+  ok.onclick=ev=>{ev.stopPropagation();submit();};
+  inp.onkeydown=ev=>{
+    if(ev.key==="Enter"){ev.preventDefault();submit();}
+    if(ev.key==="Escape"&&prefill){r._edit=null;renderAll();}
+  };
+  wrap.appendChild(inp); wrap.appendChild(ok);
+  if(prefill){
+    const cancel=el("button","patch-ok","✕"); cancel.title="取消";
+    cancel.onclick=ev=>{ev.stopPropagation(); r._edit=null; renderAll();};
+    wrap.appendChild(cancel);
+  }
+  return wrap;
+}
+/* 人工编辑标记（铅笔）：点击再次编辑 */
+function makeEditBtn(r,which){
+  const b=el("button","copy-btn"); b.title="人工补录的值 · 点击再次编辑";
+  b.innerHTML=ICON_PENCIL;
+  b.onclick=ev=>{ev.stopPropagation(); r._edit=which; renderAll();};
+  return b;
+}
 function renderTable(){
   const rows=visibleRows();
   const gColors=invGroupColors();   // 同一发票号多行 → 同色标识
@@ -607,24 +689,33 @@ function renderTable(){
     ck.checked=closable&&state.selected.has(r.EBELN);
     if(closable)ck.onchange=()=>{ck.checked?state.selected.add(r.EBELN):state.selected.delete(r.EBELN);updateSel();};
     ckC.appendChild(ck); tr.appendChild(ckC);
-    const ic=el("td","invno");
+    const ic=el("td","invno num");
     const gc=gColors[r.INV_NO];
     if(gc){ ic.style.borderLeft="3px solid "+gc; ic.style.background=gc+"14"; ic.title="一票多单：该发票含多个 PO（同色为一组）"; }
     const isp=el("span","cell-trunc",r.INV_NO||"—");
     isp.addEventListener("mouseenter",ev=>showInvTip(ev,r));
     isp.addEventListener("mouseleave",hideInvTipSoon);
     ic.appendChild(isp);
+    if(r.SRC)ic.appendChild(el("sup","src-badge",r.SRC));   // XML/PDF 角标紧贴票号右上角
     tr.appendChild(ic);
     const ptc=el("td","pono");
-    ptc.appendChild(document.createTextNode(r.EBELN));
-    const cp=el("button","copy-btn");
-    cp.title="复制 PO 号";
-    cp.innerHTML=ICON_COPY;
-    cp.onclick=ev=>{ev.stopPropagation();copyText(r.EBELN);};
-    ptc.appendChild(cp);
+    if(r.EBELN&&r._edit!=="PO"){
+      ptc.appendChild(document.createTextNode(r.EBELN));
+      const cp=el("button","copy-btn");
+      cp.title="复制 PO 号";
+      cp.innerHTML=ICON_COPY;
+      cp.onclick=ev=>{ev.stopPropagation();copyText(r.EBELN);};
+      ptc.appendChild(cp);
+      if(r.MANUAL_PO)ptc.appendChild(makeEditBtn(r,"PO"));
+    }else{
+      ptc.appendChild(makePatchInput(r,"EBELN","补充PO号",92,r.EBELN));
+    }
     tr.appendChild(ptc);
     const vc=el("td","vcode");
-    vc.appendChild(el("span","vcode-tilt",r.VENDOR_CODE||"—"));
+    if(r.VENDOR_CODE&&r._edit!=="VC"){
+      vc.appendChild(el("span","vcode-tilt",r.VENDOR_CODE));
+      if(r.MANUAL_VC)vc.appendChild(makeEditBtn(r,"VC"));
+    }else vc.appendChild(makePatchInput(r,"VENDOR_CODE","补充编号",70,r.VENDOR_CODE));
     tr.appendChild(vc);
     tr.appendChild(el("td","",r.VENDOR||"—"));
     tr.appendChild(el("td","",r.INV_DATE||"—"));
@@ -633,14 +724,14 @@ function renderTable(){
     if(r.queried&&!r.missing){
       const w=el("div","pbar");
       const track=el("div","track");
-      const fill=el("div","fill"+(r.PO_STATUS==="FULL"?" full":""));
+      const fill=el("div","fill"+((+r.RATE||0)>=100?" full":""));   // 实心只给真正 100%；不足一律斜纹（不看业务状态）
       fill.style.width=r.RATE+"%";
       track.appendChild(fill);
       w.appendChild(track); w.appendChild(el("span","pct",r.RATE+"%"));
       pc.appendChild(w);
     }else pc.textContent="—";
     tr.appendChild(pc);
-    const sc=el("td","center"); sc.appendChild(pillEl(r)); tr.appendChild(sc);
+    const sc=el("td","num"); sc.appendChild(pillEl(r)); tr.appendChild(sc);
     const oc=el("td","center");
     if(r.queried&&!r.missing){
       const b=el("button","lnk","查看详情");
@@ -667,17 +758,19 @@ function buildTipHtml(r){
       ["发票金额",r.AMOUNT?e(fmtAmt(r.AMOUNT)):"—"],
     ])+"</table>";
   if(r.INV_ITEMS&&r.INV_ITEMS.length){
-    const stTxt=!r.queried?"待查询":(r.missing?"查无此单":(PILL_TXT[stOf(r)]||""));
     h+='<div class="tt-sec">开票内容</div><table>';
-    for(const it of r.INV_ITEMS){
-      h+="<tr><td>"+e(it.name||"")+"</td><td>×"+fmt(it.qty||1)+" ｜ "+e(fmtAmt(+(it.total!=null?it.total:it.amount)||0))+" ｜ "+e(stTxt)+"</td></tr>";
+    for(const it of r.INV_ITEMS){   // 只显示 内容/数量/单价数字（数量与单价独立列，分隔符对齐）
+      const q=String(it.qty==null?"":it.qty).trim();
+      let pr=(it.price!=null&&it.price!=="")?+it.price:NaN;
+      if(isNaN(pr)&&+q>0){const tt=+(it.total!=null?it.total:it.amount)||0; if(tt>0)pr=Math.round(tt/(+q)*100)/100;}  // 无单价字段按 金额÷数量 折算
+      h+='<tr><td>'+e(it.name||"")+'</td><td class="tq">'+(q?("×"+fmt(q)):"")+'</td><td class="tsep">｜</td><td class="tp">'+(pr>0?fmtNum(pr):"—")+"</td></tr>";
     }
     h+="</table>";
   }
   if(r.ITEMS&&r.ITEMS.length){
     h+='<div class="tt-sec">行项目明细</div><table>';
     for(const it of r.ITEMS){
-      h+="<tr><td>"+e(it.EBELP)+"</td><td>"+e(it.MATNR||"")+" ｜ 订单 "+fmt(it.ORDER_QTY)+" / 已收 "+fmt(it.NET_GR_QTY)+" "+e(it.MEINS||"")+" ｜ "+e(it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))))+"</td></tr>";
+      h+="<tr><td>"+e(it.EBELP)+"</td><td>"+e(strip0(it.MATNR))+" ｜ 订单 "+fmt(it.ORDER_QTY)+" / 已收 "+fmt(it.NET_GR_QTY)+" "+e(it.MEINS||"")+" ｜ "+e(it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))))+"</td></tr>";
     }
     h+="</table>";
   }
@@ -708,15 +801,14 @@ function showDetail(r){
     +" ｜ 订单总量 "+fmt(r.ORDER_QTY)+" ｜ 累计收货 "+fmt(r.NET_GR_QTY)+" ｜ "+r.STATUS_TEXT;
   const t=el("table","sub");
   const hr=el("tr");
-  ["行项目","物料","工厂","订单数","净收货","差异","交货完成","状态"].forEach((h,i)=>hr.appendChild(el("th",(i>=3&&i<=5)?"num":"",h)));
+  ["行项目","物料","订单数","净收货","差异","状态"].forEach((h,i)=>hr.appendChild(el("th",(i>=2&&i<=4)?"num":"",h)));
   const head=el("thead"); head.appendChild(hr); t.appendChild(head);
   const body=el("tbody");
   for(const it of r.ITEMS){
     const tr=el("tr");
-    [it.EBELP,it.MATNR,it.WERKS,fmt(it.ORDER_QTY),fmt(it.NET_GR_QTY),fmt(it.DIFF_QTY),
-     it.ELIKZ||"",
-     it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货")))]
-      .forEach((v,i)=>tr.appendChild(el("td",(i>=3&&i<=5)?"num":"",v)));
+    [it.EBELP,strip0(it.MATNR),fmt(it.ORDER_QTY),fmt(it.NET_GR_QTY),fmt(it.DIFF_QTY),
+     it.STATUS_TEXT||(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))]
+      .forEach((v,i)=>tr.appendChild(el("td",(i>=2&&i<=4)?"num":"",v)));
     body.appendChild(tr);
   }
   t.appendChild(body);
@@ -740,19 +832,25 @@ function opFail(title,msg){
 /* ---- 主流程：批量查询 SAP ---- */
 async function querySAP(){
   if(!state.rows.length){toast("清单为空——请将发票 CSV 放入 invoice 文件夹后刷新",true);return;}
-  const pos=[...new Set(state.rows.map(r=>r.EBELN).filter(Boolean))];   // 无 PO 号行不参与查询
-  if(!pos.length){toast("清单中没有可查询的 PO 号（均为「无 PO 号」行，需人工补录）",true);return;}
+  const all=[...new Set(state.rows.map(r=>r.EBELN).filter(Boolean))];   // 无 PO 号行不参与查询
+  if(!all.length){toast("清单中没有可查询的 PO 号（均为「无 PO 号」行，需人工补录）",true);return;}
+  const done=new Set(state.rows.filter(r=>r.EBELN&&(stOf(r)==="FULL"||stOf(r)==="MARKED")).map(r=>r.EBELN));
+  const todo=all.filter(p=>!done.has(p));   // 仅用于提示与空转判断；请求仍发全量，跳过由服务端统一处理
+  if(!todo.length){toast("没有需要查询的 PO——完整收货与已标记关闭的 "+done.size+" 笔已跳过");return;}
   $("btnQuery").disabled=true; setLoading(true); setConn("busy","查询中…");
-  opStart("正在批量查询 SAP 收货（"+pos.length+" 笔 PO）……");
+  opStart("正在批量查询 SAP 收货（新查 "+todo.length+" 笔"+(done.size?"，跳过已完成 "+done.size+" 笔":"")+"）……");
   try{
-    const d=await api("/api/po_status",{po_text:pos.join("\n")});
+    // 发全量 PO：服务端跳过已完成项并随响应回传其快照数据，保证响应覆盖所有行（mergeRun 依赖全覆盖）
+    const d=await api("/api/po_status",{po_text:all.join("\n")});
     mergeRun(d);
     opDone();
     setConn("ok","SAP · "+d.source);
     $("footSrc").textContent=d.source;
     $("footInfo").textContent="数据更新于 "+new Date().toLocaleTimeString("zh-CN",{hour12:false});
     setStat("sapStat","SAP查询",{ran_at:nowLocal(),ok:true,source:d.source,summary:d.summary});
-    toast("核查完毕：完整收货 "+d.summary.full+" / "+pos.length+" 笔");
+    toast("核查完毕：新查 "+(d.queried??todo.length)+" 笔（完整收货 "+d.summary.full+"）"
+      +(d.skipped_full?"，跳过已完成 "+d.skipped_full+" 笔":""));
+    if(d.warning)toast(d.warning,true);   // 查无此单：结果已保存，仅提示
   }catch(e){
     opFail("SAP 查询失败",e.message);
     setConn("err","连接失败");
@@ -805,15 +903,15 @@ async function initLoad(){
       setLoading(false);
       return;
     }
-    setConn("ok","清单："+(inv.files.join("、")||"invoice"));
+    const curFiles=inv.files.filter(f=>f.includes(String(new Date().getFullYear())));   // 徽章只显示当年清单
+    setConn("ok","清单："+((curFiles.length?curFiles:inv.files).join("、")||"invoice"));
     try{
       const last=await apiGet("/api/last_run");
       if(last.run){
         mergeRun(last.run);
-        setConn("ok","上次自动核查 "+String(last.run.ran_at).slice(5,16));
-        $("lastRunText").textContent="定时核查 "+String(last.run.ran_at).replace("T"," ").slice(0,16);
+        // 核查时间不再单独显示：页头「SAP查询」徽章（sync_status）已含同一时间，避免三处重复
         $("footSrc").textContent=last.run.source;
-        $("footInfo").textContent="数据更新于 "+String(last.run.ran_at).replace("T"," ").slice(5,16);
+        $("footInfo").textContent="数据更新于 "+String(last.run.ran_at).replace("T"," ").slice(0,16);
       }
     }catch(e2){/* 尚无历史核查结果 */}
     try{   // 页头：上一次邮件读取 / SAP 查询 状态
@@ -1010,7 +1108,7 @@ $("btnMail").onclick=mailSync;
 $("opErrX").onclick=()=>{$("opErr").hidden=true;};
 $("mailStat").onclick=()=>showStatDetail("mail");
 $("sapStat").onclick=()=>showStatDetail("sap");
-$("sdClose").onclick=$("sdX").onclick=()=>{$("statDlg").hidden=true;};
+$("sdX").onclick=()=>{$("statDlg").hidden=true;};
 $("statDlg").onclick=e=>{if(e.target.id==="statDlg")$("statDlg").hidden=true;};
 $("btnExport").onclick=exportXlsx;
 $("btnQuery").onclick=querySAP;
@@ -1040,7 +1138,7 @@ document.querySelectorAll("table.inv th.sortable").forEach(th=>{
     renderTable();
   };
 });
-$("mClose").onclick=$("mCloseX").onclick=()=>{$("modal").hidden=true;};
+$("mCloseX").onclick=()=>{$("modal").hidden=true;};
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").hidden=true;};
 $("confirm").onclick=e=>{if(e.target.id==="confirm")$("confirm").hidden=true;};
 $("btnSettings").onclick=openSettings;
@@ -1048,7 +1146,7 @@ $("sSave").onclick=saveSettings;
 $("sCancel").onclick=$("sX").onclick=()=>{$("settings").hidden=true;};
 $("settings").onclick=e=>{if(e.target.id==="settings")$("settings").hidden=true;};
 $("btnAbout").onclick=()=>{$("about").hidden=false;};
-$("aClose").onclick=$("aX").onclick=()=>{$("about").hidden=true;};
+$("aX").onclick=()=>{$("about").hidden=true;};
 $("about").onclick=e=>{if(e.target.id==="about")$("about").hidden=true;};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("modal").hidden=true;$("confirm").hidden=true;$("settings").hidden=true;$("about").hidden=true;$("statDlg").hidden=true;hideInvTip();}});
 document.querySelector(".table-wrap").addEventListener("scroll",hideInvTip);

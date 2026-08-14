@@ -74,25 +74,35 @@ PYBIN="$APP_DIR/venv/bin/python"
 
 # ---------- 1. SAP NW RFC SDK（可选安装） ----------
 install_sdk() {
-  local zip="$SDK_ZIP"
+  local zip="$SDK_ZIP" src="" tmp=""
   if [ -z "$zip" ]; then
     zip=$(ls sapnwrfc*.zip SAPNWRFC*.zip /opt/sapnwrfc*.zip /opt/SAPNWRFC*.zip 2>/dev/null | head -1 || true)
   fi
-  if [ -z "$zip" ] || [ ! -f "$zip" ]; then
-    log "未找到 SDK zip（从 SAP for Me 下载 Linux x86_64 版后：--with-sdk /path/to/zip）"
+  if [ -z "$zip" ]; then   # 仓库自带已解压 SDK 目录（免下载免打包）
+    zip=$(ls -d "$APP_DIR"/install/linux-nwrfc750P_*/nwrfcsdk 2>/dev/null | head -1 || true)
+  fi
+  if [ -z "$zip" ]; then
+    log "未找到 SDK（仓库应自带 install/linux-nwrfc750P_*/nwrfcsdk；或从 SAP for Me 下载 zip 后 --with-sdk /path/zip）"
     return 1
   fi
-  log "安装 SAP NW RFC SDK: $zip"
-  command -v unzip >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y unzip; }
-  local tmp; tmp=$(mktemp -d)
-  unzip -q "$zip" -d "$tmp"
-  local src
-  if [ -d "$tmp/nwrfcsdk/lib" ]; then src="$tmp/nwrfcsdk"
-  elif [ -d "$tmp/lib" ]; then src="$tmp"
-  else log "zip 结构不识别（未找到 lib 目录）"; rm -rf "$tmp"; return 1; fi
+  if [ -d "$zip" ]; then   # 目录形式（已解压）：直接使用
+    if [ -d "$zip/lib" ]; then src="$zip"
+    elif [ -d "$zip/nwrfcsdk/lib" ]; then src="$zip/nwrfcsdk"
+    else log "目录结构不识别（未找到 lib）: $zip"; return 1; fi
+  else                     # zip 形式：先解压
+    [ -f "$zip" ] || { log "SDK 文件不存在: $zip"; return 1; }
+    command -v unzip >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y unzip; }
+    log "解压 SDK zip: $zip"
+    tmp=$(mktemp -d)
+    unzip -q "$zip" -d "$tmp"
+    if [ -d "$tmp/nwrfcsdk/lib" ]; then src="$tmp/nwrfcsdk"
+    elif [ -d "$tmp/lib" ]; then src="$tmp"
+    else log "zip 结构不识别（未找到 lib 目录）"; rm -rf "$tmp"; return 1; fi
+  fi
+  log "安装 SAP NW RFC SDK: $src → $SDK_HOME"
   mkdir -p "$(dirname "$SDK_HOME")"
   rm -rf "$SDK_HOME"
-  mv "$src" "$SDK_HOME"
+  cp -r "$src" "$SDK_HOME"
   chmod -R 755 "$SDK_HOME"
   echo "$SDK_HOME/lib" > "$SDK_LDCONF"
   ldconfig
@@ -101,7 +111,7 @@ export SAPNWRFC_HOME=$SDK_HOME
 export LD_LIBRARY_PATH=$SDK_HOME/lib:\${LD_LIBRARY_PATH:-}
 EOF
   chmod 644 "$SDK_PROFILE"
-  rm -rf "$tmp"
+  [ -n "$tmp" ] && rm -rf "$tmp"
   log "SDK 部署完成: $SDK_HOME"
 }
 
@@ -118,9 +128,17 @@ if [ ! -f "${SAPNWRFC_HOME:-/nonexistent}/lib/libsapnwrfc.so" ]; then
 fi
 
 # ---------- 2. 安装并验证 pyrfc ----------
-log "安装 pyrfc …"
+# pyrfc 为源码编译：先确保编译工具链就绪（新装 Ubuntu 通常缺 gcc/头文件）
+if ! command -v gcc >/dev/null 2>&1 || ! dpkg -s python3-dev >/dev/null 2>&1; then
+  log "安装编译工具链（build-essential python3-dev）…"
+  apt-get update -qq && apt-get install -y -qq build-essential python3-dev
+fi
+# pyrfc 仓库 2026-05 被 SAP 归档，PyPI 全版本 yanked（issue #372 停止维护）；
+# pip 默认跳过 yanked 版本，必须精确指定版本号才能安装。3.3.1 = 最终版，支持 Python 3.12
+PYRFC_VER=3.3.1
+log "安装 pyrfc==$PYRFC_VER …"
 "$APP_DIR/venv/bin/pip" install -q --upgrade pip
-"$PYBIN" -m pip install -q pyrfc
+"$PYBIN" -m pip install -q "pyrfc==$PYRFC_VER"
 "$PYBIN" -c "from pyrfc import Connection; print('[ok] pyrfc 可用')" \
   && log "pyrfc 验证通过" \
   || { log "pyrfc 安装/验证失败，请检查 SDK 与编译工具链（apt install build-essential python3-dev）"; exit 1; }
@@ -128,8 +146,8 @@ log "安装 pyrfc …"
 # ---------- 3. 追加 RFC 刷新定时任务（幂等） ----------
 if ! grep -q "po_gr_check" "$CRON_FILE" 2>/dev/null; then
   cat >> "$CRON_FILE" <<EOF
-# 每周一 08:00 用 RFC 刷新 PO 收货结果 CSV（csv 数据源）
-0 8 * * 1  root  set -a; . $ENV_FILE; set +a; cd $APP_DIR && $PYBIN rfc/po_gr_check.py po_list.csv result.csv >> $LOG_DIR/po_gr_check.log 2>&1
+# 每周一 08:00 用 RFC 刷新 PO 收货结果 CSV（csv 数据源；脚本自行解析 .env，不经 shell 加载）
+0 8 * * 1  root  cd $APP_DIR && $PYBIN rfc/po_gr_check.py po_list.csv result.csv >> $LOG_DIR/po_gr_check.log 2>&1
 EOF
   chmod 644 "$CRON_FILE"
   log "已追加 RFC 定时刷新任务（每周一 08:00）"
@@ -140,8 +158,13 @@ fi
 # ---------- 4. 完成提示 ----------
 log "================================================"
 log "第二阶段安装完成（SAP NW RFC SDK + pyrfc）"
+if grep -q "^SAP_ASHOST=" "$ENV_FILE" 2>/dev/null; then
+  log "检测到 $ENV_FILE 已配 SAP 参数 ✓"
+else
+  log "⚠ $ENV_FILE 尚未配置 SAP 参数（SAP_ASHOST/SAP_SYSNR/SAP_CLIENT/SAP_RFC_USER/SAP_RFC_PASS）"
+fi
 log "下一步："
-log "  1) SAP 侧部署 Z_RFC_PO_GR_STATUS（见 rfc/README.md，需 ABAP/Basis 配合）"
+log "  1) SAP 侧确认 Z_OA_GET_POGR_STATUS 可用且账号有权限（见 rfc/README.md，找 Basis）"
 log "  2) 编辑 $ENV_FILE：填 SAP_* 连接参数；POCLOSE_DATA_SOURCE 切为 csv（或 rfc 实时）"
 log "  3) systemctl restart poclose"
 log "  4) 首跑验证：cd $APP_DIR && $PYBIN rfc/po_gr_check.py po_list.csv result.csv"

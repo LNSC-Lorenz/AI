@@ -160,6 +160,8 @@ def parse_invoice_xml(data):
                 rec["name"] = tx
             elif nm == "quantity":
                 rec["qty"] = tx
+            elif nm in ("price", "unitprice", "dj"):
+                rec["price"] = tx            # 单价
             elif nm == "totaltaxincludedamount":
                 rec["total"] = tx
             elif nm == "amount":
@@ -191,33 +193,19 @@ PDF_MAX_PAGES = 2                  # 发票字段都在前两页，多页只可�
 # 明细区终止关键字（出现即说明行项目表格已结束）
 ITEM_STOP_KEYS = ("价税合计", "备注", "发票号码", "开票日期", "销售方", "购买方",
                   "合 计", "合计", "收款人", "开票人", "复核")
+# 品名截断关键字（规格列内容粘入品名时在此截断，只保留「内容」本身）
+NAME_CUT_KEYS = ("规格型号", "规格")
 
 
 def _pdf_items(text):
     """尽力从数电票 PDF 文本流还原开票明细行。
 
-    数电票行项目名称恒以 *类别* 开头；pdfminer 可能把每个单元格拆成独立行，
-    故先按行聚合 token（遇到 % 税率视为本行字段齐了），再按
+    数电票行项目名称恒含 *类别* 标记；pdfminer 对表格的文本块切分顺序不可控
+    （可能按列输出、或把上行税额与下行品名粘在同一段），故不依赖原始换行：
+    全文压平后在每个 *类别* 标记前强制断段，再按
     「名称… 单位? 数量 单价 金额 税率% 税额」的尾序切字段。失败容忍：宁缺毋滥。"""
-    groups, cur = [], None
-    for line in (l.strip() for l in text.splitlines()):
-        if not line:
-            continue
-        if line.startswith("*") and line.count("*") >= 2:
-            if cur:
-                groups.append(cur)
-            cur = line.split()
-        elif cur is not None:
-            if any(k in line for k in ITEM_STOP_KEYS):
-                groups.append(cur)
-                cur = None
-                break
-            cur.extend(line.split())
-            if any(re.fullmatch(r"\d+%", t) for t in cur):
-                groups.append(cur)
-                cur = None
-    if cur:
-        groups.append(cur)
+    flat = re.sub(r"\s+", " ", text)
+    flat = re.sub(r"(?=\*[^*\s]{1,10}\*)", "\n", flat)   # 每个 *类别* 标记前断段
 
     def _num(s):
         try:
@@ -226,23 +214,30 @@ def _pdf_items(text):
             return 0
 
     items = []
-    for toks in groups[:50]:
-        if not re.match(r"^\*[^*]+\*", toks[0]):
+    for seg in (s.strip() for s in flat.split("\n")):
+        if not re.match(r"^\*[^*\s]{1,10}\*", seg):
             continue
+        toks = seg.split()
         pi = next((k for k, t in enumerate(toks) if re.fullmatch(r"\d+%", t)), -1)
         if pi >= 3:                      # …数量 单价 金额 税率% 税额
-            qty_s, total_s = toks[pi - 3], toks[pi - 1]
+            qty_s, price_s, total_s = toks[pi - 3], toks[pi - 2], toks[pi - 1]
             mid = toks[1:pi - 3]         # 名称余部（+ 可能的单位）
         else:
-            qty_s, total_s = "", ""
+            qty_s = price_s = total_s = ""
             mid = toks[1:]
+        cut = next((k for k, t in enumerate(mid)   # 明细区后粘附内容 + 规格列内容，均截断
+                    if any(key in t for key in ITEM_STOP_KEYS + NAME_CUT_KEYS)), len(mid))
+        mid = mid[:cut]
         unit = ""
         if mid and not re.search(r"[\d*]", mid[-1]) and len(mid[-1]) <= 4:
             unit = mid.pop()             # 末尾非数字短 token 视为单位（片/件/台/项…）
-        name = (toks[0] + " " + " ".join(mid)).strip()
-        if name:
-            items.append({"name": name[:80], "unit": unit, "qty": qty_s or "1",
+        name = (toks[0] + " " + " ".join(mid)).strip(" ,")
+        if len(name) > 4:
+            items.append({"name": name[:80], "unit": unit, "qty": qty_s,
+                          "price": _num(price_s),
                           "amount": _num(total_s), "total": _num(total_s)})
+        if len(items) >= 50:
+            break
     return items
 
 
@@ -267,6 +262,13 @@ def parse_invoice_pdf(data):
         _log("[skip] PDF 解析失败: %s" % exc)
         return None
     text = re.sub(r"[ \t　]+", " ", text)
+    text = text.replace("＊", "*").replace("％", "%")   # 全角星号/百分号归一
+    if os.getenv("POCLOSE_PDF_DUMP"):                 # 调试：转储提取文本供版式分析
+        try:
+            with open(os.getenv("POCLOSE_PDF_DUMP"), "a", encoding="utf-8") as f:
+                f.write("===== PDF text dump =====\n%s\n\n" % text)
+        except OSError:
+            pass
     if len(text.strip()) < 50:        # 无文字层 = 扫描件/图片 PDF，明确放弃（不做 OCR）
         _log("[skip] PDF 无文字层（扫描件），放弃")
         return None
@@ -315,17 +317,29 @@ def save_by_year(records_by_year):
             with open(path, newline="", encoding="utf-8-sig") as f:
                 for row in csv.reader(f):
                     if len(row) >= 5 and row[0] and row[0] != "发票号":
-                        merged[(row[0], row[1])] = (row + [""] * 7)[:7]
+                        merged[(row[0], row[1])] = (row + [""] * 9)[:9]
         for r in recs:
             key = (r["INV_NO"], r["EBELN"])
+            if not r["EBELN"] and any(k[0] == r["INV_NO"] and k[1] for k in merged):
+                continue   # 该票已有（人工补录的）PO 行：丢弃自动解析的空 PO 行，防重影
             old = merged.get(key)
-            if old and not r["ITEMS_JSON"] and old[6]:
-                r = dict(r, ITEMS_JSON=old[6])   # PDF 版无明细：保留 XML 版已存的开票内容
-            merged[key] = [r[k] for k in CSV_KEYS]
+            nr = [r[k] for k in CSV_KEYS]
+            if old:
+                if not r["ITEMS_JSON"] and old[6]:
+                    nr[6] = old[6]           # PDF 版无明细：保留 XML 版已存的开票内容
+                if len(old) > 7 and old[7]:
+                    nr.append(old[7])        # 保留人工补录标记列（页面铅笔图标依据）
+            src = r.get("SRC", "")
+            if old and len(old) > 8 and old[8] == "XML":
+                src = "XML"              # 来源不降级：曾按 XML 入库的保持 XML
+            if len(nr) < 8:
+                nr.append("")            # 人工标记列占位（patch_row 约定 index 7）
+            nr.append(src)               # 来源列（index 8：XML/PDF，页面「版式」上标）
+            merged[key] = nr
         rows = sorted(merged.values(), key=lambda r: (r[4], r[0], r[1]))
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
-            w.writerow(CSV_HEADER)
+            w.writerow(CSV_HEADER + ["人工标记"])
             w.writerows(rows)
         print("[save] %s -> %d 条（本次新增/更新 %d）" % (path, len(rows), len(recs)))
 
@@ -337,6 +351,17 @@ _LOG = []
 
 def _log(msg):
     _LOG.append(str(msg))
+
+
+def _dw(s):
+    """显示宽度：CJK 全角按 2 列计（等宽 pre/终端内列对齐用）。"""
+    return sum(2 if ord(c) > 0x2E7F else 1 for c in str(s))
+
+
+def _pad(s, w):
+    """按显示宽度右侧补空格到 w 列。"""
+    s = str(s)
+    return s + " " * max(0, w - _dw(s))
     print(msg)
 
 
@@ -492,16 +517,17 @@ def main():
                 try:
                     rec = parse_invoice_xml(content) if kind == "xml" else parse_invoice_pdf(content)
                 except Exception as exc:
-                    _log("[skip] %s（%s）：解析异常 %s" % (name, item.subject, exc))
+                    _log("[skip]  %s（%s）：解析异常 %s" % (name, item.subject, exc))
                     continue
                 if not rec:
-                    _log("[skip] %s（%s）：无法识别为发票" % (name, item.subject))
+                    _log("[skip]  %s（%s）：无法识别为发票" % (name, item.subject))
                     continue
                 if kind == "xml":
                     xml_seen.add(rec["INV_NO"])
                 elif rec["INV_NO"] in xml_seen:
-                    _log("[skip] %s：发票 %s 的 XML 版已解析，PDF 版忽略" % (name, rec["INV_NO"]))
+                    _log("[skip]  %s：发票 %s 的 XML 版已解析，PDF 版忽略" % (name, rec["INV_NO"]))
                     continue
+                rec["SRC"] = "XML" if kind == "xml" else "PDF"   # 来源列（CSV index 8）：页面「版式」上标
                 po_list = list(rec.pop("PO_LIST", []))
                 if not po_list:
                     po_list = extract_po_all(item.subject or "")
@@ -515,8 +541,9 @@ def main():
                 if len(po_list) > 1:
                     _log("[multi] %s | 发票 %s 含 %d 个 PO，已拆多行"
                          % (name, rec["INV_NO"], len(po_list)))
-                _log("[ok] %s | 发票 %s | %s | %s | %s"
-                     % (name, rec["INV_NO"], rec["VENDOR"], rec["AMOUNT"], rec["INV_DATE"]))
+                _log("[ok]    发票 %s | %s | %s | %s | %s"
+                     % (_pad(rec["INV_NO"], 21), rec["INV_DATE"] or "----------",
+                        (rec["AMOUNT"] or "0").rjust(10), _pad(rec["VENDOR"], 34), name))
     except SystemExit:
         write_status(False, error="认证或连接失败（详见控制台输出）")
         raise

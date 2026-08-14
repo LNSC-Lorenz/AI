@@ -16,7 +16,8 @@ import tempfile
 import config
 
 RAW_FIELDS = ["EBELN", "EBELP", "MATNR", "WERKS", "ORDER_QTY", "MEINS",
-              "NET_GR_QTY", "UNTTO", "ELIKZ", "EREKZ", "LOEKZ"]
+              "NET_GR_QTY", "UNTTO", "ELIKZ", "EREKZ", "LOEKZ",
+              "GR_STATUS", "GR_DOCS"]
 
 
 def _read_csv(path, wanted):

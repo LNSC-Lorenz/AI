@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """PO 关单判定核心逻辑（全部业务规则集中于此，前端只做展示）。
 
-判定口径与 rfc/Z_RFC_PO_GR_STATUS.abap 完全一致：
-  净收货 NET_GR_QTY = 收货(SHKZG=S) - 冲销/退货(SHKZG=H)，上游已剔除 103/104 冻结收货
-  可关单 CAN_CLOSE : 净收货 >= 订单数 x (1 - 交货不足容差 UNTTO%)
-  建议 SUGGEST 优先级: DELETED > ALREADY_CLOSED > NO_GR > CLOSABLE > PARTIAL_GR
+判定口径：
+  GR_STATUS（Z_OA_GET_POGR_STATUS 提供）优先：0 未收 / 1 部分 / 2 收货完成
+  无 GR_STATUS 的旧数据回退：净收货 NET_GR_QTY >= 订单数 x (1 - 交货不足容差 UNTTO%) 判可关单
+  建议 SUGGEST 优先级: DELETED > ALREADY_CLOSED > GR_STATUS/容差判定
 """
 
 STATUS_TEXT = {
@@ -33,6 +33,7 @@ def judge_item(row):
     untto = _num(item.get("UNTTO"))
     elikz = str(item.get("ELIKZ") or "").strip().upper()
     loekz = str(item.get("LOEKZ") or "").strip().upper()
+    gr_status = str(item.get("GR_STATUS") or "").strip()   # Z_OA_GET_POGR_STATUS 提供时优先
 
     item["ORDER_QTY"] = round(order_qty, 3)
     item["NET_GR_QTY"] = round(net_gr, 3)
@@ -48,6 +49,10 @@ def judge_item(row):
         suggest = "DELETED"
     elif elikz == "X":
         suggest = "ALREADY_CLOSED"
+    elif gr_status in ("0", "1", "2"):
+        # Z_OA_GET_POGR_STATUS 口径（SAP 侧已判定）：0未收 / 1部分 / 2收货完成
+        suggest = {"0": "NO_GR", "1": "PARTIAL_GR", "2": "CLOSABLE"}[gr_status]
+        item["CAN_CLOSE"] = "X" if gr_status == "2" else ""
     elif net_gr <= 0:
         suggest = "NO_GR"
     elif can_close:

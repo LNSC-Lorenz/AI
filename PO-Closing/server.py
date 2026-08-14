@@ -51,6 +51,38 @@ def judged_with_verification(po_list):
         it["VERIFY"] = ver.get(it["EBELN"] + "|" + it["EBELP"])
     return items, ver
 
+def _saved_pos_map():
+    """读取 last_run 快照中的 PO 级结果：{EBELN: pos_entry}；无快照/异常快照返回 {}。"""
+    snap = storage.get_last_run()
+    if snap and snap.get("ok") and isinstance(snap.get("pos"), list):
+        return {str(p.get("EBELN")): p for p in snap["pos"] if p.get("EBELN")}
+    return {}
+
+
+def merge_last_run(pos_new, missing_new, queried, trigger):
+    """把一次（手动/定时）查询结果合并进 last_run 快照：仅替换本次查到的 PO，
+    其余 PO 状态原样保留——页面刷新/重开已查状态不丢。"""
+    snap = storage.get_last_run() or {}
+    old_pos = snap.get("pos") if isinstance(snap.get("pos"), list) else []
+    old_missing = snap.get("missing") if isinstance(snap.get("missing"), list) else []
+    keep = [p for p in old_pos if str(p.get("EBELN")) not in queried]
+    merged = keep + list(pos_new)
+    merged.sort(key=lambda p: str(p.get("EBELN") or ""))
+    missing = sorted({str(p) for p in old_missing if str(p) not in queried}
+                     | {str(p) for p in missing_new})
+    full = sum(1 for p in merged if p.get("PO_STATUS") == "FULL")
+    storage.save_last_run({
+        "ran_at": datetime.now().isoformat(timespec="seconds"),
+        "ok": True, "trigger": trigger,
+        "source": data_source.get_source().name,
+        "files": snap.get("files", []),
+        "summary": {"total": len(merged) + len(missing), "full": full,
+                    "lack": len(merged) - full, "missing": len(missing)},
+        "pos": merged, "missing": missing,
+        "log": snap.get("log", "")})
+
+
+
 
 def _parse_times(text):
     """解析 '03:33,12:33' 形式的时间表，校验 HH:MM 格式，返回排序去重列表。"""
@@ -148,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/notify/log":
             return self._send_json({"ok": True, "log": storage.list_notify(20)})
         if self.path == "/api/invoices":
-            rows, files = invoices.load_invoices()
+            rows, files = invoices.load_invoices()   # MANUAL_PO/MANUAL_VC 由 CSV 第 8 列带入
             return self._send_json({"ok": True, "invoices": rows, "files": files,
                                     "dir": config.INVOICE_DIR})
         if self.path == "/api/last_run":
@@ -189,6 +221,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._api_verify(payload)
             if self.path == "/api/notify":
                 return self._api_notify(payload)
+            if self.path == "/api/patch":
+                return self._api_patch(payload)
         except ValueError as exc:
             return self._error(400, str(exc))
         except RuntimeError as exc:
@@ -222,20 +256,46 @@ class Handler(BaseHTTPRequestHandler):
     def _api_po_status(self, payload):
         """PO 级收货状态（账页主表）：含行项目明细供下钻，及未查到的 PO 清单。"""
         po_list = parse_po_text(str(payload.get("po_text", "")))
-        items, _ = judged_with_verification(po_list)
-        pos = matching.aggregate_po(items)
-        marks = storage.close_mark_map()
-        for p in pos:
-            p["CLOSE_MARKED"] = "X" if p["EBELN"] in marks else ""
-        found = {p["EBELN"] for p in pos}
-        missing = [p for p in po_list if p not in found]
-        full = sum(1 for p in pos if p["PO_STATUS"] == "FULL")
-        self._send_json({
-            "ok": True, "source": data_source.get_source().name,
-            "pos": pos, "missing": missing,
-            "summary": {"total": len(po_list), "full": full,
-                        "lack": len(po_list) - full, "missing": len(missing)},
-        })
+        force = bool(payload.get("force"))
+        saved = _saved_pos_map()
+        marked = storage.close_mark_map()
+        todo, skipped = [], []
+        for po in po_list:
+            sp = saved.get(po)
+            # 已完整收货 / 已标记关闭的 PO 不再重复查询 SAP，直接套用快照
+            if not force and (po in marked or (sp or {}).get("PO_STATUS") == "FULL"):
+                skipped.append(po)
+            else:
+                todo.append(po)
+        pos_new, missing = [], []
+        if todo:
+            items, _ = judged_with_verification(todo)
+            pos_new = matching.aggregate_po(items)
+            for p in pos_new:
+                p["CLOSE_MARKED"] = "X" if p["EBELN"] in marked else ""
+            found = {p["EBELN"] for p in pos_new}
+            missing = [p for p in todo if p not in found]
+            # 结果合并写回快照：页面刷新/重开状态不丢
+            merge_last_run(pos_new, missing, set(todo), trigger="manual")
+        # 跳过的 PO：套用快照数据返回（CLOSE_MARKED 以最新标记为准）
+        pos_skip = []
+        for po in skipped:
+            sp = saved.get(po)
+            if sp:
+                sp = dict(sp)
+                sp["CLOSE_MARKED"] = "X" if po in marked else ""
+                pos_skip.append(sp)
+        full_new = sum(1 for p in pos_new if p["PO_STATUS"] == "FULL")
+        full_skip = sum(1 for p in pos_skip if p.get("PO_STATUS") == "FULL")
+        out = {"ok": True, "source": data_source.get_source().name,
+               "queried": len(todo), "skipped_full": len(skipped),
+               "pos": pos_new + pos_skip, "missing": missing,
+               "summary": {"total": len(po_list), "full": full_new + full_skip,
+                           "lack": len(po_list) - full_new - full_skip - len(missing),
+                           "missing": len(missing)}}
+        if missing:
+            out["warning"] = "SAP 未返回以下 PO：%s" % ("、".join(missing))
+        self._send_json(out)
 
     def _api_close(self, payload):
         """标记关闭选中的 PO（记录到 SQLite）。
@@ -257,7 +317,37 @@ class Handler(BaseHTTPRequestHandler):
         if len(pos) > config.MAX_PO_PER_QUERY:
             raise ValueError("单次最多 %d 个 PO" % config.MAX_PO_PER_QUERY)
         n = storage.save_close_marks(pos)
+        # 快照同步打上关闭标记：刷新 / 静态托管模式下「已标记关闭」不丢
+        snap = storage.get_last_run()
+        if snap and isinstance(snap.get("pos"), list):
+            changed = False
+            for p in snap["pos"]:
+                if p.get("EBELN") in pos and p.get("CLOSE_MARKED") != "X":
+                    p["CLOSE_MARKED"] = "X"
+                    changed = True
+            if changed:
+                storage.save_last_run(snap)
         self._send_json({"ok": True, "closed": n})
+
+    def _api_patch(self, payload):
+        """手工补录 PO 号 / 供应商编号，写回 invoice CSV（页面空值单元格内联编辑）。"""
+        inv_no = str(payload.get("inv_no", "")).strip()
+        old_po = str(payload.get("old_po", "")).strip()
+        field = str(payload.get("field", "")).strip()
+        value = str(payload.get("value", "")).strip()
+        if not inv_no.isdigit():
+            raise ValueError("发票号无效")
+        if field == "EBELN":
+            if value and not re.fullmatch(r"\d{6,12}", value):
+                raise ValueError("PO 号应为 6-12 位纯数字（留空 = 清除该值）")
+        elif field == "VENDOR_CODE":
+            if value and not re.fullmatch(r"[A-Za-z0-9]{4,12}", value):
+                raise ValueError("供应商编号应为 4-12 位字母数字（留空 = 清除该值）")
+        else:
+            raise ValueError("field 仅支持 EBELN / VENDOR_CODE")
+        if not invoices.patch_row(inv_no, old_po, field, value):
+            raise ValueError("未在 CSV 中找到对应行（发票号 %s）" % inv_no)
+        self._send_json({"ok": True})
 
     def _api_settings_get(self):
         self._send_json({

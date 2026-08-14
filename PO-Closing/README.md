@@ -10,12 +10,12 @@
 └─────────────┘                │   │    ├─ mock  内置演示（默认）            │
                                │   │    ├─ csv   读 rfc/po_gr_check.py 产出 │
                                │   │    └─ rfc   设备上实时调 SAP RFC       │
-                               │   ├─ matching.py   关单判定（同 ABAP 口径）│
+                               │   ├─ matching.py   关单判定（同 GR_STATUS 口径）│
                                │   ├─ storage.py    SQLite 核对/通知记录    │
                                │   └─ notifier.py   一键通知（默认演练）    │
                                └──────────────┬───────────────────────────┘
                                               ▼
-                              SAP: Z_RFC_PO_GR_STATUS（rfc/ 目录）
+                              SAP: Z_OA_GET_POGR_STATUS（OA 侧交付，rfc/ 目录适配）
 ```
 
 ## 1. 目录结构
@@ -24,15 +24,16 @@
 |---|---|
 | `index.html` | 前端页面（纯展示，无业务逻辑，无外部依赖） |
 | `server.py` | HTTP 服务 + API 路由 + 定点定时核查线程 |
-| `matching.py` | 关单判定核心逻辑（与 `rfc/Z_RFC_PO_GR_STATUS.abap` 同口径） |
+| `matching.py` | 关单判定核心逻辑（GR_STATUS 优先，回退 UNTTO 容差判定） |
 | `data_source.py` | 数据源适配：mock / csv / rfc |
 | `invoices.py` | 发票清单读取（合并 `invoice/` 下全部 *.csv） |
 | `storage.py` | SQLite：核对记录、通知日志、关闭标记、最近核查结果 |
 | `notifier.py` | 通知：仅内部（SQLite 通知日志 + 控制台），零外部通信 |
 | `config.py` | 全部配置走环境变量，默认值可直接演示 |
 | `invoice/invoices.csv` | 示例发票清单（页面与定时核查的输入来源，当前 120 条测试数据） |
-| `invoice/exchange_invoice_sync.py` | 内网 Exchange 邮箱 XML 发票抓取（EWS/NTLM，直读 auto@lechler.com.cn，分年存 CSV，用法见 `invoice/README.md`） |
-| `rfc/` | SAP 侧 RFC 函数源码 + 设备部署指南（独立文档） |
+| `invoice/exchange_invoice_sync.py` | 内网 Exchange 邮箱发票抓取（EWS/NTLM，直读 auto@lechler.com.cn，分年存 CSV，**第 9 列写入来源标记 XML/PDF**，用法见 `invoice/README.md`） |
+| `invoice/backfill_src.py` | 一次性回填来源列（存量 CSV 补 XML/PDF 角标数据。规则：有开票明细→XML，无明细有 PO 号→PDF；幂等可重复跑） |
+| `rfc/` | RFC 查询脚本 + 设备部署指南（独立文档） |
 | `install/` | Ubuntu 安装脚本仅 2 个：`bach_POClosing`（平台 + Exchange 发票抓取；`--verify` 验收 / `--uninstall` 卸载）→ `bach_POClosing_SAP`（NW RFC SDK + pyrfc；`--uninstall`，可后置），用法见 `install/README.md` |
 
 **运行要求：Python ≥ 3.8，零第三方依赖**（仅 rfc 数据源模式需在设备上装 pyrfc）。
@@ -53,10 +54,10 @@ python3 server.py
 
 生产级企业应用 UI：页头（标题+连接状态灯+定时核查时间）、KPI 卡、主表卡片（工具栏/表格/表脚）、页脚系统信息；黑白灰为底、KPI 卡状态色点缀（蓝=总数/绿=完整收货/琥珀=部分/红=待确认）；矩形直角、加载动画、空态、确认弹窗、Esc 关闭、响应式；纯 CSS/JS 实现，零外部依赖。
 
-1. **发票清单来源（打开即载入）**：三级兜底——① 后端在线时从 `invoice/` 文件夹读取全部 `*.csv` 合并载入并自动套用最近一次定时核查结果；② 仅静态托管时直接读取 `invoice/invoices.csv`；③ 纯双击打开（file://）时使用内嵌清单快照。格式：`发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容(JSON)` 每行一条（后三列可省略；开票内容为例 `[{"name":"*服务*xx","qty":1,"total":6600.00}]`，悬浮发票号可见）
-2. **批量查询 SAP**：以后端 `/api/po_status` 逐笔核查收货；未查询前状态为「待查询」
+1. **发票清单来源（打开即载入）**：三级兜底——① 后端在线时从 `invoice/` 文件夹读取全部 `*.csv` 合并载入并自动套用最近一次定时核查结果；② 仅静态托管时直接读取 `invoice/invoices.csv`；③ 纯双击打开（file://）时使用内嵌清单快照。格式：`发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容(JSON),人工标记,来源(XML/PDF)` 每行一条（后四列可省略；**来源列 = 发票号右上角的 XML/PDF 角标**，由抓取脚本写入，存量数据跑 `invoice/backfill_src.py` 回填；开票内容为例 `[{"name":"*服务*xx","qty":1,"total":6600.00}]`，悬浮发票号可见）
+2. **批量查询 SAP**：以后端 `/api/po_status` 逐笔核查收货，结果**合并写入服务端快照（刷新/重开页面状态不丢）**；**已完整收货 / 已标记关闭的 PO 自动跳过不再重查**（请求带 `force:1` 可强制）；未查询前状态为「待查询」
 3. **KPI 卡片**：发票 PO 总数 / 完整收货（可关闭，绿色突出）/ 部分收货 / 未收货·待确认（含未查询与查无此单）
-4. **发票 PO 列表**：复选框、发票号、PO 号、供应商、发票金额、收货进度条（完整收货纯黑、其余灰）、SAP 收货状态 pill、查看详情（行项目弹窗）；**完整收货行铺浅灰底 + 黑色左条**，仅完整收货行可勾选；**列头点击排序**（PO号/日期/金额/进度）、表头冻结、**分页显示**（每页 50/100 可选，表脚含范围信息与翻页控件）、表脚显示已选项数与数据更新时间；**导出 Excel**（工具栏按钮，导出当前筛选结果全部页为 .xlsx，原生 JS 手写 ZIP 生成，零依赖）
+4. **发票 PO 列表**：复选框、发票号（数字靠右，右上角 **XML/PDF 来源角标**）、PO 号、供应商、发票金额、收货进度条（完整收货纯黑、其余灰）、SAP 收货状态 pill、查看详情（行项目弹窗，**物料号去前导零显示**）；**完整收货行铺浅灰底 + 黑色左条**，仅完整收货行可勾选；**列头点击排序**（PO号/日期/金额/进度）、表头冻结、**分页显示**（每页 50/100 可选，表脚含范围信息与翻页控件）、表脚显示已选项数与数据更新时间；数字/状态列右对齐，列宽由 `<colgroup>` 统一控制（供应商名称列弹性吸收余量）；**导出 Excel**（工具栏按钮，导出当前筛选结果全部页为 .xlsx，原生 JS 手写 ZIP 生成，零依赖）
 5. **标记关闭选中 PO**：勾选完整收货行 → **确认弹窗** → 一键标记，服务端 `/api/close` 写入 SQLite 留痕（不写 SAP；真实关单走 BAPI_PO_CHANGE，见 rfc/README.md §4），行状态变为「已标记关闭」
 6. **搜索 / 筛选 / 日期检索**：按 PO 号、发票号、供应商搜索；按状态下拉筛选（含「已标记关闭」）；**按开票日期区间检索**（起止日期选择器），日期列可点击排序
 7. **设置（页头齿轮）**：弹窗配置**每日同步时间**（HH:MM 逗号分隔，留空关闭）与**通知接收邮箱**（逗号分隔，仅内部登记）；服务端校验格式后写入 SQLite（settings 表）并即时生效，重启后自动加载，优先级高于环境变量默认值
@@ -90,6 +91,47 @@ python3 /var/www/lnsc-apps/apps/po-closing/server.py
 ```
 
 > 前提：设备已装 SAP NW RFC SDK + pyrfc，且运行 webapp 的 Python 环境能 import pyrfc。
+
+### 4.3 升级部署（重新上传的完整步骤）
+
+**简版 4 步**：整文件夹上传 → 同步落位（排除服务器本地数据）→ 语法检查 → 重启验收。
+（角标回填只有首次或 CSV 重建后才需要，已含在下方第 3 条）
+
+**具体**：
+
+1) **上传**：本机整个 `PO-Closing` 文件夹一次性传到服务器（WinSCP 拖入 / scp -r 均可）：
+
+```powershell
+scp -r c:\Users\zhlo\Documents\VSCode\AI\AI\PO-Closing user@10.4.26.10:/tmp/
+```
+
+2) **同步落位**：rsync 覆盖到应用目录。⚠ 必须排除服务器本地数据——`.env`（SAP 密码）、`poclose.db`（快照/留痕）、`invoice/*.csv`（生产发票清单）；本机仓库不含 .env，但本机的演示 db/csv 不能盖上去：
+
+```bash
+sudo rsync -a --delete \
+  --exclude '.env' --exclude 'poclose.db' --exclude 'venv/' \
+  --exclude 'invoice/*.csv' --exclude 'result.csv' --exclude 'po_list.csv' \
+  --exclude '__pycache__/' \
+  /tmp/PO-Closing/ /var/www/lnsc-apps/apps/po-closing/
+```
+
+3) **语法检查 + 回填角标**（回填仅首次或 CSV 重建后需要，幂等）：
+
+```bash
+cd /var/www/lnsc-apps/apps/po-closing
+venv/bin/python -m py_compile server.py invoices.py matching.py data_source.py \
+  invoice/exchange_invoice_sync.py invoice/backfill_src.py rfc/po_gr_check.py && echo 语法OK
+sudo venv/bin/python invoice/backfill_src.py
+```
+
+4) **重启 + 验收**：
+
+```bash
+sudo systemctl restart poclose
+curl http://127.0.0.1:8088/api/health     # 期望 "source": "rfc"
+```
+
+浏览器 **Ctrl+F5** 强刷后按 §7 验收。**回滚**：`.env` 改 `POCLOSE_DATA_SOURCE=csv`（吃最近一次快照/周快照）→ `sudo systemctl restart poclose`。
 
 ## 5. 环境变量与落地配置
 
@@ -126,8 +168,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/var/www/lnsc-apps/apps/po-closing
-Environment=POCLOSE_DATA_SOURCE=csv
-Environment=POCLOSE_CSV=/var/www/lnsc-apps/apps/po-closing/result.csv
+EnvironmentFile=/var/www/lnsc-apps/apps/po-closing/.env   # 生产配置（含 SAP_*，600 root；模板见 env.production.txt）
 ExecStart=/usr/bin/python3 server.py
 Restart=always
 
@@ -153,6 +194,9 @@ sudo systemctl enable --now poclose
 
 - [ ] `python3 server.py` 启动后浏览器打开页面，自动载入 `invoice/` 清单并显示状态
 - [ ] 点「批量查询 SAP」返回状态 pill（完整收货/部分收货/未收货/查无此单）与进度条
+- [ ] 发票号右上角显示 XML/PDF 角标（整列为空 = 未跑 `invoice/backfill_src.py` 回填）
+- [ ] 详情弹窗物料号去前导零（显示 105635 而非 0000000000105635）
+- [ ] 查询后刷新/重开页面：已查状态全部保留；再次查询时完整收货与已标记关闭的 PO 自动跳过（toast 显示跳过笔数）
 - [ ] 勾选完整收货行 →「标记关闭选中 PO」→ 行变「已标记关闭」，刷新后仍在
 - [ ] 到点（03:33/12:33）后 `last_run` 落库，重开页面自动套用最近核查结果
 - [ ] 页头齿轮打开设置：改同步时间为当前时间后 1~2 分钟 → 保存 → 到点日志打印 `[verify]` 且页面时间更新；填邮箱保存后重开仍在

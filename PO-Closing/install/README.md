@@ -87,7 +87,7 @@ sudo bash install/bach_POClosing_SAP --uninstall                    # 卸载 pyr
 - SDK 为 SAP 闭源组件，需 S 账号从 SAP for Me 下载 **Linux x86_64** 版（本仓库不提供）
 - 前提检测：未完成第一阶段会直接报错退出；已装过 SDK 时自动复用 `/etc/profile.d/nwrfcsdk.sh`
 - 完成后追加 cron（每周一 08:00 RFC 刷新 result.csv），并提示把 `.env` 的 `POCLOSE_DATA_SOURCE` 切为 `csv`/`rfc`
-- SAP 侧函数部署（SE37 `Z_RFC_PO_GR_STATUS`）见 `rfc/README.md`，需 ABAP/Basis 配合
+- SAP 侧函数权限（`Z_OA_GET_POGR_STATUS` 所在函数组 S_RFC 授权）见 `rfc/README.md`，找 Basis
 
 ## 安装结果
 
