@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Multiple Teams Tenant Direct Routing 配置指南（新版界面操作过程）</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  body { font-family: "Microsoft YaHei", "微软雅黑", sans-serif; font-size: 11pt; color: #222; line-height: 1.55; }
+  h1 { font-size: 19pt; color: #1a4b8f; border-bottom: 3px solid #1a4b8f; padding-bottom: 6px; }
+  h2 { font-size: 14pt; color: #1a4b8f; border-left: 5px solid #1a4b8f; padding-left: 8px; margin-top: 26px; }
+  h3 { font-size: 12pt; color: #333; margin-top: 18px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10pt; }
+  th, td { border: 1px solid #999; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #e8eef7; }
+  code { font-family: Consolas, monospace; background: #f2f2f2; padding: 1px 4px; border-radius: 3px; font-size: 9.5pt; }
+  pre { background: #f5f5f5; border: 1px solid #ddd; border-left: 4px solid #1a4b8f; padding: 8px 10px; font-family: Consolas, monospace; font-size: 9.5pt; white-space: pre-wrap; word-break: break-all; }
+  .note { background: #fff8e1; border-left: 4px solid #f0a500; padding: 8px 12px; margin: 10px 0; }
+  .tip { background: #e7f4e4; border-left: 4px solid #2e8b2e; padding: 8px 12px; margin: 10px 0; }
+  .entry { background: #eef3fa; border: 1px solid #c9d6ea; padding: 4px 10px; font-weight: bold; color: #1a4b8f; }
+  .subtitle { color: #555; font-size: 10.5pt; }
+  .step { page-break-inside: avoid; }
+  ol li, ul li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Multiple Teams Tenant Direct Routing 配置指南<br>—— 基于当前新版界面的操作过程</h1>
+<p class="subtitle">依据原文件《Mutiple-Teams Tenant DR Setup guide - For-General - WQYL_ENDVERSION》整理&nbsp;&nbsp;|&nbsp;&nbsp;适用入口：Microsoft 365 管理中心（admin.microsoft.com）+ Teams 管理中心（admin.teams.microsoft.com）</p>
+
+<h2>一、原指南内容概要</h2>
+<p>原 PPT 为<strong>多租户 Teams 直接路由（Direct Routing）</strong>配置指南（运营商/服务商 SBC 场景，子域格式 <code>XXX.alc.aisesz.com</code>），共 7 步：</p>
+<table>
+<tr><th>步骤</th><th>原指南内容</th></tr>
+<tr><td>1</td><td>在 Office 365 中添加子域（TXT 验证，发电信添加 DNS 记录）</td></tr>
+<tr><td>2</td><td>创建活动用户（用子域后缀，分配 O365 + Phone System 许可证）</td></tr>
+<tr><td>3</td><td>创建拨号计划 Dial Plan（含中国号码规范化规则）</td></tr>
+<tr><td>4</td><td>创建 PSTN Usage / 语音路由策略（名称 customization）</td></tr>
+<tr><td>5</td><td>用 PowerShell 创建语音路由（Voice Route 指向运营商 SBC）</td></tr>
+<tr><td>6</td><td>给用户分配 DID 号码和策略（单个/批量）</td></tr>
+<tr><td>7</td><td>在 Teams 客户端验证拨号盘</td></tr>
+</table>
+<p>原 PPT 截图基于旧版 Office 365 管理门户和旧版 Teams 管理中心。以下为<strong>当前新界面</strong>中的对应操作。</p>
+
+<h2>二、新界面操作过程</h2>
+
+<div class="step">
+<h3>步骤 1：添加子域名</h3>
+<p class="entry">入口：Microsoft 365 管理中心 → 左侧"设置" → "域"</p>
+<ol>
+<li>点击 <strong>"+ 添加域"</strong>，输入子域：<code>XXX.alc.aisesz.com</code>（XXX 为客户名）</li>
+<li>验证方式选择 <strong>"添加 TXT 记录"</strong>（即原指南的 "Add your own DNS Records"）</li>
+<li>复制 Microsoft 给出的 <strong>TXT 名称 / TXT 值 / TTL</strong>，发给中国电信，等待电信在 DNS 服务器添加完成</li>
+<li>回到域页面点击 <strong>"验证"</strong></li>
+<li>后续"如何连接域"页面<strong>不要勾选任何服务</strong>（Exchange / SharePoint / Skype for Business），直接下一步 → 完成</li>
+<li>用 <code>ping XXX.alc.aisesz.com</code> 验证解析，公网 IP 应为 <strong>129.227.85.2</strong>（未生效则需等待 DNS 传播）</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>步骤 2：创建活动用户</h3>
+<p class="entry">入口：Microsoft 365 管理中心 → 用户 → 活动用户 → "+ 添加用户"</p>
+<ol>
+<li>用户名后缀选择刚添加的子域，如 <code>TeamsVoice@xxx.alc.aisesz.com</code></li>
+<li>分配许可证：Office 365（如 E3/E5）+ <strong>Teams Phone Standard</strong>（原"Phone System"许可证，E5 已内置）</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>步骤 3：创建拨号计划（Dial Plan）</h3>
+<p class="entry">入口：Teams 管理中心 → 语音(Voice) → 拨号计划(Dial plans) → "+ 添加"</p>
+<ol>
+<li>输入名称和描述</li>
+<li>在"规范化规则"下点击 <strong>"添加"</strong>，逐条创建规则（规则自上而下匹配，限制性强的放上面）：</li>
+</ol>
+<table>
+<tr><th>名称</th><th>模式 (Pattern)</th><th>转换 (Translation)</th></tr>
+<tr><td>LocalFixPhone</td><td><code>^([2-8]\d{7})</code></td><td><code>+86512$1</code>（按城市区号，如上海 <code>+8621$1</code>）</td></tr>
+<tr><td>LocalMobile</td><td><code>^(1\d{10})$</code></td><td><code>+86$1</code></td></tr>
+<tr><td>LongdisMobile</td><td><code>^(01\d{10})$</code></td><td><code>+86$1</code></td></tr>
+<tr><td>LongdisFixPhone</td><td><code>^0((([12]0|2[2-9])\d{5,8}|21\d{5,10}|[3-9][1-9]\d{5,9}|(701|90[1-9])\d{5,7}|80[2678]\d{5}|95\d{3}))\d*(\D+\d+)?$</code></td><td><code>+86$1</code></td></tr>
+<tr><td>Tollfree</td><td><code>^([48]00\d{7}|10800\d{7})\d*$</code></td><td><code>+86$1</code></td></tr>
+<tr><td>Service</td><td><code>^(999|1\d{2}|1\d{4}|9\d{4})$</code></td><td><code>+86$1</code></td></tr>
+<tr><td>International</td><td><code>^(?:\+|00)(1|7|2[07]|...)(?:0)?(\d{6,14})(\D+\d+)?$</code></td><td><code>+$1$2</code></td></tr>
+<tr><td>转分机</td><td><code>^(\d{4})$</code>（4位分机）</td><td>如 <code>+86512628888;ext=$1</code></td></tr>
+</table>
+<ol start="3">
+<li>可用页面上的 <strong>"测试拨号计划"</strong> 输入号码即时验证转换结果</li>
+</ol>
+</div>
+
+
+<div class="step">
+<h3>步骤 4：创建语音路由策略（PSTN Usage）</h3>
+<p class="entry">入口：Teams 管理中心 → 语音(Voice) → 语音路由策略(Voice routing policies) → "+ 添加"</p>
+<ol>
+<li>名称：<code>customization</code></li>
+<li>在"PSTN 使用记录"下点 <strong>"添加 PSTN 使用记录"</strong>；若不存在，点 <strong>"添加"</strong> 现场新建同名记录</li>
+<li>点击"应用" → "保存"</li>
+</ol>
+<div class="tip">✅ 新界面变化：旧版需在单独页面先建 PSTN Usage，现在建策略时可直接内联新建。</div>
+</div>
+
+<div class="step">
+<h3>步骤 5：创建语音路由（Voice Route）</h3>
+<p class="entry">入口：Teams 管理中心 → 语音(Voice) → 直接路由(Direct Routing)</p>
+<div class="tip">✅ 新界面重大变化：原指南此步必须用 PowerShell，现在可直接在界面完成，无需命令行。</div>
+<div class="note">⚠️ 多租户（运营商托管）场景的关键点：按微软现行官方模型（运营商主干中继 carrier trunk + 客户派生中继 derived trunk），<strong>客户租户不需要、也不应在 "SBC" 选项卡自行添加 SBC</strong>（即不要运行 <code>New-CsOnlinePSTNGateway</code>）。主干中继由运营商在其租户中创建；客户租户只需在语音路由中<strong>以"派生中继"方式引用 SBC FQDN</strong>。旧模型（客户租户自建 SBC 条目）已被官方建议尽快迁移到新模型。</div>
+<ol>
+<li>切到 <strong>"语音路由(Voice routes)"</strong> 选项卡 → "+ 添加"（或选择已有语音路由后编辑）</li>
+<li>填写：
+  <ul>
+  <li>名称：<code>customization</code></li>
+  <li>号码模式：<code>^\+</code></li>
+  <li>优先级：<code>1</code></li>
+  </ul></li>
+<li>在 "SBCs enrolled"（已注册的 SBC）下点 <strong>"添加 SBC"</strong> → 在右侧弹出面板选择 <strong>"以派生中继方式添加 SBC (Add SBC as derived trunk)"</strong>，输入本租户的派生中继 FQDN（即步骤 1 已验证的子域，如 <code>XXX.alc.aisesz.com</code>）→ 添加 → 应用<br>（派生中继自动继承运营商主干中继的全部配置参数；若填写的派生中继无效，系统将拒绝保存）</li>
+<li>PSTN 使用记录：选择步骤 4 创建的记录</li>
+</ol>
+<p class="subtitle">注：运营商侧需将派生中继 FQDN 的 DNS 记录解析到其 SBC 的 IP 地址（原指南中公网 IP 129.227.85.2）。</p>
+<p><strong>仍可用 PowerShell 方式</strong>（需 MicrosoftTeams 模块）：</p>
+<pre>Install-Module MicrosoftTeams
+Connect-MicrosoftTeams
+New-CsOnlineVoiceRoute "customization" -NumberPattern '^\+' `
+  -OnlinePstnGatewayList XXX.alc.aisesz.com -Priority 1 `
+  -OnlinePstnUsages "customization"</pre>
+<p class="subtitle">注：派生中继无需运行 <code>New-CsOnlinePSTNGateway</code>；若官方界面暂不可用，官方文档同样认可用 <code>New-CsOnlineVoiceRoute</code> 完成。</p>
+</div>
+
+<div class="step">
+<h3>步骤 6：给用户分配 DID 号码和策略</h3>
+<p class="entry">入口：Teams 管理中心 → 用户 → 管理用户(Manage users) → 点击用户</p>
+<p><strong>单个用户：</strong></p>
+<ol>
+<li><strong>"帐户(Account)"</strong> 选项卡 → "常规信息" → <strong>已分配的电话号码</strong> → 编辑 → 号码类型选 <strong>Direct Routing</strong>，输入 E.164 格式 DID，如 <code>+8651262888002</code> → 应用（此操作会自动为用户启用企业语音）</li>
+<li><strong>"策略(Policies)"</strong> 选项卡 → 编辑 → 分配：语音路由策略 = <code>customization</code>、拨号计划 = 步骤 3 创建的计划</li>
+</ol>
+<p><strong>批量分配：</strong></p>
+<ul>
+<li>在"管理用户"列表勾选多个用户 → 使用顶部的<strong>编辑设置 / 分配策略</strong>批量操作；或用 PowerShell：</li>
+</ul>
+<pre>Set-CsPhoneNumberAssignment -Identity user@xxx.alc.aisesz.com `
+  -PhoneNumber "+8651262888002" -PhoneNumberType DirectRouting
+Grant-CsOnlineVoiceRoutingPolicy -Identity user@... -PolicyName "customization"
+Grant-CsTenantDialPlan -Identity user@... -PolicyName "你的拨号计划名"</pre>
+<p class="subtitle">注：自 Teams PowerShell 7.9.0（2026 年 7 月）起，<code>Set-CsPhoneNumberAssignment</code> 的主参数名改为 <code>-TelephoneNumber</code> / <code>-NumberType</code>，旧参数名 <code>-PhoneNumber</code> / <code>-PhoneNumberType</code> 保留为别名，向下兼容，原有脚本无需修改。</p>
+<div class="note">⚠️ 注意事项（沿用原指南）：<br>
+• 所有 Teams 语音用户必须有 <strong>Teams Phone（Phone System）许可证</strong><br>
+• 共存模式必须为 <strong>Teams only</strong>；若是 Islands 模式需先向微软咨询迁移方案<br>
+• 旧命令 <code>Set-CsUser -OnPremLineURI</code> 已被 <code>Set-CsPhoneNumberAssignment</code> 取代</div>
+</div>
+
+<div class="step">
+<h3>步骤 7：验证拨号盘</h3>
+<p>用户在 Teams 客户端打开"通话" → 应显示拨号盘和自己的 DID 号码。若不显示：<strong>注销重新登录</strong>，或等待一段时间让 Microsoft 后台同步生效。</p>
+</div>
+
+<h2>三、外呼规则对照（原指南附表）</h2>
+<table>
+<tr><th>呼叫类型</th><th>用户拨号格式</th><th>规范化后 (E.164)</th></tr>
+<tr><td>Teams 主叫号码</td><td>+86512xxxxxxxxx</td><td>+8651262888002</td></tr>
+<tr><td>本地固话</td><td>8 位（62881234）</td><td>+8651262881234</td></tr>
+<tr><td>长途固话</td><td>区号+号码（02162881234）</td><td>+862162881234</td></tr>
+<tr><td>本地手机</td><td>11 位（18612345678）</td><td>+8618612345678</td></tr>
+<tr><td>长途手机</td><td>12 位（018612345678）</td><td>+86018612345678</td></tr>
+<tr><td>国际</td><td>00+国家码+号码（0085262881234）</td><td>+85287654321</td></tr>
+</table>
+
+<h2>四、新旧界面主要差异总结</h2>
+<ol>
+<li><strong>域管理</strong>：旧 O365 门户 → 新 Microsoft 365 管理中心"设置 → 域"</li>
+<li><strong>Phone System 许可证</strong> → 现名 <strong>Teams Phone Standard</strong></li>
+<li><strong>PSTN Usage</strong>：旧版独立页面先建 → 新版可在语音路由策略内联创建</li>
+<li><strong>语音路由</strong>：旧版只能 PowerShell → 新版"语音 → 直接路由 → 语音路由"选项卡界面化配置</li>
+<li><strong>DID 分配</strong>：旧版用户页"帐户 → 编辑" → 新版"管理用户 → 帐户 → 已分配的电话号码"，且命令行改用 <code>Set-CsPhoneNumberAssignment</code></li>
+</ol>
+
+<p class="subtitle">—— 文档结束 ——</p>
+</body>
+</html>
+
+

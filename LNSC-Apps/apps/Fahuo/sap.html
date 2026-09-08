@@ -1,0 +1,145 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAP模式 | LNSC 发货全链系统</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="App.ico">
+</head>
+<body>
+<div class="layout">
+
+  <!-- 左侧：模式导航 -->
+  <aside class="sidebar-left">
+    <div class="mode">
+      <div class="mode-num">- 1 -</div>
+      <a class="mode-btn" href="index.html">录单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 2 -</div>
+      <a class="mode-btn" href="print.html">下单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 3 -</div>
+      <a class="mode-btn" href="list.html">清单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 4 -</div>
+      <a class="mode-btn active" href="sap.html">SAP模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 5 -</div>
+      <a class="mode-btn" href="hmi.html">可视化模式</a>
+    </div>
+  </aside>
+
+  <!-- 中间：SAP Business One (HANA) 交货单清单 -->
+  <main class="main">
+    <header class="title-bar">
+      <h1>LNSC 发货全链系统</h1>
+      <span class="tb-mid">LNSC Full-Chain Delivery System</span>
+      <div class="title-right">
+        <span class="tb-brand">Logistics</span>
+        <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
+        <button class="btn icon-btn" type="button" title="警告" aria-label="警告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <span class="api-dot" id="apiDot" title="API 状态检测中…"></span>
+        <button class="btn icon-btn" type="button" title="设置" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn icon-btn" type="button" title="关于" aria-label="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </header>
+
+    <div class="sap-main">
+      <div class="sap-win sap-list">
+
+        <!-- 窗口标题栏 -->
+        <div class="sap-title">
+          <span>交货 - 清单</span>
+          <span class="sap-title-sub">SAP Business One · HANA 数据库：LNSC_HANA</span>
+          <span class="sap-win-btns">—　▢　✕</span>
+        </div>
+
+        <!-- 工具栏 -->
+        <div class="sap-toolbar">
+          <span class="sap-tb" id="sapRefresh">⟳ 刷新</span>
+          <span class="sap-tb">打印(P)</span><span class="sap-tb">导出(E)</span>
+          <span class="sap-filter">
+            状态
+            <select id="sapStatus">
+              <option value="">全部</option>
+              <option value="open" selected>未清</option>
+              <option value="closed">已清</option>
+            </select>
+          </span>
+          <span class="sap-filter">客户 <input id="sapCust" type="text" placeholder="代码/名称"></span>
+        </div>
+
+        <!-- DN 清单网格（表头固定 + 数据区滚动） -->
+        <div class="sap-grid-wrap table-wrap">
+          <div class="header-wrap">
+            <table class="order-table sap-grid">
+              <colgroup>
+                <col class="colS-no"><col class="colS-so"><col class="colS-cust"><col class="colS-name">
+                <col class="colS-date"><col class="colS-st"><col class="colS-sum">
+                <col class="colS-prio"><col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
+              </colgroup>
+              <thead>
+                <tr class="sap-grp">
+                  <th colspan="7">SAP 交货单信息</th>
+                  <th colspan="5">录单 / 下单信息</th>
+                </tr>
+                <tr><th>编号</th><th>SO</th><th>客户代码</th><th>客户名称</th><th>过账日期</th>
+                    <th>状态</th><th>总计</th><th>优先级</th><th>类型</th><th>承运商</th><th>运单号</th><th>快递状态</th></tr>
+              </thead>
+            </table>
+          </div>
+          <div class="table-section">
+            <table class="order-table sap-grid">
+              <colgroup>
+                <col class="colS-no"><col class="colS-so"><col class="colS-cust"><col class="colS-name">
+                <col class="colS-date"><col class="colS-st"><col class="colS-sum">
+                <col class="colS-prio"><col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
+              </colgroup>
+              <tbody id="sapBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="sap-status">表单：交货 - 清单 (ODLN)　|　公司账套：LNSC_HANA　|　<span id="sapCount">就绪</span></div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 右侧：发货统计 -->
+  <aside class="sidebar-right">
+    <div class="stat">
+      <div class="stat-label">昨日发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日待发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">超时未发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">计划发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日回单</div>
+      <div class="stat-value">16</div>
+    </div>
+  </aside>
+
+</div>
+<script src="mock.js"></script>
+<script src="stats.js"></script>
+<script src="topbar.js"></script>
+<script src="sap.js"></script>
+</body>
+</html>

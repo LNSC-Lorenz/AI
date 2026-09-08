@@ -84,13 +84,16 @@ const upload = multer({
   dest: path.join(__dirname, '.uploads_tmp'),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB per file
   fileFilter: (req, file, cb) => {
-    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.env','.wasm', '.sh', '.abap', '.c', '.cpp', '.h', '.mf', '.smf', '.so', '.50', '.gitignore'];
+    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.env','.wasm', '.sh', '.abap', '.c', '.cpp', '.h', '.mf', '.smf', '.so', '.50', '.traineddata','.gitignore'];
     const ext = path.extname(file.originalname).toLowerCase();
     // 无扩展名文件（bash 安装脚本、SDK 工具等）放行
     if (ext === '' || allowed.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('File type not allowed: ' + ext));
+      // multer 1.x 将文件名按 latin1 解码，中文文件名需转回 utf8
+      let name = file.originalname;
+      try { name = Buffer.from(name, 'latin1').toString('utf8'); } catch (e) { /* 保持原名 */ }
+      cb(new Error('不支持的文件类型 (File type not allowed): ' + name + ' [' + ext + ']'));
     }
   }
 });
@@ -100,6 +103,8 @@ app.post('/api/upload', (req, res, next) => {
   upload.any()(req, res, (err) => {
     if (err) {
       console.error('[Upload] multer error:', err.message);
+      // 清理本次请求已接收的临时文件，避免 .uploads_tmp 目录堆积
+      (req.files || []).forEach(f => fs.unlink(f.path, () => {}));
       return res.status(400).json({ error: err.message });
     }
     next();

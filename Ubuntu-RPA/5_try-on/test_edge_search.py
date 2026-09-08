@@ -24,7 +24,7 @@ from pathlib import Path
 from prefect import flow, task, get_run_logger
 from prefect.flows import Flow
 
-WORK_POOL = "windows-rpa-pool" if platform.system() == "Windows" else "linux-rpa-pool"
+WORK_POOL = "windows-gui-pool" if platform.system() == "Windows" else "linux-rpa-pool"
 
 FLOWS_DIR = Path(__file__).parent.resolve()
 

@@ -25,7 +25,7 @@ def _norm_date(s):
 
 
 def _parse(parts):
-    """发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容JSON,人工标记（后三列可选；PO号可空。
+    """发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容JSON,人工标记,来源,邮件到达日期（后五列可选；PO号可空。
     人工标记列：PO/VC/PO,VC —— 表示对应列的值来自页面手工补录，前端据以显示铅笔图标）"""
     if len(parts) >= 2 and parts[1].isdigit() and 6 <= len(parts[1]) <= 12:
         return (parts[0], parts[1],
@@ -35,9 +35,10 @@ def _parse(parts):
                 parts[5] if len(parts) > 5 else "",
                 parts[6] if len(parts) > 6 else "",
                 parts[7] if len(parts) > 7 else "",
-                parts[8] if len(parts) > 8 else "")
+                parts[8] if len(parts) > 8 else "",
+                parts[9] if len(parts) > 9 else "")
     if len(parts) == 1 and parts[0].isdigit() and 6 <= len(parts[0]) <= 12:
-        return ("", parts[0], "", "", "", "", "", "", "")        # 纯 PO 号行
+        return ("", parts[0], "", "", "", "", "", "", "", "")        # 纯 PO 号行
     if parts and parts[0].isdigit() and len(parts[0]) >= 6:
         return (parts[0], "",                            # 数电票无 PO 号：仍载入展示
                 parts[2] if len(parts) > 2 else "",
@@ -46,7 +47,8 @@ def _parse(parts):
                 parts[5] if len(parts) > 5 else "",
                 parts[6] if len(parts) > 6 else "",
                 parts[7] if len(parts) > 7 else "",
-                parts[8] if len(parts) > 8 else "")
+                parts[8] if len(parts) > 8 else "",
+                parts[9] if len(parts) > 9 else "")
     return None
 
 
@@ -71,7 +73,7 @@ def load_invoices(directory=None):
                 parsed = _parse(parts)
                 if not parsed:
                     continue   # 表头/非法行跳过
-                inv, po, vendor, amount, inv_date, vcode, items_raw, marks, src = parsed
+                inv, po, vendor, amount, inv_date, vcode, items_raw, marks, src, mail_date = parsed
                 key = inv + "|" + po
                 if key in seen:
                     continue
@@ -85,7 +87,8 @@ def load_invoices(directory=None):
                              "VENDOR_CODE": vcode, "INV_ITEMS": _parse_items(items_raw),
                              "MANUAL_PO": 1 if "PO" in marks.split(",") else 0,
                              "MANUAL_VC": 1 if "VC" in marks.split(",") else 0,
-                             "SRC": src.strip().upper() if src.strip().upper() in ("XML", "PDF") else ""})
+                             "SRC": src.strip().upper() if src.strip().upper() in ("XML", "PDF") else "",
+                             "MAIL_DATE": _norm_date(mail_date)})   # 邮件到达日期（CSV index 9，真实接收日期）
     # 供应商编号按公司名称 1:1 回填：仅当全库中该公司只对应一个编号时补缺；
     # 编号来源行带人工标记（VC）时，回填行同样标记（铅笔 = 值的人工来源）
     vc_map, vc_conflict, vc_manual = {}, set(), set()
@@ -125,7 +128,7 @@ def patch_row(inv_no, old_po, field, value, directory=None):
             continue
         changed = False
         for row in rows[1:]:
-            row += [""] * (8 - len(row))
+            row += [""] * (10 - len(row))   # 补齐到 10 列：含 来源(8)/邮件到达日期(9)，写回不错位
             if row[0].strip() == inv_no and row[1].strip() == old_po:
                 row[col] = value
                 marks = [m for m in row[7].split(",") if m]

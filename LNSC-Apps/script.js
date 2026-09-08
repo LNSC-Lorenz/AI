@@ -445,11 +445,19 @@ form.addEventListener('submit', async e => {
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
+      // 无论状态码如何，只要返回 JSON 就优先解析，提取服务端 error 字段
+      let data = null;
+      if (contentType.includes('application/json')) {
+        try { data = await res.json(); } catch (e) { data = null; }
+      }
+      if (!res.ok) {
+        const msg = (data && data.error) ? data.error : ('服务器返回异常 (' + res.status + ')');
+        throw new Error(msg);
+      }
+      if (!data) {
         const text = await res.text();
         throw new Error('服务器返回异常 (' + res.status + '): ' + text.substring(0, 100));
       }
-      const data = await res.json();
       if (data.success) {
         hint.textContent = '✅ 上传成功！共 ' + data.files.length + ' 个文件 → ' + data.url;
         hint.style.color = '#22c55e';
@@ -491,7 +499,9 @@ form.addEventListener('submit', async e => {
         setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }, 2000);
       }
     } catch (err) {
-      hint.textContent = '❌ 网络错误: ' + err.message;
+      // 区分真正的网络异常与服务端返回的校验错误
+      const isNetworkErr = (err instanceof TypeError);
+      hint.textContent = (isNetworkErr ? '❌ 网络错误: ' : '❌ 上传失败: ') + err.message;
       hint.style.color = '#ef4444';
       submitBtn.textContent = '❌ 失败';
       setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }, 2000);

@@ -62,8 +62,8 @@ python3 server.py
 6. **搜索 / 筛选 / 日期检索**：按 PO 号、发票号、供应商搜索；按状态下拉筛选（含「已标记关闭」）；**按开票日期区间检索**（起止日期选择器），日期列可点击排序
 7. **设置（页头齿轮）**：弹窗配置**每日同步时间**（HH:MM 逗号分隔，留空关闭）与**通知接收邮箱**（逗号分隔，仅内部登记）；服务端校验格式后写入 SQLite（settings 表）并即时生效，重启后自动加载，优先级高于环境变量默认值
 8. **一键通知 / 定时核查**：沿用服务端 `/api/notify` 与定点调度线程（见 §5），结果写入内部通知日志
-9. **读取邮件**：工具栏按钮手动触发内网 Exchange 发票抓取（`POST /api/mail_sync` → 服务端子进程执行 `exchange_invoice_sync.py`，脚本自动加载 `invoice/exchange.env`），执行结果**即时写到页头「邮件读取」状态标签**，完成后自动刷新清单；记录留痕通知日志
-10. **导出**：工具栏「导出」把当前筛选结果（全部页）导出为 .xlsx
+9. **读取邮件**：工具栏按钮手动触发内网 Exchange 发票抓取（`POST /api/mail_sync` → 服务端子进程执行 `exchange_invoice_sync.py`，脚本自动加载 `invoice/exchange.env`），执行结果**即时写到页头「邮件读取」状态标签**，完成后自动刷新清单；记录留痕通知日志。**PO 识别口径：仅认 4526 开头 10 位数字**（XML/PDF/邮件主题一致，无任意数字兜底，详见 `invoice/README.md`）
+10. **导出 / 分享**：工具栏「导出」把当前筛选结果（全部页）导出为 .xlsx；「邮件」把当前筛选（或勾选）的行经本机 Outlook 发给「设置」里的通知邮箱；「Teams」打开与通知邮箱的会话并附上清单（均为浏览器调起本机应用，服务端零参与）
 
 ## 4. 切换真实数据（上线步骤）
 
@@ -132,6 +132,17 @@ curl http://127.0.0.1:8088/api/health     # 期望 "source": "rfc"
 ```
 
 浏览器 **Ctrl+F5** 强刷后按 §7 验收。**回滚**：`.env` 改 `POCLOSE_DATA_SOURCE=csv`（吃最近一次快照/周快照）→ `sudo systemctl restart poclose`。
+
+### 4.4 统一入口（外网应用代理适配 · 方案 A）
+
+前端 API 为双模式寻址：**同源反代优先**（`/apps/po-closing/api/` → 8088），探测失败自动退回 `:8088` 直连（内网旧用法不受影响）。门户 nginx 补丁一键部署/撤销：
+
+```bash
+sudo bash install/bach_POClosing_proxy             # 部署：自动备份 → 打补丁 → nginx -t 校验（失败自回滚）→ reload → 自检
+sudo bash install/bach_POClosing_proxy --rollback  # 撤销：恢复最近一次备份并 reload
+```
+
+补丁内容：`/apps/po-closing/api/` → `127.0.0.1:8088/api/`（前缀剥离，超时 610s 覆盖邮件抓取）、`/apps/ctms/api/` → `127.0.0.1:3001/api/`、CSP `connect-src` 收敛为 `'self'`。生效后经 `connect.xxxproxy.net` 等只转发 443 的代理访问即全通；内网直连 `:8088` 与域名访问两种方式均保留。脚本按指纹 `root /var/www/lnsc-apps` 自动定位门户配置；定位失败时用 `nginx -T | grep lnsc-apps` 找到配置文件后手动指定：`sudo NGINX_CONF=/etc/nginx/该文件 bash install/bach_POClosing_proxy`
 
 ## 5. 环境变量与落地配置
 

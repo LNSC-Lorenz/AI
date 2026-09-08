@@ -20,7 +20,7 @@ from prefect import flow, task, get_run_logger
 from prefect.flows import Flow
 
 # 根据 Worker 操作系统自动选择 Work Pool
-WORK_POOL = "windows-rpa-pool" if platform.system() == "Windows" else "linux-rpa-pool"
+WORK_POOL = "windows-gui-pool" if platform.system() == "Windows" else "linux-rpa-pool"
 
 # Flow 代码所在目录（即本文件所在目录，Worker 执行时从这里加载代码）
 FLOWS_DIR = Path(__file__).parent.resolve()

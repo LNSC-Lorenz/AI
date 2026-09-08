@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+#===============================================================================
+# bach_CTMS — CTMS 刀具出入库系统 Ubuntu 一键安装（与 PO-Closing 同一运维模式）
+#
+# 用法（在 CTMS 根目录执行）：
+#   sudo bash install/bach_CTMS              # 安装/更新：全部上传后执行本脚本
+#                                            #   自动保留 toolinventory-server.db 等运行数据
+#                                            #   并重启服务加载新代码
+#   sudo bash install/bach_CTMS --uninstall  # 卸载服务（保留数据目录）
+#
+# 安装内容：
+#   1. /var/www/lnsc-apps/apps/ctms   前端文件（页面 + 初始化Excel）
+#   2. /opt/ctms                      后端 server.js + 数据库 + 用户表（web root 之外，防下载）
+#   3. /etc/systemd/system/ctms.service  常驻服务（端口 3001，开机自启）
+#
+# 架构（与 PO-Closing 相同：nginx 统一入口 + 每应用独立后端）：
+#   浏览器 ⇄ nginx :443/80 ─┬─ /apps/ctms/      静态前端
+#                           └─ /apps/ctms/api/ → 127.0.0.1:3001/api/（本服务）
+#   nginx 反代补丁由 PO-Closing/install/bach_POClosing_proxy 统一打入（已含 CTMS 段，
+#   幂等，可重复执行）；前端另有 http://<服务器>:3001 直连兜底，故不配 nginx 也能用。
+#===============================================================================
+set -euo pipefail
+
+APP_DIR=/var/www/lnsc-apps/apps/ctms
+SRV_DIR=/opt/ctms
+SERVICE_FILE=/etc/systemd/system/ctms.service
+SRC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# 源目录与工作目录相同时（从工作目录内直接执行）跳过拷贝
+SAME_DIR=0
+[ "$(readlink -f "$SRC_DIR")" = "$(readlink -f "$APP_DIR")" ] && SAME_DIR=1
+
+UNINSTALL=0
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) UNINSTALL=1 ;;
+    -h|--help)   sed -n '2,24p' "$0"; exit 0 ;;
+    *) echo "未知参数: $arg（用 --help 查看用法）"; exit 1 ;;
+  esac
+done
+
+log(){ echo "[bach_CTMS] $*"; }
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "请以 root 运行：sudo bash install/bach_CTMS"; exit 1
+fi
+
+# ---------- 卸载 ----------
+if [ "$UNINSTALL" -eq 1 ]; then
+  log "停止并卸载服务…"
+  systemctl disable --now ctms 2>/dev/null || true
+  rm -f "$SERVICE_FILE"
+  systemctl daemon-reload
+  log "已移除服务。数据保留于 $SRV_DIR 与 $APP_DIR（彻底清除请手动 rm -rf）"
+  exit 0
+fi
+
+# ---------- 1. Node 运行环境（需要 node:sqlite：22.13+ 免 flag，22.5~22.12 加 flag） ----------
+NODEBIN=$(command -v node || true)
+SQLITE_FLAG=""
+if [ -n "$NODEBIN" ] && node -e "require('node:sqlite')" 2>/dev/null; then
+  log "node: $NODEBIN ($(node --version))，原生支持 node:sqlite"
+elif [ -n "$NODEBIN" ] && node --experimental-sqlite -e "require('node:sqlite')" 2>/dev/null; then
+  SQLITE_FLAG="--experimental-sqlite"
+  log "node: $NODEBIN ($(node --version))，需 --experimental-sqlite"
+else
+  # 系统 Node 过旧（如 v20）：下载独立 Node 24 到 $SRV_DIR/node，仅供 CTMS 使用，不影响系统 Node
+  NODE_VER=v24.19.0
+  case "$(uname -m)" in
+    x86_64)  NODE_ARCH=linux-x64 ;;
+    aarch64) NODE_ARCH=linux-arm64 ;;
+    *) echo "不支持的架构: $(uname -m)"; exit 1 ;;
+  esac
+  log "系统 Node 过旧（$([ -n "$NODEBIN" ] && node --version || echo 未安装)），下载独立 $NODE_VER 供 CTMS 专用…"
+  mkdir -p "$SRV_DIR"
+  PKG="node-$NODE_VER-$NODE_ARCH"
+  URL="https://nodejs.org/dist/$NODE_VER/$PKG.tar.gz"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fSL "$URL" -o "/tmp/$PKG.tar.gz"
+  else
+    wget -q "$URL" -O "/tmp/$PKG.tar.gz"
+  fi
+  rm -rf "$SRV_DIR/node"
+  mkdir -p "$SRV_DIR/node"
+  tar -xzf "/tmp/$PKG.tar.gz" -C "$SRV_DIR/node" --strip-components=1
+  rm -f "/tmp/$PKG.tar.gz"
+  NODEBIN="$SRV_DIR/node/bin/node"
+  SQLITE_FLAG=""
+  "$NODEBIN" -e "require('node:sqlite')" || { echo "独立 Node 也不支持 node:sqlite，请检查下载"; exit 1; }
+  log "node: $NODEBIN ($("$NODEBIN" --version))，CTMS 专用"
+fi
+
+# ---------- 2. 前端文件 → /var/www/lnsc-apps/apps/ctms ----------
+if [ "$SAME_DIR" -eq 0 ]; then
+  log "拷贝前端文件 → $APP_DIR"
+  mkdir -p "$APP_DIR"
+  cp -f "$SRC_DIR/index.html" "$SRC_DIR/styles.css" "$SRC_DIR/app.js" "$SRC_DIR/db.js" \
+        "$SRC_DIR/user_info.js" "$SRC_DIR/xlsx.full.min.js" \
+        "$SRC_DIR/车间工具库存管理-信息表.xlsx" "$APP_DIR/"
+else
+  log "源目录即工作目录，跳过前端拷贝"
+fi
+
+# ---------- 3. 后端文件 → /opt/ctms（web root 之外，保护 .db / user_info.txt） ----------
+log "拷贝后端文件 → $SRV_DIR"
+mkdir -p "$SRV_DIR"
+cp -f "$SRC_DIR/server.js" "$SRC_DIR/user_info.txt" "$SRV_DIR/"
+[ -f "$SRC_DIR/initial_inventory.js" ] && cp -f "$SRC_DIR/initial_inventory.js" "$SRV_DIR/" || true
+# 数据库：已存在则保留（库存数据优先）；没有则用仓库内的（或留空由 initial_inventory.js seed）
+if [ ! -f "$SRV_DIR/toolinventory-server.db" ] && [ -f "$SRC_DIR/toolinventory-server.db" ]; then
+  cp -f "$SRC_DIR/toolinventory-server.db" "$SRV_DIR/"
+  log "已导入初始数据库 toolinventory-server.db"
+else
+  log "保留已有数据库（或无库时将由 initial_inventory.js 首次 seed）"
+fi
+
+
+# ---------- 4. systemd 服务（端口 3001） ----------
+log "配置 systemd 服务 ctms.service …"
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=CTMS Tool Inventory Server
+After=network.target
+
+[Service]
+WorkingDirectory=$SRV_DIR
+ExecStart=$NODEBIN $SQLITE_FLAG $SRV_DIR/server.js 3001
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable ctms
+systemctl restart ctms    # 重启加载新代码：重复执行本脚本 = 更新部署
+
+# ---------- 5. 防火墙放行 3001（前端直连兜底，与 PO-Closing 8088 同模式） ----------
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow 3001/tcp >/dev/null 2>&1 && log "已放行 3001/tcp（ufw）" || true
+fi
+
+# ---------- 6. 完成与验证 ----------
+log "================================================"
+if systemctl is-active --quiet ctms; then
+  log "服务状态: active → http://127.0.0.1:3001"
+else
+  log "服务状态异常，请检查: journalctl -u ctms -e"
+  exit 1
+fi
+sleep 1
+if curl -sf http://127.0.0.1:3001/api/health >/dev/null; then
+  log "验证通过: /api/health → {\"ok\":true}"
+  STATES=$(curl -sf http://127.0.0.1:3001/api/states | grep -o 'uniqueIdentifier' | wc -l || true)
+  log "库存状态记录数: $STATES"
+else
+  log "注意: 健康检查未通过，请查看 journalctl -u ctms -e"
+fi
+log "下一步（nginx 统一入口反代，含 CTMS 段，幂等）："
+log "  sudo bash PO-Closing/install/bach_POClosing_proxy"
+log "  验证: curl http://127.0.0.1/apps/ctms/api/health"
+log "卸载: sudo bash install/bach_CTMS --uninstall"
+

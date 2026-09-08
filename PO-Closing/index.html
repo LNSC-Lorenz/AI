@@ -61,6 +61,8 @@ input,select,textarea,button{font-family:inherit}
 #btnMail svg{color:#2563eb}
 #btnClose svg{color:#1e8e4f}
 #btnClose:hover svg{color:#fff}
+#btnOutlook,#btnTeams,#btnCopy{padding:6px 10px}   /* 纯图标按钮：收窄 */
+#btnOutlook svg,#btnTeams svg,#btnCopy svg{width:20px; height:20px}   /* 图标放大 */
 .kpi-top{display:flex; align-items:center; gap:8px}
 .kico{width:26px; height:26px; border-radius:2px; background:#f0f0f0; color:var(--navy); display:inline-flex; align-items:center; justify-content:center}
 .kico svg{width:15px; height:15px}
@@ -69,12 +71,12 @@ input,select,textarea,button{font-family:inherit}
 .search svg{width:14px; height:14px; flex:none; stroke-width:1.6}
 .empty .ico svg{width:30px; height:30px; stroke-width:1.5}
 /* 操作进度条 / 错误条 */
-.opbar{margin:0 20px; padding:10px 0 0; display:flex; align-items:center; gap:10px}
+.opbar{margin:0 20px; height:40px; display:flex; align-items:center; gap:10px}   /* 加高整行，内容上下居中 */
 .opbar[hidden]{display:none}
-.op-track{flex:1; max-width:420px; height:8px; border-radius:2px; background:#edf0f4; overflow:hidden}
+.op-track{flex:1; height:8px; border-radius:2px; background:#edf0f4; overflow:hidden}   /* 无宽度上限：占满整行 */
 .op-track i{display:block; height:100%; width:40%; background:#111; border-radius:2px; animation:indet 1.1s ease-in-out infinite}
 @keyframes indet{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
-.op-text{font-size:12px; color:var(--txt2)}
+.op-text{font-size:14px; font-weight:600; color:var(--txt); margin-left:auto; text-align:right; white-space:nowrap}   /* 文字靠右·加粗加大 */
 .op-err{margin:10px 20px 0; padding:9px 12px; background:#fdecec; border-left:3px solid #dc2626; border-radius:2px; font-size:12.5px; display:flex; gap:10px; align-items:flex-start}
 .op-err[hidden]{display:none}
 .op-err b{color:#dc2626; flex:none}
@@ -144,15 +146,17 @@ th.sortable{cursor:pointer; user-select:none}
 th.sortable:hover{color:var(--navy)}
 th .arrow{font-size:9px; color:var(--navy)}
 table.inv td{padding:5px 6px; border-bottom:1px solid #ececec; font-size:14px; font-variant-numeric:tabular-nums; vertical-align:middle; white-space:nowrap}
-table.inv tbody tr:hover{background:#f5f5f5}
+table.inv tbody tr:hover td{background:#eaeaea}   /* 悬停反馈：明显深于完整收货行底色（td 层才盖得住 full 行底色） */
 
 tr.full td{background:var(--green-row)}
+table.inv tbody tr.full:hover td{background:#e2e2e2}   /* 完整收货行的悬停反馈：再深一档 */
 tr.full{box-shadow:inset 3px 0 0 var(--green)}
 td.num,th.num{text-align:right}
 td.center,th.center{text-align:center}
 table.inv thead th.num{text-align:right}   /* 覆盖 table.inv th 的左对齐：数字列表头与单元格同向右对齐 */
 table.inv thead th.center{text-align:center}   /* 同理：勾选/版式/操作列表头与内容同向居中 */
 .invno{color:var(--navy)}
+.inv-sub{font-size:9.5px; font-weight:700; color:var(--muted); vertical-align:sub; margin-right:6px; font-family:Consolas,monospace}   /* 同号发票序号下标（色随分组），与票号间距约半字符 */
 .cell-trunc{display:inline-block; max-width:155px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; font-size:13px; text-align:right; vertical-align:bottom}
 /* 发票悬浮信息卡 */
 #invTip{position:fixed; z-index:80; display:none; background:#fff; border:1px solid #111; border-radius:2px; box-shadow:0 6px 20px rgba(0,0,0,.18); padding:12px 14px; font-size:12px; width:max-content; max-width:min(860px,92vw); max-height:calc(100vh - 24px); overflow:auto; user-select:text; cursor:text}
@@ -160,6 +164,7 @@ table.inv thead th.center{text-align:center}   /* 同理：勾选/版式/操作�
 #invTip table{width:100%; border-collapse:collapse}
 #invTip td{padding:2px 8px 2px 0; white-space:nowrap; vertical-align:top}
 #invTip td.tq,#invTip td.tp{font-family:Consolas,monospace; text-align:right}   /* 数量/单价独立列：分隔符按最长内容对齐 */
+#invTip td.tm{font-family:Consolas,monospace}   /* 行项目物料号：等宽对齐 */
 #invTip td.tsep{color:#c9c9c9; text-align:center; padding:2px 2px}
 #invTip td:first-child{color:var(--txt2)}
 #invTip .tt-sec{margin:8px 0 4px; font-weight:600; color:var(--txt2); font-size:11px; border-top:1px solid var(--border); padding-top:6px}
@@ -222,6 +227,10 @@ input[type=checkbox]:disabled{cursor:not-allowed; opacity:.4}
 .x:hover{color:var(--txt)}
 .dlg-body{padding:12px 20px}
 .meta{font-size:12px; color:var(--txt2)}
+#mMeta{display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 16px; line-height:1.6}
+#mMeta .lb{color:var(--muted)}
+#mMeta .vl{color:var(--txt); font-weight:600}
+#mMeta .vl.mono{font-family:Consolas,monospace}
 .dlg-foot{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px 18px}
 .confirm-text{font-size:13.5px; padding:14px 20px 0; line-height:1.7}
 table.sub{width:100%; border-collapse:collapse; margin-top:10px}
@@ -235,7 +244,7 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
 @media(max-width:768px){.page{padding:16px 12px}.page-head h1{font-size:17px}}
 /* 1080p 适配：加宽内容区、表格高度随视口伸展 */
 @media(min-width:1500px){
-  .page{max-width:1600px}
+  .page{max-width:1880px}
   .kpis{grid-template-columns:repeat(4,1fr)}
   .table-wrap{max-height:calc(100vh - 400px)}
 }
@@ -285,6 +294,9 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
       <button class="btn" id="btnMail"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="12" height="9" rx="1"/><path d="M2.5 4.5L8 9l5.5-4.5"/></svg>读取邮件</button>
       <button class="btn primary" id="btnQuery"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.6v3h-3"/></svg>批量查询 SAP</button>
       <button class="btn green" id="btnClose"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 8.6l3.2 3 7.2-7.2"/></svg>标记关闭选中 PO</button>
+      <button class="btn" id="btnCopy" title="仅复制：把当前筛选（或勾选）的行复制到剪贴板"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3.5 11V3.5a1 1 0 0 1 1-1H11"/></svg></button>
+      <button class="btn" id="btnOutlook" title="把当前筛选（或勾选）的行以邮件发给「设置」里的通知邮箱（调起本机 Outlook）"><svg viewBox="0 0 16 16" fill="none" stroke="#0F6CBD" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="3.4" width="12.8" height="9.2" rx="1.2"/><path d="M2.4 4.6 8 9.2l5.6-4.6"/></svg></button>
+      <button class="btn" id="btnTeams" title="打开与「设置」里通知邮箱的 Teams 会话，并附上当前筛选（或勾选）的行"><svg viewBox="0 0 16 16"><rect x="1" y="2.5" width="10.5" height="10.5" rx="1.8" fill="#4F5BA9"/><text x="6.2" y="10.6" font-size="7" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif">T</text><circle cx="13" cy="5.6" r="1.9" fill="#7C85C0"/><path d="M10.8 13.5v-3.2c0-.9.9-1.5 2.2-1.5s2.2.6 2.2 1.5v3.2z" fill="#7C85C0"/></svg></button>
       <button class="btn" id="btnExport"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7M5 7l3 3 3-3M2.5 12.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5"/></svg>导出</button>
     </div>
     <div class="opbar" id="opbar" hidden>
@@ -301,10 +313,12 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
         <colgroup>
           <col style="width:34px">          <!-- 勾选 -->
           <col style="width:11.6%">         <!-- 发票号（-1/9） -->
-          <col style="width:9.6%">          <!-- PO 号（+1/20） -->
-          <col style="width:7%">            <!-- 供应商编号 -->
+          <col style="width:7.25%">         <!-- PO 号（再 +1/4） -->
+          <col style="width:112px">         <!-- 供应商编号（再 +1/4） -->
           <col>                             <!-- 供应商名称：弹性占余量 -->
-          <col style="width:7.5%">          <!-- 开票日期（-1/6） -->
+          <col style="width:92px">          <!-- 开票日期 -->
+          <col style="width:100px">         <!-- 邮件到达日期 -->
+          <col style="width:92px">          <!-- 凭证日期（RFC BLDAT 最新） -->
           <col style="width:9%">            <!-- 发票金额 -->
           <col style="width:118px">         <!-- 收货进度 -->
           <col style="width:92px">          <!-- SAP 收货状态 -->
@@ -312,11 +326,13 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
         </colgroup>
         <thead><tr>
           <th class="center"><input type="checkbox" id="ckAll" title="全选可关闭行"></th>
-          <th>发票号</th>   <!-- 表头左对齐；票号数字内容靠右（td.num 不变） -->
+          <th style="padding-left:3em">发票号</th>   <!-- 表头文字向右缩进 3 字符；票号数字内容靠右（td.num 不变） -->
           <th class="sortable" data-k="EBELN">PO 号 <span class="arrow"></span></th>
           <th class="num"><span class="vcode-tilt">供应商编号</span></th>
           <th>供应商名称</th>
           <th class="sortable" data-k="INV_DATE">开票日期 <span class="arrow"></span></th>
+          <th class="sortable" data-k="MAIL_DATE">邮件到达日期 <span class="arrow"></span></th>
+          <th class="sortable" data-k="BLDAT">凭证日期 <span class="arrow"></span></th>
           <th class="num sortable" data-k="AMOUNT">发票金额 <span class="arrow"></span></th>
           <th class="num sortable" data-k="RATE">收货进度 <span class="arrow"></span></th>
           <th class="num">SAP 收货状态</th>
@@ -324,7 +340,7 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
-      <div id="loading" class="loading" hidden><span class="spinner"></span>正在查询 SAP 收货数据…</div>
+      <div id="loading" class="loading" hidden><span class="spinner"></span><span id="loadingText">正在载入…</span></div>
     </div>
     <div class="table-foot">
       <span id="selInfo" class="sel-info" hidden>已选 <b id="selN">0</b> 项</span>
@@ -430,13 +446,28 @@ table.sub th.num,table.sub td.num{text-align:right}   /* 覆盖 table.sub th 的
 "use strict";
 /* 纯展示层：所有判定/聚合/留痕均在服务端完成 */
 const $=id=>document.getElementById(id);
-const state={rows:[], filter:"ALL", q:"", dFrom:"", dTo:"", selected:new Set(), sortK:null, sortAsc:true, page:1, pageSize:50};
+const state={rows:[], filter:"ALL", q:"", dFrom:"", dTo:"", selected:new Set(), sortK:"INV_DATE", sortAsc:false, page:1, pageSize:50};   // 首次载入默认：开票日期降序（最新在前）
 
 function headers(){return {"Content-Type":"application/json"};}
-/* API 直连后端 8088（与 CTMS 同模式：浏览器直连后端端口，不经门户转发）。
-   自动取当前主机名：门户/独立/局域网 IP 访问均适用。 */
-const API_ORIGIN=location.protocol+"//"+location.hostname+":8088";
-function relApi(path){path=String(path);return API_ORIGIN+(path.startsWith("/")?path:"/"+path);}
+/* API 双模式寻址（方案 A 统一入口）：
+   ① 同源相对路径 <页面目录>api/ —— 经 nginx/应用代理反代，内外网统一 443/80 入口
+   ② 探测失败退回 :8088 直连 —— 内网旧用法、file:// 独立打开均兼容 */
+let _apiOrigin=null;
+function _fallbackOrigin(){return location.protocol+"//"+location.hostname+":8088";}
+async function detectApi(){
+  if(/^https?:$/.test(location.protocol)){
+    const dir=location.origin+location.pathname.replace(/[^/]*$/,"");   // 页面目录（尾带 /）
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),3000);
+    try{
+      const r=await fetch(dir+"api/health",{cache:"no-store",signal:ctl.signal});
+      if(r.ok){_apiOrigin=dir.replace(/\/+$/,""); return;}   // 存页面目录（无尾斜杠）；调用方路径自带 /api 前缀
+    }catch(e){}
+    finally{clearTimeout(t);}
+  }
+  _apiOrigin=_fallbackOrigin();
+}
+function relApi(path){path=String(path);path=path.startsWith("/")?path:"/"+path;
+  return (_apiOrigin||_fallbackOrigin())+path;}
 async function api(path,payload){
   const r=await fetch(relApi(path),{method:"POST",headers:headers(),body:JSON.stringify(payload||{})});
   const d=await r.json().catch(()=>({ok:false,error:"响应解析失败"}));
@@ -472,7 +503,7 @@ function setConn(mode,text){
   else if(mode==="err")e.innerHTML=text+' [<b class="st-err">✗</b>]';
   else e.textContent=text;
 }
-function setLoading(on){$("loading").hidden=!on;}
+function setLoading(on,text){if(text)$("loadingText").textContent=text;$("loading").hidden=!on;}
 const ICON_COPY='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3.5 11V3.5a1 1 0 0 1 1-1H11"/></svg>';
 const ICON_PENCIL='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M11.3 2.7a1.4 1.4 0 0 1 2 2L5.8 12.2l-2.8.8.8-2.8 7.5-7.5z"/></svg>';
 function copyText(t){
@@ -514,7 +545,7 @@ function restoreStats(){
 }
 function blankRow(r){
   return Object.assign({queried:false,missing:false,PO_STATUS:"",STATUS_TEXT:"",RATE:0,
-    ORDER_QTY:0,NET_GR_QTY:0,ITEM_COUNT:0,ITEMS:[],CLOSE_MARKED:"",INV_DATE:"",VENDOR_CODE:"",INV_ITEMS:[],MANUAL_PO:0,MANUAL_VC:0,SRC:""}, r);
+    ORDER_QTY:0,NET_GR_QTY:0,ITEM_COUNT:0,ITEMS:[],CLOSE_MARKED:"",INV_DATE:"",VENDOR_CODE:"",INV_ITEMS:[],MANUAL_PO:0,MANUAL_VC:0,SRC:"",MAIL_DATE:"",BLDAT:""}, r);
 }
 /* CSV 兜底解析（仅在后端不可达时启用）：发票号,PO号,供应商,金额,开票日期 */
 function normDate(s){
@@ -531,17 +562,28 @@ function splitCsv(line){   // 支持双引号包裹字段（第 7 列开票内�
   out.push(cur);return out.map(s=>s.trim());
 }
 function parseItemsJson(s){try{const v=JSON.parse(s);return Array.isArray(v)?v:[];}catch(e){return[];}}
+/* 凭证日期：该 PO 全部收货凭证中最新的 BLDAT（YYYYMMDD → YYYY-MM-DD；无凭证 → 空） */
+function bldatOf(r){
+  let max="";
+  for(const it of (r.ITEMS||[])){
+    for(const d of parseItemsJson(it.GR_DOCS)){
+      const b=String(d.BLDAT||"");
+      if(/^\d{8}$/.test(b)&&b>max)max=b;
+    }
+  }
+  return max?max.slice(0,4)+"-"+max.slice(4,6)+"-"+max.slice(6):"";
+}
 function parseCsvText(text){
   const rows=[];
   for(const line of String(text||"").split(/\r?\n/)){
     const p=splitCsv(line);
     if(p.length>=2 && /^\d{6,12}$/.test(p[1]))
-      rows.push(blankRow({INV_NO:p[0],EBELN:p[1],VENDOR:p[2]||"",AMOUNT:parseFloat(p[3])||0,INV_DATE:normDate(p[4]||""),VENDOR_CODE:p[5]||"",INV_ITEMS:parseItemsJson(p[6]||""),SRC:/^(XML|PDF)$/i.test(p[8]||"")?p[8].toUpperCase():""}));
+      rows.push(blankRow({INV_NO:p[0],EBELN:p[1],VENDOR:p[2]||"",AMOUNT:parseFloat(p[3])||0,INV_DATE:normDate(p[4]||""),VENDOR_CODE:p[5]||"",INV_ITEMS:parseItemsJson(p[6]||""),SRC:/^(XML|PDF)$/i.test(p[8]||"")?p[8].toUpperCase():"",MAIL_DATE:normDate(p[9]||"")}));
   }
   return rows;
 }
 /* 纯双击打开（file://）时的最终兜底：测试数据已移除，仅保留表头 */
-const EMBEDDED_CSV="发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容";
+const EMBEDDED_CSV="发票号,PO号,供应商,金额,开票日期,供应商编号,开票内容,人工标记,来源,邮件到达日期";
 function mergeRun(run){
   const map={}; (run.pos||[]).forEach(p=>map[p.EBELN]=p);
   const miss=new Set(run.missing||[]);
@@ -557,6 +599,7 @@ function mergeRun(run){
     }else{   // 上次核查之后才入库的新行：保持「待查询」（不能显示空白状态）
       r.queried=false; r.missing=false; r.PO_STATUS=""; r.STATUS_TEXT=""; r.RATE=0; r.ITEMS=[];
     }
+    r.BLDAT=bldatOf(r);   // 凭证日期缓存进字段：渲染与排序统一读 r.BLDAT
   }
 }
 /* ---- KPI / 筛选 / 排序 ---- */
@@ -576,7 +619,7 @@ function visibleRows(){
   if(state.sortK){
     const k=state.sortK,dir=state.sortAsc?1:-1;
     rows=rows.slice().sort((a,b)=>{
-      if(k==="EBELN"||k==="INV_DATE")return String(a[k]||"").localeCompare(String(b[k]||""))*dir;
+      if(k==="EBELN"||k==="INV_DATE"||k==="MAIL_DATE"||k==="BLDAT")return String(a[k]||"").localeCompare(String(b[k]||""))*dir;
       const va=a.queried?(+a[k]||0):-1, vb=b.queried?(+b[k]||0):-1;
       return (va-vb)*dir;
     });
@@ -615,6 +658,16 @@ function invGroupColors(){
   for(const r of state.rows){ if(r.INV_NO) cnt[r.INV_NO]=(cnt[r.INV_NO]||0)+1; }
   for(const r of state.rows){ const k=r.INV_NO; if(k&&cnt[k]>1&&!(k in color)) color[k]=GROUP_COLORS[gi++%GROUP_COLORS.length]; }
   return color;
+}
+/* 同号发票序号下标：重复的票号按出现顺序编号 1..n（基于全量 state.rows，筛选/翻页时编号稳定） */
+function invDupSeq(){
+  const cnt={}, seen={}, seq=new Map();
+  for(const r of state.rows){ if(r.INV_NO) cnt[r.INV_NO]=(cnt[r.INV_NO]||0)+1; }
+  for(const r of state.rows){
+    const k=r.INV_NO; if(!k||cnt[k]<2)continue;
+    seen[k]=(seen[k]||0)+1; seq.set(r,seen[k]);
+  }
+  return seq;
 }
 /* 空值内联补录：浅色输入框 + 确认 → POST /api/patch 写回 CSV；prefill 模式 = 再次编辑（带 ✕ 取消） */
 function makePatchInput(r,field,ph,w,prefill){
@@ -658,6 +711,7 @@ function makeEditBtn(r,which){
 function renderTable(){
   const rows=visibleRows();
   const gColors=invGroupColors();   // 同一发票号多行 → 同色标识
+  const dupSeq=invDupSeq();         // 同一发票号多行 → 票号前序号下标
   const total=rows.length;
   const pages=Math.max(1,Math.ceil(total/state.pageSize));
   if(state.page>pages)state.page=pages;
@@ -671,7 +725,7 @@ function renderTable(){
   const tb=$("tbody"); tb.textContent="";
   if(!pageRows.length){
     const tr=el("tr");
-    const c=el("td"); c.colSpan=10;
+    const c=el("td"); c.colSpan=12;
     const box=el("div","empty");
     const ico=el("span","ico"); ico.innerHTML=ICON_TRAY;
     box.appendChild(ico);
@@ -692,6 +746,8 @@ function renderTable(){
     const ic=el("td","invno num");
     const gc=gColors[r.INV_NO];
     if(gc){ ic.style.borderLeft="3px solid "+gc; ic.style.background=gc+"14"; ic.title="一票多单：该发票含多个 PO（同色为一组）"; }
+    const dsi=dupSeq.get(r);
+    if(dsi){const sub=el("sub","inv-sub",dsi); if(gc)sub.style.color=gc; ic.appendChild(sub);}   // 同号发票：票号前加序号下标（色随分组）
     const isp=el("span","cell-trunc",r.INV_NO||"—");
     isp.addEventListener("mouseenter",ev=>showInvTip(ev,r));
     isp.addEventListener("mouseleave",hideInvTipSoon);
@@ -719,6 +775,8 @@ function renderTable(){
     tr.appendChild(vc);
     tr.appendChild(el("td","",r.VENDOR||"—"));
     tr.appendChild(el("td","",r.INV_DATE||"—"));
+    tr.appendChild(el("td","",r.MAIL_DATE||"—"));        // 邮件到达日期（真实接收日期）
+    tr.appendChild(el("td","",r.BLDAT||"—"));              // 凭证日期（RFC BLDAT 最新，mergeRun 已缓存）
     tr.appendChild(amtCell(r.AMOUNT));
     const pc=el("td","num");
     if(r.queried&&!r.missing){
@@ -751,7 +809,7 @@ function buildTipHtml(r){
   const e=escXml;
   let h='<div class="tt-title">发票 '+e(r.INV_NO||"—")+'</div><table>'
     +tipRows([
-      ["PO 号",e(r.EBELN)],
+      ["PO 号",e(r.EBELN||"—")+" ｜ "+e(PILL_TXT[stOf(r)]||r.STATUS_TEXT||"—")],
       ["供应商编号",e(r.VENDOR_CODE||"—")],
       ["供应商名称",e(r.VENDOR||"—")],
       ["开票日期",e(r.INV_DATE||"—")],
@@ -770,7 +828,11 @@ function buildTipHtml(r){
   if(r.ITEMS&&r.ITEMS.length){
     h+='<div class="tt-sec">行项目明细</div><table>';
     for(const it of r.ITEMS){
-      h+="<tr><td>"+e(it.EBELP)+"</td><td>"+e(strip0(it.MATNR))+" ｜ 订单 "+fmt(it.ORDER_QTY)+" / 已收 "+fmt(it.NET_GR_QTY)+" "+e(it.MEINS||"")+" ｜ "+e(it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))))+"</td></tr>";
+      const st=e(it.STATUS_TEXT||(it.ELIKZ==="X"?"已关闭":(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))));
+      h+='<tr><td>'+e(strip0(it.EBELP))+'</td><td class="tm">'+(e(strip0(it.MATNR))||"—")+'</td>'
+        +'<td class="tsep">｜</td><td>订单</td><td class="tq">'+fmt(it.ORDER_QTY)+'</td>'
+        +'<td class="tsep">/</td><td>已收</td><td class="tq">'+fmt(it.NET_GR_QTY)+'</td><td>'+e(it.MEINS||"")+'</td>'
+        +'<td class="tsep">｜</td><td>'+st+'</td></tr>';
     }
     h+="</table>";
   }
@@ -796,9 +858,11 @@ function hideInvTipSoon(){clearTimeout(tipTimer); tipTimer=setTimeout(hideInvTip
 
 /* ---- 详情弹窗 ---- */
 function showDetail(r){
-  $("mTitle").textContent="PO 收货详情 · "+r.EBELN;
-  $("mMeta").textContent="发票号 "+(r.INV_NO||"—")+" ｜ 开票日期 "+(r.INV_DATE||"—")+" ｜ 供应商 "+(r.VENDOR||"—")+" ｜ 发票金额 "+(r.AMOUNT?fmtAmt(r.AMOUNT):"—")
-    +" ｜ 订单总量 "+fmt(r.ORDER_QTY)+" ｜ 累计收货 "+fmt(r.NET_GR_QTY)+" ｜ "+r.STATUS_TEXT;
+  $("mTitle").textContent="PO 收货详情 · "+r.EBELN+" ｜ "+(PILL_TXT[stOf(r)]||r.STATUS_TEXT||"");
+  $("mMeta").innerHTML=[["发票号",r.INV_NO||"—",1],["开票日期",r.INV_DATE||"—"],
+    ["供应商",r.VENDOR||"—"],["发票金额",r.AMOUNT?fmtAmt(r.AMOUNT):"—"],
+    ["订单总量",fmt(r.ORDER_QTY)],["累计收货",fmt(r.NET_GR_QTY)]]
+    .map(p=>'<span class="lb">'+p[0]+'</span><span class="vl'+(p[2]?" mono":"")+'">'+escXml(String(p[1]))+'</span>').join("");
   const t=el("table","sub");
   const hr=el("tr");
   ["行项目","物料","订单数","净收货","差异","状态"].forEach((h,i)=>hr.appendChild(el("th",(i>=2&&i<=4)?"num":"",h)));
@@ -806,7 +870,7 @@ function showDetail(r){
   const body=el("tbody");
   for(const it of r.ITEMS){
     const tr=el("tr");
-    [it.EBELP,strip0(it.MATNR),fmt(it.ORDER_QTY),fmt(it.NET_GR_QTY),fmt(it.DIFF_QTY),
+    [strip0(it.EBELP),strip0(it.MATNR),fmt(it.ORDER_QTY),fmt(it.NET_GR_QTY),fmt(it.DIFF_QTY),
      it.STATUS_TEXT||(it.CAN_CLOSE==="X"?"收货足额":(it.NET_GR_QTY>0?"部分收货":"未收货"))]
       .forEach((v,i)=>tr.appendChild(el("td",(i>=2&&i<=4)?"num":"",v)));
     body.appendChild(tr);
@@ -837,7 +901,7 @@ async function querySAP(){
   const done=new Set(state.rows.filter(r=>r.EBELN&&(stOf(r)==="FULL"||stOf(r)==="MARKED")).map(r=>r.EBELN));
   const todo=all.filter(p=>!done.has(p));   // 仅用于提示与空转判断；请求仍发全量，跳过由服务端统一处理
   if(!todo.length){toast("没有需要查询的 PO——完整收货与已标记关闭的 "+done.size+" 笔已跳过");return;}
-  $("btnQuery").disabled=true; setLoading(true); setConn("busy","查询中…");
+  $("btnQuery").disabled=true; setLoading(true,"正在查询 SAP 收货数据…"); setConn("busy","查询中…");
   opStart("正在批量查询 SAP 收货（新查 "+todo.length+" 笔"+(done.size?"，跳过已完成 "+done.size+" 笔":"")+"）……");
   try{
     // 发全量 PO：服务端跳过已完成项并随响应回传其快照数据，保证响应覆盖所有行（mergeRun 依赖全覆盖）
@@ -889,10 +953,80 @@ async function doClose(){
   }
 }
 
+/* ---- 分享：邮件（调起本机 Outlook）/ Teams 会话；服务端零参与 ---- */
+function shareRows(){   // 有勾选发勾选行，否则发当前筛选结果
+  const rows=visibleRows();
+  const sel=rows.filter(r=>state.selected.has(r.EBELN));
+  return sel.length?sel:rows;
+}
+/* 纯文本表按列对齐：CJK 记 2 宽，空格补齐；金额列右对齐 */
+function dw(s){let w=0;for(const ch of String(s))w+=ch.codePointAt(0)>0x2E7F?2:1;return w;}
+function padR(s,w){s=String(s);return s+" ".repeat(Math.max(0,w-dw(s)));}
+function padL(s,w){s=String(s);return " ".repeat(Math.max(0,w-dw(s)))+s;}
+const BAD_ST={PARTIAL:1,NONE:1,MISS:1,NOPO:1,WAIT:1};   // 问题行状态（完整收货/已标记关闭以外）
+function badPos(rows){   // 问题行 PO 清单（供摘要行使用）
+  return rows.filter(r=>BAD_ST[stOf(r)]).map(r=>r.EBELN||"（无 PO 号）");
+}
+function shareLines(rows,limit){
+  const head=["发票号","PO号","供应商","金额","开票日期","状态"];
+  const data=rows.slice(0,limit).map(r=>{
+    const st=stOf(r);
+    return {bad:!!BAD_ST[st],
+            cells:[r.INV_NO||"—",r.EBELN||"（无 PO 号）",(r.VENDOR||"—").slice(0,24),
+                   fmtAmt(r.AMOUNT),r.INV_DATE||"—",PILL_TXT[st]||"待查询"]};
+  });
+  const all=[head].concat(data.map(d=>d.cells));
+  const W=head.map((_,i)=>Math.max.apply(null,all.map(c=>dw(c[i]))));
+  const fmtRow=c=>c.map((v,i)=>i===3?padL(v,W[i]):padR(v,W[i])).join(" | ");
+  const lines=[fmtRow(head),"-".repeat(dw(fmtRow(head)))];
+  data.forEach(d=>lines.push(fmtRow(d.cells)+(d.bad?" ❗️":"")));   // ❗️ 在行尾，不占列宽
+  if(rows.length>limit)lines.push("…共 "+rows.length+" 行，仅列前 "+limit+" 行（完整清单请用「导出」）");
+  return lines;
+}
+async function shareEmails(){
+  try{const d=await apiGet("/api/settings");
+    return (d.notify_emails||"").split(",").map(s=>s.trim()).filter(Boolean);
+  }catch(e){return [];}
+}
+async function sendOutlook(){
+  const rows=shareRows();
+  if(!rows.length){toast("当前筛选结果为空",true);return;}
+  const emails=await shareEmails();
+  if(!emails.length){toast("请先在「设置」里填写通知接收邮箱",true);return;}
+  const subject="PO 收货核查清单（"+rows.length+" 行）"+new Date().toLocaleDateString("zh-CN");
+  const bad=badPos(rows);
+  const body="\n\n"+(bad.length?"需跟进 "+bad.length+" 笔："+bad.slice(0,15).join("、")+(bad.length>15?" 等":"")+"\n":"")
+    +shareLines(rows,60).join("\n");   // 开头空两行：用户直接在顶部写留言
+  location.href="mailto:"+emails.join(";")+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body);
+}
+async function openTeams(){
+  const rows=shareRows();
+  if(!rows.length){toast("当前筛选结果为空",true);return;}
+  const emails=await shareEmails();
+  if(!emails.length){toast("请先在「设置」里填写通知接收邮箱",true);return;}
+  const bad=badPos(rows);
+  const msg="\n\n"+(bad.length?"**需跟进 "+bad.length+" 笔："+bad.slice(0,10).join("、")+(bad.length>10?" 等":"")+"**\n":"")   // 代码块外的 ** 在 Teams 里真加粗
+    +"PO 收货核查清单（"+rows.length+" 行）\n```\n"+shareLines(rows,20).join("\n")+"\n```";
+  // 按官方文档格式：users 逗号分隔保持字面量（不编码）；topicName 标识群聊（3 人及以上生效）
+  window.open("https://teams.microsoft.com/l/chat/0/0?users="+emails.join(",")
+    +"&topicName="+encodeURIComponent("PO 收货核查")
+    +"&message="+encodeURIComponent(msg),"_blank");
+}
+
+function copyShare(){   // 仅复制到剪贴板：行数不受限（无 URL 长度问题）
+  const rows=shareRows();
+  if(!rows.length){toast("当前筛选结果为空",true);return;}
+  const text=shareLines(rows,rows.length).join("\n");
+  const done=()=>toast("已复制 "+rows.length+" 行到剪贴板");
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(done,()=>fallbackCopy(text,done));
+  else fallbackCopy(text,done);
+}
+
 /* ---- 启动三级兜底：① 后端 API（含最近核查结果）② 直读 invoice CSV ③ 内嵌快照 ---- */
 async function initLoad(){
-  setLoading(true); setConn("busy","载入中…");
+  setLoading(true,"正在载入发票清单…"); setConn("busy","载入中…");
   state.page=1;
+  if(!_apiOrigin)await detectApi();   // 方案 A：同源反代优先，失败退回 :8088 直连
   try{   // ① 后端服务在线
     const inv=await apiGet("/api/invoices");
     state.rows=inv.invoices.map(blankRow);
@@ -1062,7 +1196,7 @@ function exportXlsx(){
 /* ---- 读取邮件（触发服务端内网 Exchange 抓取，状态直写页头「邮件读取」，完成后刷新清单） ---- */
 async function mailSync(){
   $("btnMail").disabled=true; setConn("busy","读取邮件中…");
-  opStart("正在读取邮件（内网 Exchange 抓取中，通常需数十秒）……");
+  opStart("正在读取当天邮件（内网 Exchange 抓取中，通常需数十秒）……");
   try{
     const d=await api("/api/mail_sync",{});
     setStat("mailStat","邮件读取",{ran_at:nowLocal(),ok:d.ok,log:d.output||""});   // 状态直写页头并持久化（含过程日志）
@@ -1111,6 +1245,9 @@ $("sapStat").onclick=()=>showStatDetail("sap");
 $("sdX").onclick=()=>{$("statDlg").hidden=true;};
 $("statDlg").onclick=e=>{if(e.target.id==="statDlg")$("statDlg").hidden=true;};
 $("btnExport").onclick=exportXlsx;
+$("btnOutlook").onclick=sendOutlook;
+$("btnCopy").onclick=copyShare;
+$("btnTeams").onclick=openTeams;
 $("btnQuery").onclick=querySAP;
 $("btnClose").onclick=closeSelected;
 $("cOk").onclick=doClose;
@@ -1138,6 +1275,8 @@ document.querySelectorAll("table.inv th.sortable").forEach(th=>{
     renderTable();
   };
 });
+/* 初始排序箭头同步：开票日期 ▼（最新在前），与 state 默认值一致 */
+document.querySelector('table.inv th[data-k="INV_DATE"] .arrow').textContent="▼";
 $("mCloseX").onclick=()=>{$("modal").hidden=true;};
 $("modal").onclick=e=>{if(e.target.id==="modal")$("modal").hidden=true;};
 $("confirm").onclick=e=>{if(e.target.id==="confirm")$("confirm").hidden=true;};

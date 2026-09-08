@@ -16,7 +16,7 @@
   EXCH_PASS        登录密码（NTLM 质询-响应由服务器侧 AD 校验）
   EXCH_AUTH        ntlm（默认）/ basic / digest
   EXCH_FOLDER      邮件文件夹，默认 Inbox；子文件夹写法 Inbox/AP
-  EXCH_SINCE_DAYS  只处理最近 N 天，默认 365；0 = 全部
+  EXCH_SINCE_DAYS  只处理最近 N 个自然日，默认 1（当天 0 点起）；0 = 全部
   EXCH_SUBJECT_FILTER  主题关键词过滤，默认「发票」；置空 = 不过滤
 
 用法：
@@ -89,17 +89,10 @@ VCODE_RULE = r"(?<!\d)(60\d{5})(?!\d)"
 
 def extract_po_all(*texts):
     """提取全部 PO 号（一票多单场景：备注栏可能写多个 PO）。
-    优先 4526 规则集合；一个都没有时回退任意 10 位数字集合。去重保序。"""
+    口径 PDF/XML 一致：仅认 4526 开头的 10 位数字，无任意数字兜底（宁缺毋假，杜绝单价/金额误判）。去重保序。"""
     seen, out = set(), []
     for t in texts:
         for m in re.finditer(PO_RULE, t or ""):
-            if m.group(1) not in seen:
-                seen.add(m.group(1))
-                out.append(m.group(1))
-    if out:
-        return out
-    for t in texts:
-        for m in re.finditer(r"(?<!\d)(\d{10})(?!\d)", t or ""):
             if m.group(1) not in seen:
                 seen.add(m.group(1))
                 out.append(m.group(1))
@@ -125,7 +118,7 @@ def extract_vcode(*texts):
     return ""
 def parse_invoice_xml(data):
     """解析一张 XML 发票；缺发票号视为无效返回 None。
-    PO 提取：订单字段标签 -> 备注类标签 -> XML 全文 10 位数字 -> 调用方退回邮件主题。"""
+    PO 提取：订单字段标签 -> 备注类标签 -> XML 全文，全程仅 4526 规则；调用方退回邮件主题。"""
     import xml.etree.ElementTree as ET
     try:
         root = ET.fromstring(data)
@@ -317,7 +310,7 @@ def save_by_year(records_by_year):
             with open(path, newline="", encoding="utf-8-sig") as f:
                 for row in csv.reader(f):
                     if len(row) >= 5 and row[0] and row[0] != "发票号":
-                        merged[(row[0], row[1])] = (row + [""] * 9)[:9]
+                        merged[(row[0], row[1])] = (row + [""] * 10)[:10]
         for r in recs:
             key = (r["INV_NO"], r["EBELN"])
             if not r["EBELN"] and any(k[0] == r["INV_NO"] and k[1] for k in merged):
@@ -335,11 +328,15 @@ def save_by_year(records_by_year):
             if len(nr) < 8:
                 nr.append("")            # 人工标记列占位（patch_row 约定 index 7）
             nr.append(src)               # 来源列（index 8：XML/PDF，页面「版式」上标）
+            mail = r.get("MAIL_DATE", "")
+            if old and len(old) > 9 and old[9] and not mail:
+                mail = old[9]            # 本次未取到收件时间：保留旧值不清空
+            nr.append(mail)              # 邮件到达日期列（index 9）
             merged[key] = nr
         rows = sorted(merged.values(), key=lambda r: (r[4], r[0], r[1]))
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
-            w.writerow(CSV_HEADER + ["人工标记"])
+            w.writerow(CSV_HEADER + ["人工标记", "来源", "邮件到达日期"])
             w.writerows(rows)
         print("[save] %s -> %d 条（本次新增/更新 %d）" % (path, len(rows), len(recs)))
 
@@ -444,12 +441,14 @@ def get_folder(account, path):
 
 def iter_messages(folder, since_days, limit=0, subject_kw=""):
     """按时间倒序遍历邮件；since_days=0 不限时间；subject_kw 为主题关键词过滤
-    （先尝试服务端过滤，本地再复核一次，双保险）。"""
+    （先尝试服务端过滤，本地再复核一次，双保险）。
+    时间窗按自然日计：since_days=1 → 今天 0 点起（满足日常「只收当天」需求）。"""
     qs = folder.all().order_by("-datetime_received")
     if since_days > 0:
         try:
             from exchangelib import EWSDateTime, EWSTimeZone
-            cutoff = EWSDateTime.now(EWSTimeZone.localzone()) - timedelta(days=since_days)
+            now = EWSDateTime.now(EWSTimeZone.localzone())
+            cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=since_days - 1)
             qs = qs.filter(datetime_received__gte=cutoff)
         except Exception as exc:   # 过滤失败则退回全量，打印提示
             _log("[warn] 时间过滤不可用，改全量遍历: %s" % exc)
@@ -492,7 +491,7 @@ def main():
     args = ap.parse_args()
 
     _load_env_file()
-    since = int(os.getenv("EXCH_SINCE_DAYS", "365"))
+    since = int(os.getenv("EXCH_SINCE_DAYS", "1"))   # 默认只收当天（自然日）；0 = 全部
     subject_kw = os.getenv("EXCH_SUBJECT_FILTER", "发票")
     n_msg = n_att = 0
     by_year = {}
@@ -505,7 +504,7 @@ def main():
                  % (account.primary_smtp_address, folder.name, folder.total_count))
             return
 
-        _log("[conn] %s / %s（最近 %s 天，主题含「%s」）" % (
+        _log("[conn] %s / %s（最近 %s 个自然日，主题含「%s」）" % (
             account.primary_smtp_address, folder.name, since or "不限", subject_kw or "不限"))
         xml_seen = set()   # 本批次 XML 已解析的发票号：同票 PDF 版跳过（XML 数据更全）
         for item in iter_messages(folder, since, args.limit, subject_kw):
@@ -528,8 +527,11 @@ def main():
                     _log("[skip]  %s：发票 %s 的 XML 版已解析，PDF 版忽略" % (name, rec["INV_NO"]))
                     continue
                 rec["SRC"] = "XML" if kind == "xml" else "PDF"   # 来源列（CSV index 8）：页面「版式」上标
+                _dt = getattr(item, "datetime_received", None)
+                rec["MAIL_DATE"] = _dt.astimezone().strftime("%Y-%m-%d") if _dt else ""   # 邮件到达日期（CSV index 9，真实接收时间转本地）
                 po_list = list(rec.pop("PO_LIST", []))
                 if not po_list:
+                    # 正文无 PO → 退回邮件主题：主题中 4526 开头的 10 位数字即 PO 号（一组或多组均可）
                     po_list = extract_po_all(item.subject or "")
                 if not po_list:
                     po_list = [""]   # 无 PO 号行仍保留（页面标「无 PO 号」，人工补录）

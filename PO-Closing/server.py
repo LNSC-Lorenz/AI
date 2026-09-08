@@ -368,13 +368,15 @@ class Handler(BaseHTTPRequestHandler):
                          "notify_emails": ",".join(emails)})
 
     def _api_mail_sync(self, payload):
-        """手动触发邮件抓取（内网 Exchange → CSV）。脚本自行加载 invoice/exchange.env。"""
+        """手动触发邮件抓取（内网 Exchange → CSV）。脚本自行加载 invoice/exchange.env；
+        但时间窗在此固定注入 EXCH_SINCE_DAYS=1（只收当天，自然日），不随 exchange.env 配置漂移。"""
         script = os.path.join(config.BASE_DIR, "invoice", "exchange_invoice_sync.py")
         if not os.path.isfile(script):
             raise RuntimeError("抓取脚本不存在: %s" % script)
         try:
+            env = dict(os.environ, EXCH_SINCE_DAYS="1")   # 子进程环境优先于 exchange.env（脚本内 setdefault）
             proc = subprocess.run([sys.executable, script],
-                                  capture_output=True, text=True, timeout=600)
+                                  capture_output=True, text=True, timeout=600, env=env)
         except subprocess.TimeoutExpired:
             raise RuntimeError("抓取超时（600 秒）")
         out = ((proc.stdout or "") + (proc.stderr or "")).strip()

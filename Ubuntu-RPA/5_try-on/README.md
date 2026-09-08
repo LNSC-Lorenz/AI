@@ -36,7 +36,7 @@ C:\RPA-Agent\.venv\Scripts\python.exe test_deploy.py
 
 ```
 Deployed: hello-flow/hello
-Work pool: windows-rpa-pool
+Work pool: windows-gui-pool
 Code path: C:\RPA-Agent\flows
 ```
 

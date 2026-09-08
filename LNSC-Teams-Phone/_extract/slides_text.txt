@@ -1,0 +1,269 @@
+﻿==== slide1.xml ====
+Mutiple
+-Teams Tenant  Direct Routing
+Configuration Guide
+==== slide2.xml ====
+Step 1 Create 
+SubDomain
+==== slide3.xml ====
+1. Log in to the administrator page of Office365 as an administrator and open the domain name setting option
+2. Click Add domain name and add Subdomain as required 
+Subdomain:XXX.alc.aisesz.com
+—XXX—Customer Name
+Add subdomain in Office 365
+XXX. alc.aisesz.com
+Choose 
+option‘Add
+ your own DNS Records
+’  
+==== slide4.xml ====
+The TXT Record value from Microsoft respond ,The customer 
+must be 
+send the Txt Record value to 
+ChinaTelecom.Waiting
+ for the 
+ChinaTelecom
+ add  the Txt  Record value to DNS Server,  Once the 
+chinaTelecom
+
+finished.The
+ customer  click the verify to next.
+DNS  Record SRV
+Send back the 
+TxT
+ name and TXT Value  and TTL to us
+==== slide5.xml ====
+Do not select any Application(Exchange/
+Sharepoint
+/SFB),just click 
+Next,then
+ Click Done ,You can using ping to verify the subdomain
+Ping can be used to verify whether 
+subdomian
+ parsing is 
+successful,The
+ public IP is 129.227.85.2,if 
+no,maybe
+ you need some time to wait the DNS Worked
+==== slide6.xml ====
+Step 2 Create Active User
+==== slide7.xml ====
+1. In the Users TAB, click to open Active Users
+2. Click Add User and select the Subdomain suffix
+3. Assign the Office 365 license and Phone System license to activate the user
+Step2
+：
+Create Subdomain
+
+User
+ActiveUser
+:
+TeamsVoice@xxx.
+alc.aisesz.com
+==== slide8.xml ====
+Step 3 Create 
+DialPlan
+==== slide9.xml ====
+1. On the Teams management screen, 
+tap Voice
+ to open 
+DialPlan
+2. Click Add to add 
+DialPlan
+Step3
+：
+Create 
+DailPlan
+Note
+：
+DialPlan
+ can be set based on user requirements. However, ensure that the dialed number is retained
+==== slide10.xml ====
+Step3
+：
+Create 
+DailPlan
+-Rules
+Name
+Patterm
+Translation
+LocalFixPhone
+^([2-8]\d{7})
++86+Citycode$1 
+e.g:Suzhou
+:+86512$1,Shanghai:+8621$1
+
+LocalMobile
+^(1\d{10})$
++86$1
+
+LongdisMobile
+^(01\d{10})$
++86$1
+LongdisFixPhone
+^0((([12]0|2[2-9])\d{5,8}|21\d{5,10}|[3-9][1-9]\d{5,9}|(701|90[1-9])\d{5,7}|80[2678]\d{5}|95\d{3}))\d*(\D+\d+)?$
++86$1
+Trollfree
+^([48]00\d{7}|10800\d{7})\d*$
++86$1
+Service
+^(999|1\d{2}|1\d{4}|9\d{4})$
++86$1
+Internationcall
+^(?:\+|00)(1|7|2[07]|3[0-46]|39\d|4[013-9]|5[1-8]|6[0-6]|8[1246]|9[0-58]|2[1235689]\d|24[013-9]|242\d|3[578]\d|42\d|5[09]\d|6[789]\d|8[035789]\d|9[679]\d)(?:0)?(\d{6,14})(\D+\d+)?$
++$1$2
+Operator 
+Number+Extension
+^(\d{4})$  Extension=4digits
+Operator 
+Number;ext
+=$1(For example:+86512628888;ext=$1
+==== slide11.xml ====
+Step 4 Create PSTN Usage
+==== slide12.xml ====
+1. On the Page for creating a Voice Routing Policy, click Add
+2. Add the CREATED PSTN Usage on the page that is displayed
+Step4
+：
+Create Voice Routing Policy
+PSTNUsage
+ :customization
+==== slide13.xml ====
+Step 5 Create Voice Routing 
+==== slide14.xml ====
+Notic
+:
+PowerShell Version must be above 4.3
+Connection Teams Server command Via 
+Powershell
+Install-Module 
+MicrosoftTeams
+( if don’t have install the Teams 
+Moudle
+ on 
+Powershell
+ ,should be install the Teams module on 
+powershell
+ first)
+Connect-
+MicrosoftTeams
+ -Credential $credential 
+(if installed 
+theTeams
+ module on 
+powershell
+
+already,Can
+ be use this CLI Command connectivity Teams Server directly)
+Step5
+：
+Create 
+VoiceRouting
+New-
+csonlineVoiceRoute
+ "
+customization
+" -
+Numberpattern
+ '^\+' -
+onlinepstngatewaylist
+
+xxx.aisesz.com 
+-priority 1 -
+onlinepstnusage
+ “
+same the define 
+pstnusage
+ name
+"
+==== slide15.xml ====
+Step 6 Assign the DID Number and Policies to Teams User
+==== slide16.xml ====
+1 Go to Teams user panel ,and select the User 
+2
+、
+Select the Account ,and Edit, Set the DID Number
+Notic
+ Teams only mode– You can use this configuration .
+If the island mode-should be ask Microsoft that how to migration to only Teams mode.
+Step6
+：
+Assign the DID Number to Teams User
+==== slide17.xml ====
+1 Go to Teams user panel ,and select the User 
+2
+、
+Select the Account ,and Edit, Set the DID Number
+Notic
+ Teams only mode– You can use this configuration .
+If the island mode-should be ask Microsoft that how to migration to only Teams mode.
+Step6
+：
+Assign the DID Number to Teams User-
+Batch allocation number
+==== slide18.xml ====
+Step6
+：
+Assign policies to the Teams Phone System users
+Note
+：
+Make sure all users who use Teams voice have a Phone System license assigned to them
+1 Go to Teams user panel ,and select the User 
+2
+、
+Select the  
+Policies,,and
+ Edit
+
+==== slide19.xml ====
+Step6
+：
+Assign policies to the Teams Phone System users-
+Batch allocation policies
+Note
+：
+Make sure all users who use Teams voice have a Phone System license assigned to them
+1 Go to Teams user panel ,and select the User 
+2
+、
+Select the  
+Policies,,and
+ Edit
+
+==== slide20.xml ====
+Step 7 Verify the Dialpad on Teams Client
+==== slide21.xml ====
+Step7
+：
+Verify the Dialpad on Teams Client
+Normally: The DID number show the teams client ,if no ,you should be logout and login again ,or maybe you wait some time to waiting the Microsoft sync up
+==== slide22.xml ====
+Outbound Rules
+Usage
+Format
+Teams E164 Example
+Remark
+Teams Calling Party
++86512xxxxxxxxx
++8651262888002
+Outbound Call Rule
+Local 
+FixPhone
+xxxxxxxx
+ 8digits-e.g:62881234
++8651262881234
+LongDis 
+FixPhone
+Area Code+Number-e.g:02162881234
++862162881234
+MobilePhone
+-Local
+MobilePhone-Longdistance
+
+1xxxxxxxxxx 11digits-18612345678
+01xxxxxxxxxx 12digits-018612345678
++8618612345678
++86018612345678
+International Call
+00+Country Code+Number-e,g:0085262881234
++85287654321

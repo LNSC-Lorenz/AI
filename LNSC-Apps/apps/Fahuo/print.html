@@ -1,0 +1,306 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>下单模式 | LNSC 发货全链系统</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="App.ico">
+</head>
+<body>
+<div class="layout">
+
+  <!-- 左侧：模式导航 -->
+  <aside class="sidebar-left">
+    <div class="mode">
+      <div class="mode-num">- 1 -</div>
+      <a class="mode-btn" href="index.html">录单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 2 -</div>
+      <a class="mode-btn active" href="print.html">下单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 3 -</div>
+      <a class="mode-btn" href="list.html">清单模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 4 -</div>
+      <a class="mode-btn" href="sap.html">SAP模式</a>
+    </div>
+    <div class="mode">
+      <div class="mode-num">- 5 -</div>
+      <a class="mode-btn" href="hmi.html">可视化模式</a>
+    </div>
+  </aside>
+
+  <!-- 中间：下单模式 -->
+  <main class="main">
+    <header class="title-bar">
+      <h1>LNSC 发货全链系统</h1>
+      <span class="tb-mid">LNSC Full-Chain Delivery System</span>
+      <div class="title-right">
+        <span class="tb-brand">Logistics</span>
+        <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
+        <button class="btn icon-btn" type="button" title="警告" aria-label="警告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <span class="api-dot" id="apiDot" title="API 状态检测中…"></span>
+        <button class="btn icon-btn" type="button" title="设置" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn icon-btn" type="button" title="关于" aria-label="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </header>
+
+    <div class="pw-main">
+
+      <!-- 左 1/4：承运商切换 + 130 面单模拟预览（顺丰/德邦/跨越三套模板） -->
+      <div class="pw-left">
+        <div class="pw-carrier" id="carrierBar">
+          <button class="pw-cb active" type="button" data-c="顺丰">顺丰</button>
+          <button class="pw-cb" type="button" data-c="德邦">德邦</button>
+          <button class="pw-cb" type="button" data-c="跨越">跨越</button>
+          <button class="pw-cb" type="button" data-c="专车">专车</button>
+          <button class="pw-cb" type="button" data-c="客户自提">客户自提</button>
+        </div>
+        <section class="pw-bill" id="pwBill">
+
+          <!-- 顺丰 130 模板（丰桥：130×230mm，丰密面单隐藏手机号） -->
+          <div class="bill-tpl" id="billSF">
+            <div class="pw-head"><span>顺丰速运 SF EXPRESS</span><span class="f-product">顺丰标快</span></div>
+            <div class="pw-no">
+              <div class="pw-barcode"></div>
+              <div class="pw-no-text f-waybill">SF 0000 0000 0000</div>
+            </div>
+            <div class="pw-route">
+              <span class="big f-route">---</span>
+              <span class="small">0519 常州金坛<br>→ <span class="f-dest">--</span></span>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">收件人</div>
+              <div class="addr"><span class="f-name">---</span>&nbsp;&nbsp;<span class="f-phone">-----------</span></div>
+              <div class="f-addr">请选择右侧 DN 加载收件地址</div>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">寄件人</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div>江苏常州金坛 德城路99号（邮编 213200）</div>
+            </div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>数量：1</span></div>
+            <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
+            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-foot">
+              <div class="pw-qr"></div>
+              <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
+            </div>
+          </div>
+
+          <!-- 德邦模板（开放平台：DPK 运单号 / 大件快递3.60 / 重量体积 / 送货上楼） -->
+          <div class="bill-tpl" id="billDB" hidden>
+            <div class="pw-head"><span>德邦快递 DEPPON</span><span class="f-product">大件快递 3.60</span></div>
+            <div class="pw-no">
+              <div class="pw-barcode"></div>
+              <div class="pw-no-text f-waybill">DPK 000 0000 0000</div>
+            </div>
+            <div class="pw-route">
+              <span class="big f-route">---</span>
+              <span class="small">到达站 ← 常州金坛<br>→ <span class="f-dest">--</span></span>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">收件人</div>
+              <div class="addr"><span class="f-name">---</span>&nbsp;&nbsp;<span class="f-phone">-----------</span></div>
+              <div class="f-addr">请选择右侧 DN 加载收件地址</div>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">寄件人</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div>江苏常州金坛 德城路99号（邮编 213200）</div>
+            </div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
+            <div class="pw-row"><span>重量：<span class="f-weight">--</span> kg</span><span>体积：<span class="f-volume">--</span> m³</span></div>
+            <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
+            <div class="pw-row"><span>送货方式：送货上楼</span></div>
+            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-foot">
+              <div class="pw-qr"></div>
+              <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
+            </div>
+          </div>
+
+          <!-- 跨越模板（开放平台：KY 运单号 / 限时速运 / 昼夜取派） -->
+          <div class="bill-tpl" id="billKY" hidden>
+            <div class="pw-head"><span>跨越速运 KYE</span><span class="f-product">次日达</span></div>
+            <div class="pw-no">
+              <div class="pw-barcode"></div>
+              <div class="pw-no-text f-waybill">KY 0000 0000 0000</div>
+            </div>
+            <div class="pw-route">
+              <span class="big f-route">---</span>
+              <span class="small">限时速运 ← 常州金坛<br>→ <span class="f-dest">--</span></span>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">收件人</div>
+              <div class="addr"><span class="f-name">---</span>&nbsp;&nbsp;<span class="f-phone">-----------</span></div>
+              <div class="f-addr">请选择右侧 DN 加载收件地址</div>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">寄件人</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div>江苏常州金坛 德城路99号（邮编 213200）</div>
+            </div>
+            <div class="pw-row"><span>时效产品：次日达</span><span>特色服务：昼夜取派</span></div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
+            <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
+            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-foot">
+              <div class="pw-qr"></div>
+              <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
+            </div>
+          </div>
+
+          <!-- 专车 / 客户自提模板（厂内送货单：无快递面单，ZC/ZT 编号） -->
+          <div class="bill-tpl" id="billOT" hidden>
+            <div class="pw-head"><span class="f-ot-title">专车直送单</span><span class="f-product">整车直送</span></div>
+            <div class="pw-no">
+              <div class="pw-barcode"></div>
+              <div class="pw-no-text f-waybill">ZC 0000 0000 0000</div>
+            </div>
+            <div class="pw-route">
+              <span class="big f-route">---</span>
+              <span class="small">常州金坛 直发<br>→ <span class="f-dest">--</span></span>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">收货方 / 提货人</div>
+              <div class="addr"><span class="f-name">---</span>&nbsp;&nbsp;<span class="f-phone">-----------</span></div>
+              <div class="f-addr">请选择右侧 DN 加载收件地址</div>
+            </div>
+            <div class="pw-block">
+              <div class="lbl">发货方</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div>江苏常州金坛 德城路99号（邮编 213200）</div>
+            </div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
+            <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
+            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-foot">
+              <div class="pw-qr"></div>
+              <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+      <!-- 右 3/4：上中下三段 -->
+      <div class="pw-right">
+
+        <!-- 上段：录单 DN 平铺滚动（右上多选开关） -->
+        <section>
+          <div class="pw-sec-title pw-dn-head">
+            <span id="dnTitle">录单 DN发货单（点击选择，平铺滚动）</span>
+            <div class="dn-filter">
+              <button type="button" class="dn-ft active" data-t="发货单">发货单</button>
+              <button type="button" class="dn-ft" data-t="外协单">外协单</button>
+              <button type="button" class="dn-ft" data-t="其他">其他</button>
+            </div>
+            <label class="ms-wrap">多选
+              <span class="ms-switch"><input type="checkbox" id="msToggle"><i></i></span>
+            </label>
+          </div>
+          <div class="pw-dn-list scroll-dark" id="dnList"></div>
+        </section>
+
+        <!-- 中段：顺丰特殊设置 + 下单按钮 -->
+        <section>
+          <div class="pw-sec-title">承运商设置</div>
+          <div class="pw-config-row">
+            <div class="pw-config">
+              <div class="pw-r1">
+                <label>产品类型
+                  <select id="cfgProduct">
+                    <option>顺丰标快</option><option>顺丰特快</option>
+                    <option>顺丰卡航</option><option>同城半日达</option>
+                  </select>
+                </label>
+                <label>付款方式
+                  <select id="cfgPay">
+                    <option>寄付月结</option><option>寄付现结</option><option>到付</option>
+                  </select>
+                </label>
+                <label>保价
+                  <input id="cfgInsure" type="text" inputmode="numeric" placeholder="声明价值"> 元
+                </label>
+                <label class="grow">托寄物
+                  <input id="cfgCargo" type="text" placeholder="如：气动元件">
+                </label>
+                <label id="cfgWV" hidden>重量
+                  <input id="cfgWeight" type="text" inputmode="decimal" placeholder="--"> kg
+                  　体积 <input id="cfgVolume" type="text" inputmode="decimal" placeholder="--"> m³
+                </label>
+              </div>
+              <div class="pw-r2">
+                <label><input type="checkbox"> 签单返还</label>
+                <label><input type="checkbox"> 等通知派送</label>
+                <label><input type="checkbox"> 定时派送</label>
+              </div>
+            </div>
+            <button class="pw-order-btn" id="btnOrder" type="button">下单</button>
+          </div>
+        </section>
+
+        <!-- 下段：打单列表 -->
+        <section class="pw-list table-wrap">
+          <div class="header-wrap">
+            <table class="order-table">
+              <colgroup>
+                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-ot"><col class="col2-name"><col class="col2-phone">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr">
+              </colgroup>
+              <thead>
+                <tr><th>DN</th><th>SO</th><th>优先级</th><th>类型</th><th>联系人</th><th>电话</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th><th>打印</th></tr>
+              </thead>
+            </table>
+          </div>
+          <div class="table-section">
+            <table class="order-table">
+              <colgroup>
+                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-ot"><col class="col2-name"><col class="col2-phone">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr">
+              </colgroup>
+              <tbody id="printBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 右侧：发货统计 -->
+  <aside class="sidebar-right">
+    <div class="stat">
+      <div class="stat-label">昨日发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日待发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">超时未发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">计划发货</div>
+      <div class="stat-value">16</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日回单</div>
+      <div class="stat-value">16</div>
+    </div>
+  </aside>
+
+</div>
+<script src="mock.js"></script>
+<script src="stats.js"></script>
+<script src="topbar.js"></script>
+<script src="print.js"></script>
+</body>
+</html>

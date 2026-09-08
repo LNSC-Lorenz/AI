@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#===============================================================================
+# bach_POClosing_proxy — 方案 A 一键部署/撤销：nginx 统一入口（应用 API 走 443/80 反代）
+#
+#   sudo bash install/bach_POClosing_proxy             部署（备份 → 打补丁 → 校验 → 生效）
+#   sudo bash install/bach_POClosing_proxy --rollback  撤销（恢复最近一次备份 → reload）
+#
+# 补丁内容（写入门户 nginx 配置，幂等）：
+#   location /apps/po-closing/api/ → 127.0.0.1:8088/api/（前缀剥离；超时 610s 覆盖邮件抓取）
+#   location /apps/ctms/api/       → 127.0.0.1:3001/api/（CTMS 前端已有相对路径探测，配上即通）
+#   CSP connect-src 收敛为 'self'（API 同源后不再需要放行 :8088）
+#
+# 安全性：改动前自动备份（.bak.时间戳）；nginx -t 不过自动回滚；前端有直连兜底。
+#===============================================================================
+set -euo pipefail
+
+MARK="# >>> po-closing unified-entry"
+log(){ echo "[proxy] $*"; }
+[ "$(id -u)" -eq 0 ] || { echo "请以 root 运行：sudo bash install/bach_POClosing_proxy"; exit 1; }
+
+# 定位门户 nginx 配置：优先 NGINX_CONF 环境变量；否则按站点指纹（web 根目录）全树搜索
+if [ -n "${NGINX_CONF:-}" ] && [ -f "$NGINX_CONF" ]; then
+  CONF="$NGINX_CONF"
+else
+  CONF=$(grep -rls "root /var/www/lnsc-apps" /etc/nginx 2>/dev/null | head -1 || true)
+fi
+if [ -z "${CONF:-}" ]; then
+  echo "未找到门户 nginx 配置。排查："
+  echo "  nginx -T 2>/dev/null | grep -n 'lnsc-apps'     # 看实际生效的配置在哪个文件"
+  echo "找到后手动指定再跑："
+  echo "  sudo NGINX_CONF=/etc/nginx/该文件 bash install/bach_POClosing_proxy"
+  exit 1
+fi
+log "nginx 配置: $CONF"
+
+# ---------- 撤销 ----------
+if [ "${1:-}" = "--rollback" ]; then
+  LAST=$(ls -t "$CONF".bak.* 2>/dev/null | head -1 || true)
+  [ -n "${LAST:-}" ] || { echo "无备份可回滚（$CONF.bak.* 不存在）"; exit 1; }
+  cp -a "$LAST" "$CONF"
+  nginx -t && systemctl reload nginx
+  log "已回滚到 $LAST 并 reload"
+  log "验证: curl -I http://127.0.0.1/ 应为 200；/apps/po-closing/api/health 恢复 404（前端自动退回 :8088 直连）"
+  exit 0
+fi
+
+# ---------- 部署 ----------
+if grep -qF "$MARK" "$CONF"; then
+  log "补丁已存在，跳过（幂等）"
+else
+  BAK="$CONF.bak.$(date +%Y%m%d%H%M%S)"
+  cp -a "$CONF" "$BAK"
+  log "备份: $BAK"
+  python3 - "$CONF" "$MARK" <<'PY'
+import sys
+path, mark = sys.argv[1], sys.argv[2]
+s = open(path, encoding="utf-8").read()
+block = """    %s
+    location /apps/po-closing/api/ {
+        proxy_pass http://127.0.0.1:8088/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 610s;
+        proxy_send_timeout 610s;
+    }
+    location /apps/ctms/api/ {
+        proxy_pass http://127.0.0.1:3001/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+    # <<< po-closing unified-entry
+
+""" % mark
+anchor = "    location /apps/ {"
+if anchor not in s:
+    sys.exit("未找到 'location /apps/ {' 锚点，配置结构可能已变化，未做修改")
+s = s.replace(anchor, block + anchor, 1)
+old_csp = "connect-src 'self' http://*:8088 blob: data:;"
+if old_csp in s:
+    s = s.replace(old_csp, "connect-src 'self' blob: data:;", 1)
+open(path, "w", encoding="utf-8").write(s)
+print("patched")
+PY
+fi
+
+if ! nginx -t; then
+  log "nginx -t 校验失败，自动回滚"
+  LAST=$(ls -t "$CONF".bak.* 2>/dev/null | head -1) && cp -a "$LAST" "$CONF"
+  nginx -t && systemctl reload nginx
+  exit 1
+fi
+systemctl reload nginx
+log "nginx 已 reload，反代生效"
+
+if curl -sf http://127.0.0.1/apps/po-closing/api/health >/dev/null; then
+  log "验证通过: /apps/po-closing/api/health 经 nginx :80 反代 OK"
+else
+  log "注意: 反代未通——确认 poclose 服务运行中（systemctl status poclose）"
+fi
+log "完成。外网经 connect.xxxproxy.net 访问即统一走 443；内网旧用法不受影响"
+log "撤销: sudo bash install/bach_POClosing_proxy --rollback"
