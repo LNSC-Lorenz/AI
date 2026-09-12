@@ -13,6 +13,7 @@ const out = rows.map(r => ({
   name: r.name, phone: r.phone, note: r.note, carrier: r.carrier,
   ship_date: r.ship_date, status: r.status,
   waybill_no: r.waybill_no, route_status: r.route_status,
+  created_at: r.created_at || "",
   shipped_at: r.shipped_at || "", returned_at: r.returned_at || "",
   province: r.province, city: r.city, district: r.district, street: r.street
 }));

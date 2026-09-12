@@ -195,16 +195,105 @@ document.querySelectorAll(".dn-ft").forEach(b => {
     dnFilter = b.dataset.t;
     $("dnTitle").textContent = "录单 " + DN_TITLE[dnFilter] + "（点击选择，平铺滚动）";
     renderDnList();
+    renderPrintList();          /* 打单列表同步过滤 */
   });
 });
 
-/* ----- 下段打单列表（全量含已下单；初始选中由初始化统一处理） ----- */
+/* ----- 查看列：按 DN 拉取已上传文件（缓存），点击预览/打印 ----- */
+const uploadCache = {};   /* dn -> Promise<files[]> */
+function loadUploadFiles(dn) {
+  if (!uploadCache[dn]) {
+    uploadCache[dn] = fetch(`${apiBase}/upload?dn=${encodeURIComponent(dn)}`)
+      .then(r => r.ok ? r.json() : { files: [] })
+      .then(d => d.files || [])
+      .catch(() => []);
+  }
+  return uploadCache[dn];
+}
+
+/* Excel：用本地 Excel 程序打开（Office 协议 ms-excel:ofv=只读视图，需本机安装 Office） */
+function openLocalExcel(dn, name) {
+  const abs = new URL(`Upload/${dn}/${encodeURIComponent(name)}`, location.href).href;
+  window.location.href = "ms-excel:ofv|u|" + abs;
+}
+
+/* ----- 文件预览弹窗（PDF=iframe 原生；Excel=SheetJS 转表；Word=docx-preview） ----- */
+const pvMask = $("pvMask"), pvTitle = $("pvTitle"), pvBody = $("pvBody");
+let pvPrintMode = "html";
+async function openPreview(dn, name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const url = `Upload/${dn}/${encodeURIComponent(name)}`;
+  pvTitle.textContent = name;
+  pvBody.innerHTML = "";
+  pvPrintMode = "html";
+  pvMask.hidden = false;
+  try {
+    if (ext === "pdf") {
+      const f = document.createElement("iframe");
+      f.className = "pv-frame";
+      f.src = url;
+      pvBody.appendChild(f);
+      pvPrintMode = "pdf";
+    } else if (["xlsx", "xls", "csv"].includes(ext)) {
+      const buf = await (await fetch(url)).arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const div = document.createElement("div");
+      div.className = "pv-doc";
+      div.innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+      pvBody.appendChild(div);
+    } else if (ext === "docx") {
+      const buf = await (await fetch(url)).arrayBuffer();
+      const div = document.createElement("div");
+      div.className = "pv-doc";
+      pvBody.appendChild(div);
+      await docx.renderAsync(buf, div);
+    } else {
+      pvBody.innerHTML = '<div class="pv-err">该格式暂不支持预览（支持 PDF / Excel / Word）</div>';
+    }
+  } catch (e) {
+    pvBody.innerHTML = '<div class="pv-err">预览失败：' + e.message + "</div>";
+  }
+}
+$("pvPrint").addEventListener("click", () => {
+  if (pvPrintMode === "pdf") {
+    const f = pvBody.querySelector("iframe");
+    if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); return; }
+  }
+  /* Excel / Word：只打印弹窗内容 */
+  document.body.classList.add("printing-pv");
+  window.print();
+  document.body.classList.remove("printing-pv");
+});
+$("pvClose").addEventListener("click", () => { pvMask.hidden = true; pvBody.innerHTML = ""; });
+pvMask.addEventListener("click", e => { if (e.target === pvMask) { pvMask.hidden = true; pvBody.innerHTML = ""; } });
+
+/* ----- 下段打单列表（随类型过滤；前两列含义随类型切换；仅近 7 天录单 + 全部已下单） ----- */
+const LIST_HEADS = { "发货单": ["DN", "SO"], "外协单": ["采购员", "PO号"], "其他": ["发件人", "收件城市"] };
+const LIST_WINDOW_MS = 7 * 864e5;   /* 待下单只显示近 7 天录单 */
+function inListWindow(o) {
+  if (o.waybill_no) return true;                                  /* 已下单：全部显示 */
+  const t = Date.parse((o.created_at || "").replace(" ", "T"));   /* 录单时间 */
+  return isNaN(t) ? true : (Date.now() - t) <= LIST_WINDOW_MS;    /* 无创建时间不滤 */
+}
 function renderPrintList() {
   printBody.innerHTML = "";
+  /* 表头前两列随过滤切换：发货单=DN/SO，外协单=采购员/PO号，其他=发件人/收件城市 */
+  const heads = LIST_HEADS[dnFilter] || LIST_HEADS["发货单"];
+  const ths = document.querySelectorAll(".pw-list thead th");
+  if (ths.length >= 2) { ths[0].textContent = heads[0]; ths[1].textContent = heads[1]; }
   orders.forEach((o, i) => {
+    const ot = o.order_type || "发货单";
+    if (ot !== dnFilter) return;   /* 类型过滤（与 DN 区一致） */
+    if (!inListWindow(o)) return;  /* 近 7 天录单 + 已下单 */
+    const c1 = ot === "外协单" ? (buyerOf(o) || "—")
+             : ot === "其他"   ? (senderOf(o) || "—")
+             : (o.so || "");
+    const c2 = ot === "外协单" ? (poOf(o) || "—")
+             : ot === "其他"   ? (o.city || "—")
+             : (o.so_no || "—");
     const tr = document.createElement("tr");
     tr.dataset.idx = i;
-    [o.so || "", o.so_no || "—", o.priority || "一般", o.order_type || "发货单", o.name || "", o.phone || "",
+    [c1, c2, o.priority || "一般", o.name || "", o.carrier || "—",
      o.waybill_no || "—", o.waybill_no ? "已下单" : "待下单",
      o.route_status || "—", (o.returned_at || "").slice(0, 10) || "—"].forEach(v => {
       const td = document.createElement("td");
@@ -225,18 +314,52 @@ function renderPrintList() {
     });
     tdP.appendChild(pb);
     tr.appendChild(tdP);
+    /* 查看列：该发货单已上传的文件，格式图标（PDF=预览 / Excel=本地程序打开） */
+    const tdV = document.createElement("td");
+    tdV.className = "view-cell";
+    if (o.so && apiBase) {
+      loadUploadFiles(o.so).then(files => {
+        if (!files.length) { tdV.textContent = "—"; return; }
+        files.forEach(fn => {
+          const ext = (fn.split(".").pop() || "").toLowerCase();
+          /* 格式图标：PDF/Excel/Word 用专属图标，其它格式统一 File */
+          const kind = ext === "pdf" ? "pdf"
+            : ["xlsx", "xls"].includes(ext) ? "xls"
+            : ext === "csv" ? "csv"
+            : ["docx", "doc"].includes(ext) ? "doc" : "file";
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "f-ico";
+          const img = document.createElement("img");
+          img.src = `icon/file-type-${kind}.svg`;
+          img.alt = ext;
+          b.appendChild(img);
+          if (kind === "xls" || kind === "csv") {
+            b.title = fn + "（用本地 Excel 打开）";
+            b.addEventListener("click", e => { e.stopPropagation(); openLocalExcel(o.so, fn); });
+          } else {
+            b.title = fn + "（点击预览）";
+            b.addEventListener("click", e => { e.stopPropagation(); openPreview(o.so, fn); });
+          }
+          tdV.appendChild(b);
+        });
+      });
+    } else {
+      tdV.textContent = "—";
+    }
+    tr.appendChild(tdV);
     tr.addEventListener("click", () => syncSelect(i)); /* 列表行 → 联动 */
     printBody.appendChild(tr);
   });
 }
 
-/* 更新列表行的 单号/下单状态/路由状态（加 SO+类型 列后索引 6/7/8） */
+/* 更新列表行的 单号/下单状态/路由状态（列序：DN SO 优先级 联系人 承运商 单号… 索引 5/6/7） */
 function updateRowCells(o, i) {
   const row = printBody.querySelector(`tr[data-idx="${i}"]`);
   if (!row) return;
-  row.cells[6].textContent = o.waybill_no || "—";
-  row.cells[7].textContent = o.waybill_no ? "已下单" : "待下单";
-  row.cells[8].textContent = o.route_status || "—";
+  row.cells[5].textContent = o.waybill_no || "—";
+  row.cells[6].textContent = o.waybill_no ? "已下单" : "待下单";
+  row.cells[7].textContent = o.route_status || "—";
 }
 
 /* ----- 承运商设置联动：所有输入传入对应承运商下单元素 ----- */

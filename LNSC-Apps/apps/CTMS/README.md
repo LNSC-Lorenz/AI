@@ -71,7 +71,25 @@ node -e "require('node:sqlite'); console.log('node:sqlite OK')"
 # 版本不足时脚本会自动在服务启动参数中加 --experimental-sqlite
 ```
 
-### 4. 访问
+### 4. 配置"上传Excel"写入路径（页面【上传Excel】按钮需要）
+
+后端在 `/opt/ctms` 运行，而 Excel 在 web 目录，需用环境变量告诉后端真实路径：
+
+```bash
+sudo mkdir -p /etc/systemd/system/ctms.service.d
+sudo tee /etc/systemd/system/ctms.service.d/override.conf << 'EOF'
+[Service]
+Environment=EXCEL_PATH=/var/www/lnsc-apps/apps/ctms/车间工具库存管理-信息表.xlsx
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart ctms
+
+# 验证接口（应返回"文件内容无效或过小"而非 Not Found）
+curl -X POST http://127.0.0.1:3001/api/upload-excel
+```
+
+> 不配也能跑系统，只是【上传Excel】按钮会把文件写到 `/opt/ctms/` 下（页面拿不到）。
+
+### 5. 访问
 
 - 门户首页点击 **CTMS** 卡片，或直接打开 `http://<服务器IP>/apps/ctms/`
 - CTMS 卡片注册在门户 `apps.json` 中（内置应用，不会从门户 UI 被误删）
@@ -79,13 +97,14 @@ node -e "require('node:sqlite'); console.log('node:sqlite OK')"
 
 ## 数据管理
 
-- **数据库文件**：`/var/www/lnsc-apps/apps/ctms/toolinventory-server.db`（往后的唯一数据库）
+- **数据库文件**：`/opt/ctms/toolinventory-server.db`（唯一数据库，web root 之外防下载）
+- **主数据 Excel**：`/var/www/lnsc-apps/apps/ctms/车间工具库存管理-信息表.xlsx`（库位/名称/安全库存等静态主数据的唯一权威，见下方"功能更新"第 5、6 条）
 - **初始数据归档**：首次导入成功后自动将 `initial_inventory.js` 重命名为 `.bak`，避免误删数据库后静默用旧数据重建
 - **每日自动备份**（凌晨2点，保留最近30天）：
 
 ```bash
 sudo mkdir -p /backup/ctms
-echo '0 2 * * * root cp /var/www/lnsc-apps/apps/ctms/toolinventory-server.db /backup/ctms/toolinventory-$(date +\%Y\%m\%d).db && find /backup/ctms -name "*.db" -mtime +30 -delete' | sudo tee /etc/cron.d/ctms-backup
+echo '0 2 * * * root cp /opt/ctms/toolinventory-server.db /backup/ctms/toolinventory-$(date +\%Y\%m\%d).db && find /backup/ctms -name "*.db" -mtime +30 -delete' | sudo tee /etc/cron.d/ctms-backup
 ```
 
 - **恢复备份**：停止门户服务 → 用备份文件覆盖 `toolinventory-server.db` → 重启门户服务
@@ -115,5 +134,7 @@ echo '0 2 * * * root cp /var/www/lnsc-apps/apps/ctms/toolinventory-server.db /ba
    - 两者都填 → 扣账+绑定工单存同一条记录，导出在同一个表格（"变化数量"与"数量"两列）
 2. **工单信息保留**：工单号/物料名称/材质/数量提交后不再自动清空，同一工单可连续领用，不需要时手工删除
 3. **防重复扣账**：出入库请求未完成时屏蔽重复点击（修复偶发"领1件扣多件"）
-4. **库位搜索**：主界面左下角搜索框，按型号/名称/SAP号/唯一ID/品牌模糊查找，结果显示库位（柜/抽屉/行/位）和当前库存，点击（或回车）直接跳到对应柜抽屉并闪烁高亮目标卡片
+4. **库位搜索**：主界面左下角搜索框，按型号/名称/SAP号/唯一ID/品牌模糊查找，结果显示库位（柜/抽屉/行/位）和当前库存，点击（或回车）直接跳到对应柜抽屉并闪烁高亮目标卡片。模糊匹配做了归一化：全角→半角、忽略大小写、忽略空格和 `- _ / \ . × Φ` 等分隔符（`D10.5-45`、`d10 5 45`、`10545` 互相可搜）
+5. **Excel 为主数据权威**：每次页面加载时，自动把 Excel 中的物料名称同步覆盖到数据库（只覆盖不清空）；出入库时同理。改名称只需改 Excel，刷新页面即全系统生效。同时前端加载 Excel 已禁用浏览器缓存（`no-store`），保证每次拿到的都是最新表
+6. **页面上传Excel**：搜索框右侧【上传Excel】按钮，选择新版 xlsx 后直接写入服务器 web 目录（旧文件自动备份为 `…-备份日期-时间.xlsx`），上传后页面立即用新表刷新，无需 SSH/拷贝。需配置 `EXCEL_PATH` 环境变量（见"部署方法"第 4 步）。历史流水中的物料名称保留当时快照不回溯；新记录自动使用 Excel 名称
 

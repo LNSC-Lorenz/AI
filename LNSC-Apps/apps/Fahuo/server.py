@@ -25,6 +25,7 @@ from urllib.parse import urlparse, parse_qs
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, "fahuo.db")
+UPLOAD_DIR = os.path.join(BASE, "Upload")   # 上传文件根目录（按 DN 建子文件夹）
 PORT = int(os.environ.get("PORT", "8091"))
 
 SCHEMA = """
@@ -143,11 +144,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self._list_orders(qs)
         if re.search(r"/api/stats$", path):
             return self._stats()
+        if re.search(r"/api/upload$", path):
+            return self._upload_list(qs)
         return super().do_GET()  # 静态文件
 
     def do_POST(self):
-        if re.search(r"/api/orders$", urlparse(self.path).path):
+        p = urlparse(self.path).path
+        if re.search(r"/api/orders$", p):
             return self._create_order()
+        if re.search(r"/api/upload$", p):
+            return self._upload()
         self._json(404, {"error": "not found"})
 
     def do_PUT(self):
@@ -157,6 +163,8 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def do_DELETE(self):
+        if re.search(r"/api/upload$", urlparse(self.path).path):
+            return self._upload_delete()
         m = re.search(r"/api/orders/(\d+)$", urlparse(self.path).path)
         if m:
             with db() as c:
@@ -165,6 +173,49 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     # ---------- 业务 ----------
+    def _upload_list(self, qs):
+        """GET /api/upload?dn=<DN> → {"dn":..., "files":[文件名...]}（无目录时 files=[]）"""
+        dn = re.sub(r"[^\w-]", "", qs.get("dn", [""])[0])[:32]
+        folder = os.path.join(UPLOAD_DIR, dn) if dn else None
+        files = sorted(os.listdir(folder)) if folder and os.path.isdir(folder) else []
+        self._json(200, {"dn": dn, "files": files})
+
+    def _upload_delete(self):
+        """DELETE /api/upload?dn=<DN>&name=<文件名> → 删除文件；目录空了顺带移除"""
+        qs = parse_qs(urlparse(self.path).query)
+        dn = re.sub(r"[^\w-]", "", qs.get("dn", [""])[0])[:32]
+        name = os.path.basename(qs.get("name", [""])[0].replace("\\", "/")).strip()
+        if not dn or not name:
+            return self._json(400, {"error": "dn 和 name 必填"})
+        fp = os.path.join(UPLOAD_DIR, dn, name)
+        if not os.path.isfile(fp):
+            return self._json(404, {"error": "文件不存在"})
+        os.remove(fp)
+        folder = os.path.join(UPLOAD_DIR, dn)
+        if os.path.isdir(folder) and not os.listdir(folder):
+            os.rmdir(folder)
+        self._json(200, {"ok": True, "deleted": name})
+
+    def _upload(self):
+        """POST /api/upload?dn=<DN>&name=<文件名>（body=原始文件字节）
+        保存到 Upload/<DN>/<文件名>，目录自动创建。"""
+        qs = parse_qs(urlparse(self.path).query)
+        dn = re.sub(r"[^\w-]", "", qs.get("dn", [""])[0])[:32]
+        name = os.path.basename(qs.get("name", [""])[0].replace("\\", "/")).strip()
+        if not dn or not name:
+            return self._json(400, {"error": "dn 和 name 必填"})
+        n = int(self.headers.get("Content-Length") or 0)
+        if n <= 0:
+            return self._json(400, {"error": "空文件"})
+        if n > 50 * 1024 * 1024:
+            return self._json(413, {"error": "文件过大（>50MB）"})
+        folder = os.path.join(UPLOAD_DIR, dn)
+        os.makedirs(folder, exist_ok=True)
+        data = self.rfile.read(n)
+        with open(os.path.join(folder, name), "wb") as f:
+            f.write(data)
+        self._json(201, {"ok": True, "path": "Upload/%s/%s" % (dn, name), "size": len(data)})
+
     def _list_orders(self, qs):
         day = qs.get("date", [""])[0]
         with db() as c:

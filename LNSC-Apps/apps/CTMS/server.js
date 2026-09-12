@@ -9,6 +9,8 @@ const { DatabaseSync } = require('node:sqlite');
 
 const PORT = parseInt(process.argv[2]) || process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'toolinventory-server.db');
+// 前端"上传Excel"写入的目标文件（正式部署时用环境变量指向 web 目录里的信息表）
+const EXCEL_PATH = process.env.EXCEL_PATH || path.join(__dirname, '车间工具库存管理-信息表.xlsx');
 
 // ===== 数据库初始化 =====
 const db = new DatabaseSync(DB_PATH);
@@ -151,6 +153,31 @@ function histToJson(h) {
 const api = {
     'GET /api/health': () => ({ ok: true }),
 
+    // 上传新版《车间工具库存管理-信息表.xlsx》（body 为原始二进制，先备份再覆盖）
+    'POST /api/upload-excel': (q, body) => {
+        if (!Buffer.isBuffer(body) || body.length < 1024) {
+            return { ok: false, error: '文件内容无效或过小。' };
+        }
+        if (body.length > 20 * 1024 * 1024) {
+            return { ok: false, error: '文件过大（限 20MB）。' };
+        }
+        // xlsx 本质是 zip，必须以 PK 开头
+        if (!(body[0] === 0x50 && body[1] === 0x4B)) {
+            return { ok: false, error: '不是有效的 xlsx 文件。' };
+        }
+        try {
+            if (fs.existsSync(EXCEL_PATH)) {
+                const bak = EXCEL_PATH.replace(/\.xlsx$/i, '') + '-备份' + localNow().replace(/[-: ]/g, '').replace(/(\d{8})(\d{6})/, '$1-$2') + '.xlsx';
+                fs.copyFileSync(EXCEL_PATH, bak);
+            }
+            fs.writeFileSync(EXCEL_PATH, body);
+            console.log(`Excel uploaded: ${EXCEL_PATH} (${body.length} bytes)`);
+            return { ok: true, size: body.length };
+        } catch (e) {
+            return { ok: false, error: '写入失败：' + e.message };
+        }
+    },
+
     // 用户验证：支持扫码ID或用户ID查询
     'GET /api/user': (q) => {
         const id = (q.get('id') || '').trim();
@@ -194,7 +221,8 @@ const api = {
                 const existing = sel.get(it.uniqueIdentifier);
                 if (!existing) {
                     ins.run(it.uniqueIdentifier, it.materialName || '', localNow());
-                } else if (it.materialName && !existing.MaterialName) {
+                } else if (it.materialName && it.materialName !== existing.MaterialName) {
+                    // Excel 为主数据权威：每次页面加载都会把 Excel 中的名称同步覆盖到数据库
                     updName.run(it.materialName, existing.Id);
                 }
             });
@@ -239,8 +267,9 @@ const api = {
             if (isNew) newCount = prevNew + delta;
             else oldCount = prevOld + delta;
 
-            db.prepare('UPDATE InventoryState SET NewCount = ?, OldCount = ?, MaterialName = CASE WHEN MaterialName = \'\' THEN ? ELSE MaterialName END, LastUpdated = ? WHERE Id = ?')
-                .run(newCount, oldCount, materialName || '', localNow(), s.Id);
+            // 名称同样以 Excel 为准：出入库时携带的卡片名称（来自Excel）非空则覆盖
+            db.prepare('UPDATE InventoryState SET NewCount = ?, OldCount = ?, MaterialName = CASE WHEN ? != \'\' THEN ? ELSE MaterialName END, LastUpdated = ? WHERE Id = ?')
+                .run(newCount, oldCount, materialName || '', materialName || '', localNow(), s.Id);
 
             db.prepare('INSERT INTO InventoryHistory (UniqueIdentifier, MaterialName, IsNew, Delta, Person, Timestamp, PrevNew, PrevOld, AfterNew, AfterOld, OrderNo, OrderMaterial, OrderTexture, OrderQty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                 .run(uniqueIdentifier, materialName || s.MaterialName || '', isNew ? 1 : 0, delta, person || '', localNow(), prevNew, prevOld, newCount, oldCount, orderNo || '', orderMaterial || '', orderTexture || '', orderQty != null && orderQty !== '' ? String(orderQty) : '');
@@ -364,11 +393,18 @@ const server = http.createServer((req, res) => {
     const handler = api[key];
 
     if (handler) {
-        let bodyStr = '';
-        req.on('data', chunk => bodyStr += chunk);
+        const chunks = [];
+        req.on('data', chunk => chunks.push(chunk));
         req.on('end', () => {
             try {
-                const body = bodyStr ? JSON.parse(bodyStr) : null;
+                // 上传Excel接口接收原始二进制，其余接口按 JSON 解析
+                let body;
+                if (key === 'POST /api/upload-excel') {
+                    body = Buffer.concat(chunks);
+                } else {
+                    const bodyStr = Buffer.concat(chunks).toString('utf8');
+                    body = bodyStr ? JSON.parse(bodyStr) : null;
+                }
                 const result = handler(url.searchParams, body);
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify(result));

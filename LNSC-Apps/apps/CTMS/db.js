@@ -104,6 +104,20 @@ class DatabaseService {
         return { ok: true };
     }
 
+    // 上传新版库存信息表（xlsx 原始二进制，不走 JSON）
+    async uploadExcel(file) {
+        const resp = await fetch(await this._base() + 'upload-excel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: file
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+            throw new Error(data.error || `上传失败 (${resp.status})`);
+        }
+        return data;
+    }
+
     async getAllInventoryStates() {
         const data = await this._request('GET', await this._base() + 'states');
         return (data || []).map(s => ({

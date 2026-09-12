@@ -953,6 +953,32 @@ body {
     height: 100%;
 }
 
+/* ===== 上传Excel按钮（搜索框右侧） ===== */
+.upload-excel-btn {
+    margin-left: 8px;
+    padding: 5px 12px;
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.upload-excel-btn:hover {
+    background: #2196F3;
+}
+
+.upload-excel-btn.uploading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+
 /* ===== 库位搜索框（主界面底栏左侧） ===== */
 .search-box {
     position: relative;

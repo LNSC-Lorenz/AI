@@ -8,6 +8,7 @@
 # 补丁内容（写入门户 nginx 配置，幂等）：
 #   location /apps/po-closing/api/ → 127.0.0.1:8088/api/（前缀剥离；超时 610s 覆盖邮件抓取）
 #   location /apps/ctms/api/       → 127.0.0.1:3001/api/（CTMS 前端已有相对路径探测，配上即通）
+#   location /apps/fahuo/api/      → 127.0.0.1:8091/api/（发货系统；50MB 上传体；独立标记单独幂等）
 #   CSP connect-src 收敛为 'self'（API 同源后不再需要放行 :8088）
 #
 # 安全性：改动前自动备份（.bak.时间戳）；nginx -t 不过自动回滚；前端有直连兜底。
@@ -15,6 +16,7 @@
 set -euo pipefail
 
 MARK="# >>> po-closing unified-entry"
+MARK2="# >>> fahuo unified-entry"
 log(){ echo "[proxy] $*"; }
 [ "$(id -u)" -eq 0 ] || { echo "请以 root 运行：sudo bash install/bach_POClosing_proxy"; exit 1; }
 
@@ -86,6 +88,38 @@ print("patched")
 PY
 fi
 
+# ---------- Fahuo 反代补丁（独立标记，单独幂等；旧服务器已打过 PO 补丁也会补打此段） ----------
+if grep -qF "$MARK2" "$CONF"; then
+  log "Fahuo 补丁已存在，跳过（幂等）"
+else
+  BAK="$CONF.bak.$(date +%Y%m%d%H%M%S)"
+  cp -a "$CONF" "$BAK"
+  log "备份: $BAK"
+  python3 - "$CONF" "$MARK2" <<'PY'
+import sys
+path, mark = sys.argv[1], sys.argv[2]
+s = open(path, encoding="utf-8").read()
+block = """    %s
+    location /apps/fahuo/api/ {
+        proxy_pass http://127.0.0.1:8091/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+        client_max_body_size 50m;
+    }
+    # <<< fahuo unified-entry
+
+""" % mark
+anchor = "    location /apps/ {"
+if anchor not in s:
+    sys.exit("未找到 'location /apps/ {' 锚点，配置结构可能已变化，未做修改")
+s = s.replace(anchor, block + anchor, 1)
+open(path, "w", encoding="utf-8").write(s)
+print("patched fahuo")
+PY
+fi
+
 if ! nginx -t; then
   log "nginx -t 校验失败，自动回滚"
   LAST=$(ls -t "$CONF".bak.* 2>/dev/null | head -1) && cp -a "$LAST" "$CONF"
@@ -98,7 +132,12 @@ log "nginx 已 reload，反代生效"
 if curl -sf http://127.0.0.1/apps/po-closing/api/health >/dev/null; then
   log "验证通过: /apps/po-closing/api/health 经 nginx :80 反代 OK"
 else
-  log "注意: 反代未通——确认 poclose 服务运行中（systemctl status poclose）"
+  log "注意: po-closing 反代未通——确认 poclose 服务运行中（systemctl status poclose）"
+fi
+if curl -sf http://127.0.0.1/apps/fahuo/api/stats >/dev/null; then
+  log "验证通过: /apps/fahuo/api/stats 经 nginx :80 反代 OK"
+else
+  log "注意: fahuo 反代未通——确认 fahuo-api 服务运行中（systemctl status fahuo-api）"
 fi
 log "完成。外网经 connect.xxxproxy.net 访问即统一走 443；内网旧用法不受影响"
 log "撤销: sudo bash install/bach_POClosing_proxy --rollback"

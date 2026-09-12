@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+    <title>LNSC 仓储库位动态视图</title>
+    <style>:root{--chat-accent:#6366f1;--chat-bg:#ecedf1;--chat-surface:#ffffff;--chat-text:#1f2937;--chat-border:#e5e7eb;--chat-text-muted:#6b7280}</style>
+    <style>html,body{font-family:system-ui,-apple-system,sans-serif;color:#1f2937;background:#fff;line-height:1.6;color-scheme:light}a{color:#2563eb}a:visited{color:#7c3aed}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left}th{background:#f9fafb;font-weight:600}code,pre{background:#f3f4f6;color:#111827;border-radius:4px}pre{padding:12px;overflow-x:auto}code{padding:2px 4px}hr{border:none;border-top:1px solid #e5e7eb}blockquote{border-left:3px solid #d1d5db;margin:12px 0;padding:4px 16px;color:#4b5563}img{max-width:100%;height:auto}input,select,textarea,button{color:#1f2937;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:4px 8px}</style>
+    <style>*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f4f6f9;color:#1f2a37}
+#app{max-width:1400px;margin:0 auto;padding:20px}
+#top-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;background:#fff;padding:20px 24px;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:16px}
+.title-block h1{font-size:24px;color:#0b3d63}
+.subtitle{font-size:13px;color:#6b7280;margin-top:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:1px solid #d1d9e2;background:#fff;color:#374151;padding:9px 16px;border-radius:9px;font-size:14px;cursor:pointer;transition:.15s;font-weight:500}
+.btn:hover{background:#eef2f7;border-color:#9db2c8}
+.btn-primary{background:#0b6cb0;color:#fff;border-color:#0b6cb0}
+.btn-primary:hover{background:#095a92}
+.btn-import{background:#0f9d58;color:#fff;border-color:#0f9d58}
+.btn-import:hover{background:#0b8043;border-color:#0b8043}
+#legend-bar{display:flex;flex-wrap:wrap;gap:20px;background:#fff;padding:14px 20px;border-radius:12px;margin-bottom:16px;box-shadow:0 1px 6px rgba(0,0,0,.05)}
+.legend-group{font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.legend-group strong{color:#374151;font-weight:600}
+.chip{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.chip-green{background:#dcfce7;color:#166534}
+.chip-yellow{background:#fef9c3;color:#854d0e}
+.chip-red{background:#fee2e2;color:#991b1b}
+#summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.sum-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-left:4px solid #0b6cb0}
+.sum-card h4{font-size:13px;color:#6b7280;font-weight:600;margin-bottom:6px}
+.sum-card .big{font-size:26px;font-weight:700;color:#0b3d63}
+.sum-card .mini{font-size:12px;color:#9ca3af;margin-top:4px}
+.sum-card .dots{display:flex;gap:6px;margin-top:8px;font-size:12px}
+.zone{background:#fff;border-radius:14px;padding:18px 20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.zone-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.zone-head h3{font-size:18px;color:#0b3d63}
+.zone-badge{font-size:12px;background:#eef2f7;color:#475569;padding:3px 10px;border-radius:8px;font-weight:600}
+.zone-mode{font-size:12px;padding:3px 10px;border-radius:8px;font-weight:600}
+.mode-sum{background:#e0f2fe;color:#0369a1}
+.mode-count{background:#f3e8ff;color:#7e22ce}
+.bin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.bin-grid.fixed7{grid-template-columns:repeat(7,1fr)}
+.bin{border-radius:9px;padding:9px 8px;text-align:center;font-size:12px;border:1px solid transparent;position:relative;cursor:default;transition:.1s}
+.bin:hover{transform:translateY(-2px);box-shadow:0 3px 8px rgba(0,0,0,.12)}
+.bin .bcode{font-weight:700;font-size:12px}
+.bin .bval{font-size:15px;font-weight:700;margin-top:3px}
+.bin .bunit{font-size:10px;opacity:.7}
+.b-green{background:#dcfce7;border-color:#86efac;color:#166534}
+.b-yellow{background:#fef9c3;border-color:#fde047;color:#854d0e}
+.b-red{background:#fee2e2;border-color:#fca5a5;color:#991b1b}
+.b-empty{background:#f8fafc;border-color:#e2e8f0;color:#cbd5e1}
+.b-empty .bval{color:#cbd5e1}
+
+/* ===== HRS 货架立面图 ===== */
+.hrs-rack{margin-bottom:22px}
+.hrs-rack-title{font-size:14px;font-weight:700;color:#0b3d63;margin-bottom:8px;padding:4px 10px;background:#eef2f7;border-radius:7px;display:inline-block}
+.rack-scroll{overflow-x:auto;padding-bottom:6px}
+.rack-table{border-collapse:separate;border-spacing:5px;width:auto}
+.rack-table td,.rack-table th{border:none;padding:0}
+.rack-layer-lbl{font-size:11px;font-weight:700;color:#64748b;white-space:nowrap;padding-right:6px !important;text-align:right;vertical-align:middle}
+.rack-col-lbl{font-size:11px;font-weight:700;color:#64748b;text-align:center;padding-bottom:2px !important}
+.rack-cell-wrap{display:flex;gap:3px;justify-content:center}
+.rbin{min-width:64px;border-radius:7px;padding:5px 4px;text-align:center;font-size:11px;border:1px solid transparent;line-height:1.2;transition:.1s;cursor:default}
+.rbin:hover{transform:translateY(-2px);box-shadow:0 3px 8px rgba(0,0,0,.12);position:relative;z-index:2}
+.rbin .rcode{font-size:10px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.rbin .rval{font-size:13px;font-weight:700;margin-top:1px}
+.rbin .rvunit{font-size:9px;font-weight:600;opacity:.7;margin-left:1px}
+.rbin .rdep{font-size:9px;opacity:.65;font-weight:700}
+
+/* ===== AC / SC 双列布局 ===== */
+.acsc-columns{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.acsc-col{flex:1 1 400px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.acsc-row{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+
+/* ===== SUM 区 按排分行 ===== */
+.sum-rows{display:flex;flex-direction:column;gap:8px}
+.sum-row{display:flex;align-items:stretch;gap:8px}
+.sum-row-label{flex:0 0 auto;min-width:34px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#475569;background:#eef2f7;border-radius:8px;padding:0 8px}
+.sum-row-bins{flex:1 1 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal.hidden{display:none}
+.modal-box{background:#fff;border-radius:14px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-wide{max-width:760px}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #eef2f7}
+.modal-head h2{font-size:18px;color:#0b3d63}
+.modal-close{border:none;background:none;font-size:26px;cursor:pointer;color:#94a3b8;line-height:1}
+.modal-body{padding:20px 22px;overflow-y:auto}
+.modal-foot{padding:14px 22px;border-top:1px solid #eef2f7;display:flex;justify-content:flex-end;gap:10px}
+.setting-block{margin-bottom:22px}
+.setting-block h3{font-size:14px;color:#334155;margin-bottom:12px;padding-bottom:6px;border-bottom:1px dashed #e2e8f0}
+.row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.row label{font-size:14px;color:#475569}
+.row input{width:110px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;text-align:right}
+.row.hint,.hint{font-size:12px;color:#94a3b8}
+.hint code{background:#f1f5f9;padding:1px 5px;border-radius:4px;color:#0369a1}
+#loc-editor{width:100%;height:320px;font-family:'SF Mono',Consolas,monospace;font-size:12px;line-height:1.5;border:1px solid #cbd5e1;border-radius:9px;padding:12px;resize:vertical}
+.loc-stats{margin-top:10px;font-size:13px;color:#475569}
+.import-drop{border:2px dashed #86c9a3;border-radius:12px;padding:30px 20px;text-align:center;cursor:pointer;transition:.15s;background:#f6fdf9;margin-bottom:16px}
+.import-drop.dragover{background:#dcfce7;border-color:#0f9d58}
+.import-tip{font-size:12px;color:#64748b;background:#f8fafc;border-radius:9px;padding:12px;margin-bottom:12px;line-height:1.6}
+.append-row{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:#475569}
+.import-status{font-size:13px;min-height:20px}</style></head>
+    <body><main id="app">
+  <header id="top-bar">
+    <div class="title-block">
+      <h1>LNSC 仓储库位动态视图</h1>
+      <p class="subtitle">Storage Bin Saturation Overview · <span id="data-note">数据来源：SAP_WM_2600</span></p>
+    </div>
+    <div class="actions">
+      <button id="btn-import" class="btn btn-import">📥 导入库存报告</button>
+      <button id="btn-settings" class="btn">⚙️ 饱和度设置</button>
+      <button id="btn-locations" class="btn">📋 库位表管理</button>
+      <button id="btn-refresh" class="btn btn-primary">🔄 重新计算</button>
+    </div>
+  </header>
+
+  <section id="legend-bar">
+    <div class="legend-group">
+      <strong>COUNT 区 (HRS / AC / SC) — 按品类数：</strong>
+      <span class="chip chip-green">🟢 1–<span class="v-cg">5</span> 款</span>
+      <span class="chip chip-yellow">🟡 <span class="v-cy1">6</span>–<span class="v-cy2">8</span> 款</span>
+      <span class="chip chip-red">🔴 ≥<span class="v-cr">9</span> 款</span>
+    </div>
+    <div class="legend-group">
+      <strong>SUM 区 (RMS / RMO / RMT / RMW) — 按库存总量：</strong>
+      <span class="chip chip-green">🟢 ≤<span class="v-sg">500</span></span>
+      <span class="chip chip-yellow">🟡 <span class="v-sy1">501</span>–<span class="v-sy2">1000</span></span>
+      <span class="chip chip-red">🔴 &gt;<span class="v-sr">1000</span></span>
+    </div>
+  </section>
+
+  <section id="summary-cards"></section>
+
+  <section id="zone-container"></section>
+
+  <div id="import-modal" class="modal hidden">
+    <div class="modal-box modal-wide">
+      <div class="modal-head"><h2>📥 导入库存报告</h2><button class="modal-close" data-close="import-modal">×</button></div>
+      <div class="modal-body">
+        <p class="hint">导入 SAP 库存报告。支持 <code>.xls</code>（Excel 97-2003）、<code>.xlsx</code>、<code>.csv</code> 文件。系统会自动识别 <code>LGTYP</code>（仓储区）、<code>LGPLA</code>（库位号）、数量列（<code>STOCK</code>/<code>AVAILABLE</code>/<code>COUNT</code>）并重新计算库位状态。导入后数据会保存在本浏览器，下次打开仍在。注意：发布到服务器后，页面默认使用服务器自动扫描的库存数据（<code>stock.json</code>，全员共享、定时自动更新），手动导入仅覆盖本机显示，点击下方「清空所有库存数据」即可恢复共享数据。</p>
+        <div class="import-drop" id="import-drop">
+          <div class="drop-icon">📄</div>
+          <p><strong>点击选择</strong> 或 拖入文件</p>
+          <p class="hint">支持 .xls / .xlsx / .csv 格式</p>
+          <input type="file" id="import-file" accept=".csv,.txt,.xls,.xlsx" hidden="">
+        </div>
+        <div class="import-tip">
+          <strong>💡 分批导入说明：</strong>数据量大时可分两批导入 —— 先导入「AC + SC」，再导入「其余区域」。勾选下方「追加模式」即可累加，不覆盖之前导入的数据。
+          <label class="append-row"><input type="checkbox" id="import-append"> 追加模式（累加到已有数据，不清空）</label>
+        </div>
+        <div class="import-status" id="import-status"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="import-clear">🗑️ 清空所有库存数据</button>
+        <button class="btn btn-primary" id="import-apply" disabled="">应用并重新计算</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head"><h2>⚙️ 饱和度阈值设置</h2><button class="modal-close" data-close="settings-modal">×</button></div>
+      <div class="modal-body">
+        <div class="setting-block">
+          <h3>COUNT 区（HRS / AC / SC）— 品类数</h3>
+          <div class="row"><label>🟢 绿色上限（≤）</label><input type="number" id="cnt-green-max" value="5"></div>
+          <div class="row"><label>🟡 黄色上限（≤）</label><input type="number" id="cnt-yellow-max" value="8"></div>
+          <div class="row hint">🔴 红色 = 大于黄色上限（≥9）</div>
+        </div>
+        <div class="setting-block">
+          <h3>SUM 区（RMS / RMO / RMT / RMW）— 库存总量</h3>
+          <div class="row"><label>🟢 绿色上限（≤）</label><input type="number" id="sum-green-max" value="500"></div>
+          <div class="row"><label>🟡 黄色上限（≤）</label><input type="number" id="sum-yellow-max" value="1000"></div>
+          <div class="row hint">🔴 红色 = 大于黄色上限（&gt;1000）</div>
+        </div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-primary" id="apply-settings">应用并重新计算</button></div>
+    </div>
+  </div>
+
+  <div id="locations-modal" class="modal hidden">
+    <div class="modal-box modal-wide">
+      <div class="modal-head"><h2>📋 库位表管理（LNSC 仓储库位统计表）</h2><button class="modal-close" data-close="locations-modal">×</button></div>
+      <div class="modal-body">
+        <p class="hint">在此粘贴或编辑库位表。每行格式：<code>仓储区,仓位编号,统计类型</code>（统计类型 COUNT 或 SUM）。系统已内置当前库位表，修改后点击保存即可持久化到浏览器。</p>
+        <textarea id="loc-editor" spellcheck="false"></textarea>
+        <div class="loc-stats" id="loc-stats"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="loc-reset">恢复内置默认</button>
+        <button class="btn btn-primary" id="loc-save">保存库位表并重新计算</button>
+      </div>
+    </div>
+  </div>
+</main><script>window.addEventListener('message',function(e){if(e.data&&e.data.type==='theme_update'){var r=document.documentElement;for(var k in e.data.vars||{})r.style.setProperty(k,e.data.vars[k])}});window.addEventListener('message',function(e){if(e.data&&e.data.type==='theme_update'){var r=document.documentElement;for(var k in e.data.vars||{})r.style.setProperty(k,e.data.vars[k])}});
+/* ===== 动态加载 SheetJS（用于解析 .xls BIFF8 / .xlsx 二进制） =====
+   优先加载应用自带的 lib/xlsx.full.min.js（内网部署无需外网），
+   本地缺失时自动回退 CDN。与 HTML01 一样把解析库放在 lib/ 目录随应用一起上传。 */
+var XLSX_READY=null;
+function ensureXLSX(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  if(XLSX_READY)return XLSX_READY;
+  function loadScript(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=function(){if(window.XLSX)res(window.XLSX);else rej(new Error('脚本无效'))};s.onerror=function(){rej(new Error('加载失败'))};document.head.appendChild(s);});}
+  XLSX_READY=loadScript('lib/xlsx.full.min.js')
+    .catch(function(){return loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');})
+    .catch(function(){throw new Error('SheetJS 加载失败（本地 lib/ 与 CDN 均不可用）');});
+  return XLSX_READY;
+}
+
+/* ===== 内置库位表（LNSC 仓储库位统计表）===== */
+var DEFAULT_LOCATIONS=(function(){
+  var out=[];
+  // HRS 01 区: 01-CC-LL-S (CC=01..10 列, LL=01..09 层, S=1..2 深度)
+  for(var c=1;c<=10;c++)for(var l=1;l<=9;l++)for(var s=1;s<=2;s++)
+    out.push('HRS,01-'+String(c).padStart(2,'0')+'-'+String(l).padStart(2,'0')+'-'+s+',COUNT');
+  // HRS 02 区: 02-CC-LL-S
+  for(var c=1;c<=10;c++)for(var l=1;l<=9;l++)for(var s=1;s<=2;s++)
+    out.push('HRS,02-'+String(c).padStart(2,'0')+'-'+String(l).padStart(2,'0')+'-'+s+',COUNT');
+  // HRS 03 区: 03-LL-CC (LL=01..09 层, CC=01..20 列)
+  for(var l=1;l<=9;l++)for(var c=1;c<=20;c++)
+    out.push('HRS,03-'+String(l).padStart(2,'0')+'-'+String(c).padStart(2,'0')+',COUNT');
+  // HRS 04 区: 04-LL-CC (LL=01..07 层, CC=01..18 列)
+  for(var l=1;l<=7;l++)for(var c=1;c<=18;c++)
+    out.push('HRS,04-'+String(l).padStart(2,'0')+'-'+String(c).padStart(2,'0')+',COUNT');
+  // HRS 05 区: 05-LL-CC (LL=01..07 层, CC=01..18 列)
+  for(var l=1;l<=7;l++)for(var c=1;c<=18;c++)
+    out.push('HRS,05-'+String(l).padStart(2,'0')+'-'+String(c).padStart(2,'0')+',COUNT');
+  // AC 区: NN-S (NN=01..100, S=1..7)
+  for(var n=1;n<=100;n++)for(var s=1;s<=7;s++)
+    out.push('AC,'+String(n).padStart(2,'0')+'-'+s+',COUNT');
+  // SC 区: NN-S (NN=01..100, S=1..7)
+  for(var n=1;n<=100;n++)for(var s=1;s<=7;s++)
+    out.push('SC,'+String(n).padStart(2,'0')+'-'+s+',COUNT');
+  // RMS 区
+  ['01-1','01-2','01-3','01-4','01-5','02-1','02-2','02-3','02-4','02-5',
+   '03-1','03-2','03-3','03-4','03-5','04-1','04-2','04-3','04-4','04-5',
+   '05-1','05-2','05-3','05-4','05-5','05-6','05-A','05-B','05-C','05-D',
+   '05-E','05-F','05-G','05-H','05-I','06-1','06-2','06-3','06-4','06-5',
+   '06-6','07-1','07-2','07-3','07-4','07-5','07-6']
+   .forEach(function(b){out.push('RMS,'+b+',SUM');});
+  for(var h=1;h<=24;h++)out.push('RMS,H'+String(h).padStart(2,'0')+',SUM');
+  // RMT 区
+  ['01-1','01-2','01-3','01-4','01-5','01-6','02-1','02-2','02-3','02-4','02-5','02-6']
+   .forEach(function(b){out.push('RMT,'+b+',SUM');});
+  // RMO 区
+  ['01-1','01-2','01-3','01-4','01-5','01-6','02-1','02-2','02-3','02-4',
+   '03-1','03-2','03-3','03-4','04-1','04-2','04-3','04-4','04-5',
+   '05-1','05-2','05-3','05-4','05-5','06-1','06-2','06-3','06-4','06-5']
+   .forEach(function(b){out.push('RMO,'+b+',SUM');});
+  // RMW 区
+  ['01-1','01-2','01-3','01-4','01-5','02-1','02-2','02-3','02-4','02-5']
+   .forEach(function(b){out.push('RMW,'+b+',SUM');});
+  return out.join('\n');
+})();
+
+/* ===== 库存报告数据（LGTYP, LGPLA, STOCK）— 内置部分示例 ===== */
+var STOCK_DATA=[["RMS","01-4",4.92],["RMO","04-3",1.75],["HRS","01-03-02-1",5],["RMS","05-A",1.64],["RMO","04-3",2.68],["RMO","06-2",6.7],["RMS","04-1",430.5],["RMS","H01",31.58],["RMS","H01",26.99],["RMT","01-5",17.1],["RMO","06-2",18.33],["RMW","01-E",20],["RMW","01-5",2.6],["RMS","02-4",0.2],["RMW","01-4",51],["RMS","01-3",12.2],["RMS","01-5",4.14],["RMS","01-5",42.7],["RMS","01-3",11.43],["RMS","01-4",2.86],["RMO","01-6",154.28],["RMS","05-G",3.5],["RMO","06-3",39.28],["RMO","06-3",53],["RMO","06-3",30.62],["RMW","01-2",53.5],["RMS","02-3",4.4],["RMS","01-4",9.2],["RMS","01-3",5.09],["RMS","01-4",20.91],["RMO","04-2",16.6],["RMW","01-B",45.25],["RMW","01-2",43.52],["RMS","02-2",20.86],["RMO","01-4",17.9],["RMT","02-5",10],["HRS","03-02-11",300],["HRS","03-01-18",379],["RMO","01-4",73],["RMO","04-4",24.8],["RMS","03-5",303.9],["HRS","02-03-09-1",500],["HRS","01-08-09-2",622],["HRS","04-03-02",974],["RMS","01-4",18],["RMS","05-C",4.2],["RMW","01-4",5],["RMS","05-C",13.8],["HRS","04-03-02",407],["HRS","01-03-09-1",4819],["RMS","H01",90],["RMS","H01",15.32],["RMS","07-4",183],["RMS","H01",1],["RMO","02-1",185.8],["RMS","01-4",11.1],["RMO","01-5",4.04],["RMW","01-1",54.2],["RMO","06-2",40.55],["HRS","05-01-09",5.6],["RMW","01-4",105.06],["RMW","01-2",68],["RMW","02-3",47.24],["RMO","04-2",19.6],["RMO","04-2",95],["RMS","01-4",2.5],["RMS","05-E",62.64],["RMS","05-4",51.86],["RMO","02-1",71.3],["RMW","01-4",9.29],["RMW","02-3",41.539],["RMS","03-1",32.92],["RMS","03-1",181.6],["RMO","04-1",23.8],["AC","60-3",5.45],["RMW","01-E",10],["RMO","06-2",29.1],["RMT","02-1",0.72],["RMS","01-3",8.49],["RMW","02-1",127],["HRS","03-08-10",56],["RMO","06-1",27.5],["RMS","05-E",2.292],["RMW","01-1",61.4],["RMO","02-1",254],["RMO","02-2",15.7],["RMW","02-1",72.8],["RMS","05-A",6.5],["RMO","02-1",154],["RMS","05-E",6.9],["RMW","01-1",19.4],["RMS","05-5",268.096],["RMS","01-4",4.46],["RMS","01-4",3.8],["RMS","01-4",3.8],["RMS","05-B",15],["RMW","02-1",85.1],["RMT","01-1",122.512],["RMO","04-2",10.42],["RMW","02-1",67],["RMW","01-1",174.45],["RMW","01-3",13.31],["RMW","01-5",3.7],["HRS","03-01-03",19.5],["RMO","01-4",28.1],["RMO","01-4",19.81],["RMO","04-1",19.5],["RMO","01-2",42],["RMS","01-3",12.2],["RMW","01-5",47.24],["RMO","01-2",80.14],["RMS","01-5",46.88],["RMW","02-5",7.5],["RMW","01-2",23.9],["RMW","01-4",18.7],["RMS","H02",200],["HRS","03-02-14",12],["RMS","05-4",182.32],["RMS","05-1",15.1],["RMW","02-4",125.34],["RMW","02-2",30],["RMW","01-3",30.4],["RMW","02-4",89.73],["RMO","05-5",107.66],["RMS","05-I",12.2],["RMW","02-1",61.972],["RMO","01-5",245],["RMW","02-4",6.66],["RMW","02-4",10.42],["RMW","02-3",12],["RMS","01-4",1.88],["RMO","05-3",37.179],["RMO","06-2",44.84],["RMW","02-5",125.23],["HRS","04-03-02",2644],["HRS","03-05-07",1000],["HRS","03-05-07",1000],["RMS","H03",4.56],["RMW","01-4",64.31],["RMS","01-1",147.3],["RMW","01-2",30.48],["HRS","03-03-04",1000],["RMW","02-3",121],["RMW","02-2",77.92],["HRS","02-02-07-2",480],["HRS","01-01-09-2",8832],["HRS","01-07-09-1",940],["RMW","01-3",18.36],["RMO","01-4",65],["RMO","05-5",79.5],["RMW","02-2",309.18],["RMW","02-2",67.93],["RMW","02-4",24.845],["RMS","01-3",39.76],["RMO","04-2",27.43],["RMW","01-3",50],["RMO","02-3",58],["RMW","01-3",69.7],["RMW","01-1",1.2],["HRS","04-03-02",3521],["RMS","03-1",12.4],["RMW","02-4",105],["RMS","02-2",41.9],["RMS","03-1",3.5],["RMS","03-1",25.6],["RMS","05-A",5.24],["RMW","01-1",73.83],["RMW","01-5",19.12],["RMW","01-E",2.45],["RMO","01-2",37.98],["RMS","H03",1.45],["RMS","07-2",258.52],["HRS","02-02-08-2",360],["HRS","02-02-08-2",1000],["RMO","01-4",128],["RMO","04-3",42],["HRS","01-10-09-1",1000],["RMW","02-4",21.94],["RMW","01-4",9.24],["RMS","05-1",21.3],["SC","64-3",168],["HRS","02-02-07-2",150],["RMO","05-3",58.81],["HRS","01-05-09-2",500],["RMW","01-5",14.22],["AC","95-6",5],["HRS","01-08-09-1",399],["RMO","01-2",24.06],["RMW","02-2",13],["HRS","01-06-08-2",489],["HRS","03-02-11",356],["AC","41-7",1000],["RMO","01-4",365],["RMW","02-3",265.6],["HRS","03-08-02",500],["HRS","04-04-03",500],["HRS","03-08-05",500],["SC","64-6",268],["HRS","01-10-03-1",98],["SC","19-4",104],["RMW","01-3",63.52],["RMS","01-3",39.76],["HRS","05-01-11",18.9],["RMW","02-4",29.16],["RMO","06-2",15],["RMO","01-2",60.26],["RMW","01-2",47.05],["RMO","02-1",546.29],["RMS","01-4",1.99],["RMW","01-1",15],["AC","70-7",1000],["AC","11-1",612],["HRS","04-03-02",500],["AC","62-4",794],["HRS","04-07-04",1000],["HRS","03-03-04",202],["HRS","04-01-12",76],["HRS","02-09-09-1",68],["RMO","06-1",79],["RMS","01-3",3.04],["RMW","02-5",75],["RMO","01-1",151],["RMO","06-1",27.5],["RMW","02-1",89.62]];
+
+/* ===== 状态阈值 ===== */
+var THRESH={cntGreenMax:5,cntYellowMax:8,sumGreenMax:500,sumYellowMax:1000};
+
+/* ===== 库位表持久化 ===== */
+var LOC_VERSION='2026-07-15-v8-fullcode';
+function loadLocations(){try{var ver=localStorage.getItem('lnsc_loc_version');var s=localStorage.getItem('lnsc_locations');if(s&&ver===LOC_VERSION)return s;}catch(e){}try{localStorage.setItem('lnsc_locations',DEFAULT_LOCATIONS);localStorage.setItem('lnsc_loc_version',LOC_VERSION);}catch(e){}return DEFAULT_LOCATIONS;}
+var locations=loadLocations();
+function loadThresh(){try{var s=localStorage.getItem('lnsc_thresh');if(s)Object.assign(THRESH,JSON.parse(s));}catch(e){}}
+loadThresh();
+
+/* ===== 实时库存数据 =====
+   数据来源优先级（对齐 Purchase_Search_Drawing 的发布架构）：
+   ① 服务器扫描生成的 stock.json（共享盘库存报告 → cron 扫描，所有用户共享同一份数据）
+   ② 本浏览器手动导入的库存报告（localStorage，仅本机生效，用于临时覆盖）
+   ③ 内置示例数据 STOCK_DATA（本地 file:// 打开 / 服务器索引不可用时的兜底） */
+var SERVER_STOCK=null;   /* {generated, file, rows} — 来自 stock.json */
+var LIVE_STOCK=loadStock();
+function hasLocalImport(){try{return !!localStorage.getItem('lnsc_stock');}catch(e){return false;}}
+function loadStock(){try{var s=localStorage.getItem('lnsc_stock');if(s){var a=JSON.parse(s);if(Array.isArray(a)&&a.length)return a;}}catch(e){}return STOCK_DATA.slice();}
+function saveStock(){try{localStorage.setItem('lnsc_stock',JSON.stringify(LIVE_STOCK));}catch(e){}}
+function updateDataNote(mode){
+  var el=document.getElementById('data-note');if(!el)return;
+  if(mode==='server'&&SERVER_STOCK){el.textContent='数据来源：服务器库存扫描 · '+SERVER_STOCK.file+' · '+SERVER_STOCK.generated+' · '+LIVE_STOCK.length+' 行';}
+  else if(mode==='imported'){el.textContent='数据来源：已导入库存报告（仅本机生效） · '+LIVE_STOCK.length+' 行';}
+  else{el.textContent='数据来源：SAP_WM_2600（内置部分数据） · '+LIVE_STOCK.length+' 行';}
+}
+/* Web 部署（http/https）时 fetch 服务器端 2_scan-stock.sh 生成的 stock.json；
+   本地 file:// 双击打开不 fetch（浏览器禁止），自动回退 localStorage/内置示例。
+   stock.json 格式: {"generated":"YYYY-MM-DD HH:MM","file":"报告文件名","rows":[["LGTYP","LGPLA",数量],...]} */
+function loadServerStock(){
+  if(location.protocol==='file:')return Promise.resolve(false);
+  return fetch('stock.json',{cache:'no-store'}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(data){
+    var rows=Array.isArray(data)?data:((data&&Array.isArray(data.rows))?data.rows:[]);
+    rows=rows.filter(function(x){return Array.isArray(x)&&x.length>=2&&x[0]&&x[1];})
+             .map(function(x){return [String(x[0]).trim(),String(x[1]).trim(),(+x[2]||0)];});
+    if(!rows.length)throw new Error('stock.json 无数据');
+    SERVER_STOCK={generated:(data&&data.generated)||'',file:(data&&data.file)||'stock.json',rows:rows};
+    if(!hasLocalImport()){LIVE_STOCK=SERVER_STOCK.rows.slice();updateDataNote('server');render();}
+    return true;
+  }).catch(function(){return false;});
+}
+
+function parseLocations(txt){var rows=[];txt.split(/\n/).forEach(function(l){l=l.trim();if(!l)return;var p=l.split(',');if(p.length>=3){rows.push({zone:p[0].trim(),bin:p[1].trim(),type:p[2].trim().toUpperCase()});}});return rows;}
+
+/* 计算：SUM=STOCK 加总, COUNT=匹配行数 */
+function compute(){var locs=parseLocations(locations);var map={};locs.forEach(function(l){var k=l.zone+'|'+l.bin;map[k]={zone:l.zone,bin:l.bin,type:l.type,sum:0,count:0};});LIVE_STOCK.forEach(function(row){var lgtyp=row[0],lgpla=row[1],stock=row[2];var k=lgtyp+'|'+lgpla;if(map[k]){map[k].count++;map[k].sum+=(+stock||0);}});return {locs:locs,map:map};}
+
+function statusOf(rec){if(rec.type==='COUNT'){var c=rec.count;if(c===0)return 'empty';if(c<=THRESH.cntGreenMax)return 'green';if(c<=THRESH.cntYellowMax)return 'yellow';return 'red';}else{var s=rec.sum;if(s<=0)return 'empty';if(s<=THRESH.sumGreenMax)return 'green';if(s<=THRESH.sumYellowMax)return 'yellow';return 'red';}}
+function fmtVal(rec){return rec.type==='COUNT'?rec.count:(Math.round(rec.sum*100)/100);}
+
+/* ===== HRS 货架立面图配置 ===== */
+var HRS_RACKS=[
+  {rack:'01', title:'HRS 01 排', cols:10, layers:9, depth:2, fmt:'CLS'},
+  {rack:'02', title:'HRS 02 排', cols:10, layers:9, depth:2, fmt:'CLS'},
+  {rack:'03', title:'HRS 03 排', cols:20, layers:9, depth:1, fmt:'LC'},
+  {rack:'04', title:'HRS 04 排', cols:18, layers:7, depth:1, fmt:'LC'},
+  {rack:'05', title:'HRS 05 排', cols:18, layers:7, depth:1, fmt:'LC'}
+];
+
+function renderHrsRack(cfg,recMap){
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var html='<div class="hrs-rack"><div class="hrs-rack-title">'+cfg.title+' · '+cfg.cols+' 列 × '+cfg.layers+' 层'+(cfg.depth>1?' × 双深度(-1/-2)':'')+'</div><div class="rack-scroll"><table class="rack-table"><tbody>';
+  html+='<tr><th></th>';
+  for(var c=1;c<=cfg.cols;c++)html+='<th class="rack-col-lbl">'+pad(c)+'</th>';
+  html+='</tr>';
+  for(var l=cfg.layers;l>=1;l--){
+    html+='<tr><td class="rack-layer-lbl">L'+pad(l)+'</td>';
+    for(var c=1;c<=cfg.cols;c++){
+      html+='<td>';
+      if(cfg.depth>1){
+        html+='<div class="rack-cell-wrap">';
+        for(var s=1;s<=2;s++){
+          var bin=cfg.rack+'-'+pad(c)+'-'+pad(l)+'-'+s;
+          html+=cellHtml(recMap[bin],'HRS',bin,'-'+s);
+        }
+        html+='</div>';
+      }else{
+        var bin=cfg.rack+'-'+pad(l)+'-'+pad(c);
+        html+='<div class="rack-cell-wrap">'+cellHtml(recMap[bin],'HRS',bin,'')+'</div>';
+      }
+      html+='</td>';
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
+function cellHtml(rec,zone,bin,depLbl){
+  if(!rec){rec={zone:zone,bin:bin,type:'COUNT',sum:0,count:0};}
+  var st=statusOf(rec);
+  var val=fmtVal(rec);
+  var title=zone+' '+bin+'\n品类数: '+val+' 款';
+  return '<div class="rbin b-'+st+'" title="'+title+'"><div class="rcode">'+bin+'</div><div class="rval">'+val+'<span class="rvunit">款</span></div></div>';
+}
+
+/* ===== SUM 区：按排分行渲染 =====
+   规则：按库位号 "-" 前的前缀分组（01-* 一行, 02-* 一行 ...）；
+   无 "-" 的（如 H01~H24）归到 "H" 行；行按数值升序，H 排最后。 */
+function renderSumRows(recs,mode){
+  var grp={};
+  recs.forEach(function(r){
+    var key;
+    if(r.bin.indexOf('-')>=0){key=r.bin.split('-')[0].trim();}
+    else{key=(r.bin.match(/^[A-Za-z]+/)||['?'])[0];}
+    if(!grp[key])grp[key]=[];
+    grp[key].push(r);
+  });
+  var keys=Object.keys(grp).sort(function(a,b){
+    var na=parseInt(a,10),nb=parseInt(b,10);
+    var aNum=!isNaN(na),bNum=!isNaN(nb);
+    if(aNum&&bNum)return na-nb;
+    if(aNum&&!bNum)return -1;   // 数字排前
+    if(!aNum&&bNum)return 1;    // 字母排后
+    return a.localeCompare(b);
+  });
+  var html='<div class="sum-rows">';
+  keys.forEach(function(key){
+    var list=grp[key].slice().sort(function(a,b){return a.bin.localeCompare(b.bin,undefined,{numeric:true});});
+    var cells='';
+    list.forEach(function(r){
+      var st=statusOf(r);var val=fmtVal(r);
+      cells+='<div class="bin b-'+st+'" title="'+r.zone+' '+r.bin+' : '+val+'"><div class="bcode">'+r.bin+'</div><div class="bval">'+val+'</div></div>';
+    });
+    html+='<div class="sum-row"><div class="sum-row-label">'+key+'</div><div class="sum-row-bins">'+cells+'</div></div>';
+  });
+  html+='</div>';
+  return html;
+}
+
+/* ===== 主渲染 ===== */
+function render(){
+  var res=compute();var map=res.map;updateLegend();
+  var ZONES=['HRS','AC','SC','RMS','RMO','RMT','RMW'];
+  var zoneRecs={};ZONES.forEach(function(z){zoneRecs[z]=[];});
+  Object.keys(map).forEach(function(k){var r=map[k];if(zoneRecs[r.zone])zoneRecs[r.zone].push(r);});
+
+  var sc=document.getElementById('summary-cards');sc.innerHTML='';
+  ZONES.forEach(function(z){
+    var recs=zoneRecs[z];if(!recs.length)return;
+    var g=recs.filter(function(r){return statusOf(r)==='green';}).length;
+    var y=recs.filter(function(r){return statusOf(r)==='yellow';}).length;
+    var rd=recs.filter(function(r){return statusOf(r)==='red';}).length;
+    var e=recs.filter(function(r){return statusOf(r)==='empty';}).length;
+    var mode=recs[0].type;
+    sc.insertAdjacentHTML('beforeend','<div class="sum-card"><h4>'+z+' 区（'+mode+'）</h4><div class="big">'+recs.length+'</div><div class="mini">库位总数 · 已用 '+(recs.length-e)+'</div><div class="dots"><span>🟢'+g+'</span><span>🟡'+y+'</span><span>🔴'+rd+'</span><span>⚪'+e+'</span></div></div>');
+  });
+
+  var zc=document.getElementById('zone-container');zc.innerHTML='';
+  ZONES.forEach(function(z){
+    var recs=zoneRecs[z];if(!recs.length)return;
+    var mode=recs[0].type;
+    var inner='';
+
+    if(z==='HRS'){
+      var recMap={};recs.forEach(function(r){recMap[r.bin]=r;});
+      HRS_RACKS.forEach(function(cfg){inner+=renderHrsRack(cfg,recMap);});
+    }else if(z==='AC'||z==='SC'){
+      var byRack={};
+      recs.forEach(function(r){
+        var m=r.bin.match(/^(\d+)-(\d+)$/);
+        var rack=m?parseInt(m[1],10):0;
+        var slot=m?parseInt(m[2],10):0;
+        if(!byRack[rack])byRack[rack]={};
+        byRack[rack][slot]=r;
+      });
+      var maxRack=0;Object.keys(byRack).forEach(function(k){var n=parseInt(k,10);if(n>maxRack)maxRack=n;});
+      var half=Math.ceil(maxRack/2);
+      function buildRow(rack){
+        var slots=byRack[rack]||{};
+        var cells='';
+        for(var s=1;s<=7;s++){
+          var r=slots[s];
+          var bin=String(rack).length<2?('0'+rack):String(rack);bin=bin+'-'+s;
+          if(r){var st=statusOf(r);var val=fmtVal(r);
+            cells+='<div class="bin b-'+st+'" title="'+z+' '+r.bin+'"><div class="bcode">'+r.bin+'</div><div class="bval">'+val+'<span class="bunit">款</span></div></div>';
+          }else{
+            cells+='<div class="bin b-empty" title="'+z+' '+bin+'"><div class="bcode">'+bin+'</div><div class="bval">0<span class="bunit">款</span></div></div>';
+          }
+        }
+        return '<div class="acsc-row">'+cells+'</div>';
+      }
+      var leftCol='',rightCol='';
+      for(var rk=1;rk<=half;rk++)leftCol+=buildRow(rk);
+      for(var rk2=half+1;rk2<=maxRack;rk2++)rightCol+=buildRow(rk2);
+      inner='<div class="acsc-columns"><div class="acsc-col">'+leftCol+'</div><div class="acsc-col">'+rightCol+'</div></div>';
+    }else{
+      /* SUM 区（RMS/RMO/RMT/RMW）：按排分行 —— 01-* 一行, 02-* 一行 ... */
+      inner=renderSumRows(recs,mode);
+    }
+
+    var modeBadge=mode==='SUM'?'<span class="zone-mode mode-sum">SUM · 库存总量加总</span>':'<span class="zone-mode mode-count">COUNT · 品类数统计</span>';
+    zc.insertAdjacentHTML('beforeend','<div class="zone"><div class="zone-head"><h3>'+z+' <span class="zone-badge">'+recs.length+' 库位</span></h3>'+modeBadge+'</div>'+inner+'</div>');
+  });
+}
+
+function updateLegend(){document.querySelector('.v-cg').textContent=THRESH.cntGreenMax;document.querySelector('.v-cy1').textContent=THRESH.cntGreenMax+1;document.querySelector('.v-cy2').textContent=THRESH.cntYellowMax;document.querySelector('.v-cr').textContent=THRESH.cntYellowMax+1;document.querySelector('.v-sg').textContent=THRESH.sumGreenMax;document.querySelector('.v-sy1').textContent=THRESH.sumGreenMax+1;document.querySelector('.v-sy2').textContent=THRESH.sumYellowMax;document.querySelector('.v-sr').textContent=THRESH.sumYellowMax;}
+
+/* ===== 弹窗与事件 ===== */
+function openModal(id){document.getElementById(id).classList.remove('hidden');}
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+document.getElementById('btn-settings').onclick=function(){document.getElementById('cnt-green-max').value=THRESH.cntGreenMax;document.getElementById('cnt-yellow-max').value=THRESH.cntYellowMax;document.getElementById('sum-green-max').value=THRESH.sumGreenMax;document.getElementById('sum-yellow-max').value=THRESH.sumYellowMax;openModal('settings-modal');};
+document.getElementById('btn-locations').onclick=function(){document.getElementById('loc-editor').value=locations;updateLocStats();openModal('locations-modal');};
+document.getElementById('btn-refresh').onclick=render;
+document.querySelectorAll('.modal-close').forEach(function(b){b.onclick=function(){closeModal(b.dataset.close);};});
+document.querySelectorAll('.modal').forEach(function(m){m.onclick=function(e){if(e.target===m)m.classList.add('hidden');};});
+document.getElementById('apply-settings').onclick=function(){THRESH.cntGreenMax=+document.getElementById('cnt-green-max').value;THRESH.cntYellowMax=+document.getElementById('cnt-yellow-max').value;THRESH.sumGreenMax=+document.getElementById('sum-green-max').value;THRESH.sumYellowMax=+document.getElementById('sum-yellow-max').value;try{localStorage.setItem('lnsc_thresh',JSON.stringify(THRESH));}catch(e){}closeModal('settings-modal');render();};
+document.getElementById('loc-save').onclick=function(){locations=document.getElementById('loc-editor').value;try{localStorage.setItem('lnsc_locations',locations);localStorage.setItem('lnsc_loc_version',LOC_VERSION);}catch(e){}closeModal('locations-modal');render();};
+document.getElementById('loc-reset').onclick=function(){document.getElementById('loc-editor').value=DEFAULT_LOCATIONS;updateLocStats();};
+document.getElementById('loc-editor').oninput=updateLocStats;
+function updateLocStats(){var rows=parseLocations(document.getElementById('loc-editor').value);var byZone={};rows.forEach(function(r){byZone[r.zone]=(byZone[r.zone]||0)+1;});document.getElementById('loc-stats').textContent='共 '+rows.length+' 个库位 · '+Object.keys(byZone).map(function(z){return z+':'+byZone[z];}).join(' · ');}
+
+/* ===== 导入库存报告（支持 .xls / .xlsx / .csv）===== */
+var PARSED_ROWS=null;
+document.getElementById('btn-import').onclick=function(){document.getElementById('import-status').innerHTML='';document.getElementById('import-apply').disabled=true;PARSED_ROWS=null;openModal('import-modal');};
+var dropZone=document.getElementById('import-drop');
+var fileInput=document.getElementById('import-file');
+dropZone.onclick=function(){fileInput.click();};
+dropZone.addEventListener('dragover',function(e){e.preventDefault();dropZone.classList.add('dragover');});
+dropZone.addEventListener('dragleave',function(){dropZone.classList.remove('dragover');});
+dropZone.addEventListener('drop',function(e){e.preventDefault();dropZone.classList.remove('dragover');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change',function(e){if(e.target.files.length)handleFile(e.target.files[0]);});
+
+function setStatus(html){document.getElementById('import-status').innerHTML=html;}
+
+function handleFile(file){
+  var name=(file.name||'').toLowerCase();
+  var isExcel=/\.(xls|xlsx)$/.test(name);
+  if(isExcel){
+    setStatus('<span style="color:#0369a1">⏳ 正在加载 Excel 解析引擎…</span>');
+    ensureXLSX().then(function(XLSX){
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        try{
+          var wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+          var ws=wb.Sheets[wb.SheetNames[0]];
+          var aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+          parseAOA(aoa,file.name);
+        }catch(err){setStatus('<span style="color:#991b1b">✗ 解析失败：'+err.message+'</span>');}
+      };
+      reader.onerror=function(){setStatus('<span style="color:#991b1b">✗ 文件读取失败</span>');};
+      reader.readAsArrayBuffer(file);
+    }).catch(function(err){setStatus('<span style="color:#991b1b">✗ '+err.message+'</span>');});
+  }else{
+    var reader=new FileReader();
+    reader.onload=function(ev){try{parseCSV(ev.target.result,file.name);}catch(err){setStatus('<span style="color:#991b1b">✗ 解析失败：'+err.message+'</span>');}};
+    reader.readAsText(file,'UTF-8');
+  }
+}
+
+function parseAOA(aoa,fname){
+  if(!aoa||!aoa.length)throw new Error('文件为空');
+  var headerIdx=-1,cols=null;
+  for(var i=0;i<Math.min(aoa.length,10);i++){
+    var c=(aoa[i]||[]).map(function(x){return String(x).trim().toUpperCase();});
+    if(c.indexOf('LGTYP')>=0&&c.indexOf('LGPLA')>=0){headerIdx=i;cols=c;break;}
+  }
+  if(headerIdx<0)throw new Error('未找到表头，需包含 LGTYP 和 LGPLA 列');
+  var iType=cols.indexOf('LGTYP'),iBin=cols.indexOf('LGPLA');
+  var iStock=cols.indexOf('STOCK');if(iStock<0)iStock=cols.indexOf('AVAILABLE');if(iStock<0)iStock=cols.indexOf('COUNT');
+  var rows=[];
+  for(var r=headerIdx+1;r<aoa.length;r++){
+    var row=aoa[r]||[];
+    var zone=String(row[iType]==null?'':row[iType]).trim();
+    var bin=String(row[iBin]==null?'':row[iBin]).trim();
+    if(!zone||!bin)continue;
+    var stock=0;
+    if(iStock>=0){var raw=String(row[iStock]==null?'0':row[iStock]).replace(/,/g,'');stock=parseFloat(raw)||0;}
+    rows.push([zone,bin,stock]);
+  }
+  if(!rows.length)throw new Error('未解析到数据行');
+  finalizeParse(rows,fname);
+}
+
+function splitLine(line){var out=[],cur='',q=false;for(var i=0;i<line.length;i++){var c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if((c===','||c==='\t'||c===';')&&!q){out.push(cur);cur='';}else cur+=c;}out.push(cur);return out.map(function(s){return s.trim();});}
+
+function parseCSV(text,fname){
+  text=text.replace(/^\ufeff/,'');
+  var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
+  if(!lines.length)throw new Error('文件为空');
+  var headerIdx=-1,cols=null;
+  for(var i=0;i<Math.min(lines.length,5);i++){var c=splitLine(lines[i]).map(function(x){return x.toUpperCase();});if(c.indexOf('LGTYP')>=0&&c.indexOf('LGPLA')>=0){headerIdx=i;cols=c;break;}}
+  if(headerIdx<0)throw new Error('未找到表头，需包含 LGTYP 和 LGPLA 列');
+  var iType=cols.indexOf('LGTYP'),iBin=cols.indexOf('LGPLA');var iStock=cols.indexOf('STOCK');if(iStock<0)iStock=cols.indexOf('AVAILABLE');if(iStock<0)iStock=cols.indexOf('COUNT');
+  var rows=[];
+  for(var i=headerIdx+1;i<lines.length;i++){var c=splitLine(lines[i]);if(c.length<=Math.max(iType,iBin))continue;var zone=(c[iType]||'').trim();var bin=(c[iBin]||'').trim();if(!zone||!bin)continue;var stock=0;if(iStock>=0){stock=parseFloat((c[iStock]||'0').replace(/,/g,''))||0;}rows.push([zone,bin,stock]);}
+  if(!rows.length)throw new Error('未解析到数据行');
+  finalizeParse(rows,fname);
+}
+
+function finalizeParse(rows,fname){
+  PARSED_ROWS=rows;
+  document.getElementById('import-apply').disabled=false;
+  setStatus('<span style="color:#166534">✓ 已解析 <b>'+rows.length+'</b> 行（来自 '+fname+'），点击右下角「应用并重新计算」生效。</span>');
+}
+
+document.getElementById('import-apply').onclick=function(){if(!PARSED_ROWS)return;var append=document.getElementById('import-append').checked;if(append){LIVE_STOCK=LIVE_STOCK.concat(PARSED_ROWS);}else{LIVE_STOCK=PARSED_ROWS.slice();}saveStock();updateDataNote('imported');closeModal('import-modal');render();};
+document.getElementById('import-clear').onclick=function(){if(!confirm('确定清空本浏览器导入的库存数据？将恢复为服务器扫描数据（无服务器数据时为内置示例）。'))return;try{localStorage.removeItem('lnsc_stock');}catch(e){}setStatus('<span style="color:#0369a1">⏳ 正在恢复共享数据…</span>');loadServerStock().then(function(ok){if(ok){setStatus('<span style="color:#166534">✓ 已恢复为服务器库存扫描数据。</span>');}else if(SERVER_STOCK){LIVE_STOCK=SERVER_STOCK.rows.slice();updateDataNote('server');setStatus('<span style="color:#166534">✓ 已恢复为服务器库存扫描数据。</span>');render();}else{LIVE_STOCK=STOCK_DATA.slice();updateDataNote('builtin');setStatus('<span style="color:#854d0e">服务器库存索引不可用，已恢复为内置示例数据。</span>');render();}});};
+
+updateDataNote(hasLocalImport()?'imported':'builtin');
+render();
+loadServerStock();</script></body></html>

@@ -142,7 +142,7 @@ function getDrawerHeight(cabIndex, drawIndex) {
 // ===== Excel Data Loading =====
 async function loadExcelData() {
     try {
-        const response = await fetch('车间工具库存管理-信息表.xlsx');
+        const response = await fetch('车间工具库存管理-信息表.xlsx', { cache: 'no-store' });
         if (!response.ok) {
             console.warn('Excel file not found, using empty data');
             return;
@@ -566,23 +566,43 @@ function formatLocation(item) {
     return `${cabCode}柜 抽屉${item.drawerNumber} 行${item.rowNumber} 位${item.sequenceNumber}`;
 }
 
+// 模糊搜索归一化：全角转半角、忽略大小写、去掉空格和常见分隔符（- _ / \ . · , 、 * Φ Ø 括号 # 等），
+// "×" 按 "x" 处理。这样型号 "D10.5-45"、"d10 5 45"、"10.5×45" 都能互相搜到。
+function normalizeSearchText(s) {
+    let t = (s == null ? '' : String(s));
+    t = t.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)); // 全角→半角
+    t = t.toLowerCase().replace(/×/g, 'x');
+    t = t.replace(/[\s\-_/\\.·,，、*ΦφØø()（）\[\]【】#＃]+/g, '');
+    return t;
+}
+
 function onSearchInput() {
-    const kw = document.getElementById('txtSearch').value.trim().toLowerCase();
+    const kwRaw = document.getElementById('txtSearch').value.trim().toLowerCase();
+    const kw = normalizeSearchText(kwRaw);
     const box = document.getElementById('searchResults');
     if (!kw) { hideSearchResults(); return; }
 
+    // 原始子串匹配 + 归一化模糊匹配，任一命中即算匹配
     const matches = excelData.filter(x =>
-        (x.materialName || '').toLowerCase().includes(kw) ||
-        (x.sapNumber || '').toLowerCase().includes(kw) ||
-        (x.uniqueIdentifier || '').toLowerCase().includes(kw) ||
-        (x.toolBrand || '').toLowerCase().includes(kw)
-    ).slice(0, 20);
+        [x.materialName, x.sapNumber, x.uniqueIdentifier, x.toolBrand].some(f => {
+            const raw = (f || '').toString().toLowerCase();
+            return raw.includes(kwRaw) || normalizeSearchText(f).includes(kw);
+        })
+    );
+
+    // 相关度排序：名称以关键词开头的排最前，其余按库位顺序
+    matches.sort((a, b) => {
+        const ap = normalizeSearchText(a.materialName).startsWith(kw) ? 0 : 1;
+        const bp = normalizeSearchText(b.materialName).startsWith(kw) ? 0 : 1;
+        return ap - bp || a.cabinetNumber - b.cabinetNumber || a.drawerNumber - b.drawerNumber || a.sequenceNumber - b.sequenceNumber;
+    });
+    const top = matches.slice(0, 20);
 
     box.innerHTML = '';
-    if (!matches.length) {
+    if (!top.length) {
         box.innerHTML = '<div class="search-item search-empty">未找到匹配的刀具</div>';
     } else {
-        matches.forEach(item => {
+        top.forEach(item => {
             const div = document.createElement('div');
             div.className = 'search-item';
             div.innerHTML = `<span class="si-name">${item.materialName || item.uniqueIdentifier || ''}</span>` +
@@ -628,6 +648,32 @@ function goToItem(item) {
             setTimeout(() => card.classList.remove('search-hit'), 2600);
         }
     }, 60);
+}
+
+// ===== 上传新版库存信息表（xlsx），上传成功后用新表刷新界面 =====
+async function uploadExcelFile(input) {
+    const file = input.files && input.files[0];
+    input.value = ''; // 重置，允许重复选择同一个文件
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) {
+        showMessage('请选择 .xlsx 格式的文件。');
+        return;
+    }
+
+    const textEl = document.querySelector('.upload-excel-text');
+    const btn = document.querySelector('.upload-excel-btn');
+    if (btn) btn.classList.add('uploading');
+    if (textEl) textEl.textContent = '上传中…';
+    try {
+        const r = await dbService.uploadExcel(file);
+        await loadExcelData(); // 用新表重新加载 库位/名称/安全库存/采购量 并刷新界面
+        showMessage(`上传成功（${(r.size / 1024).toFixed(0)} KB），数据已按新表刷新。`);
+    } catch (e) {
+        showMessage('上传失败：' + e.message);
+    } finally {
+        if (btn) btn.classList.remove('uploading');
+        if (textEl) textEl.textContent = '上传Excel';
+    }
 }
 
 // ===== Tool Details Loading =====

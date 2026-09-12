@@ -250,19 +250,19 @@
           <div class="header-wrap">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-ot"><col class="col2-name"><col class="col2-phone">
-                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr">
+                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <thead>
-                <tr><th>DN</th><th>SO</th><th>优先级</th><th>类型</th><th>联系人</th><th>电话</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th><th>打印</th></tr>
+                <tr><th>DN</th><th>SO</th><th>优先级</th><th>联系人</th><th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th><th>打印</th><th>查看</th></tr>
               </thead>
             </table>
           </div>
           <div class="table-section">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-ot"><col class="col2-name"><col class="col2-phone">
-                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr">
+                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <tbody id="printBody"></tbody>
             </table>
@@ -298,9 +298,27 @@
   </aside>
 
 </div>
+
+<!-- 文件预览弹窗（PDF / Excel / Word；可打印） -->
+<div class="pv-mask" id="pvMask" hidden>
+  <div class="pv-box">
+    <div class="pv-head">
+      <b id="pvTitle">预览</b>
+      <div class="pv-actions">
+        <button class="btn" id="pvPrint" type="button">打印</button>
+        <button class="btn" id="pvClose" type="button">关闭</button>
+      </div>
+    </div>
+    <div class="pv-body" id="pvBody"></div>
+  </div>
+</div>
+
 <script src="mock.js"></script>
 <script src="stats.js"></script>
 <script src="topbar.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="lib/docx-preview.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
 <script src="print.js"></script>
 </body>
 </html>

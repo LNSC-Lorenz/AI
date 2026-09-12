@@ -134,6 +134,10 @@
                 <input type="text" id="txtSearch" placeholder="搜索型号/名称/SAP号，定位库位" autocomplete="off">
                 <div id="searchResults" class="search-results" style="display:none;"></div>
             </div>
+            <label class="upload-excel-btn" title="上传新版《车间工具库存管理-信息表.xlsx》，上传后自动刷新数据">
+                <span class="upload-excel-text">上传Excel</span>
+                <input type="file" id="fileExcel" accept=".xlsx" style="display:none" onchange="uploadExcelFile(this)">
+            </label>
             <div class="bottom-buttons">
                 <span class="separator">＞</span>
                 <button class="func-btn" onclick="exportCurrentStock()">生成当前库存</button>

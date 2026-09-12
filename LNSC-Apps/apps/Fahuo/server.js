@@ -11,6 +11,7 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 
 const BASE = __dirname;
+const UPLOAD_DIR = path.join(BASE, "Upload");   // 上传文件根目录（按 DN 建子文件夹）
 const PORT = parseInt(process.env.PORT || "8091", 10);
 
 const db = new DatabaseSync(path.join(BASE, "fahuo.db"));
@@ -89,6 +90,43 @@ function serveStatic(p, res) {
 }
 
 /* ---------- 业务 ---------- */
+/* GET /api/upload?dn=<DN> → { dn, files:[...] }（无目录时 files=[]） */
+function listUpload(u, res) {
+  const dn = (u.searchParams.get("dn") || "").replace(/[^\w-]/g, "").slice(0, 32);
+  const folder = path.join(UPLOAD_DIR, dn);
+  const files = (dn && fs.existsSync(folder)) ? fs.readdirSync(folder).sort() : [];
+  json(res, 200, { dn, files });
+}
+
+/* DELETE /api/upload?dn=<DN>&name=<文件名> → 删除文件；目录空了顺带移除 */
+function deleteUpload(u, res) {
+  const dn = (u.searchParams.get("dn") || "").replace(/[^\w-]/g, "").slice(0, 32);
+  const name = path.basename((u.searchParams.get("name") || "").replace(/\\/g, "/")).trim();
+  if (!dn || !name) return json(res, 400, { error: "dn 和 name 必填" });
+  const fp = path.join(UPLOAD_DIR, dn, name);
+  if (!fs.existsSync(fp)) return json(res, 404, { error: "文件不存在" });
+  fs.unlinkSync(fp);
+  const folder = path.join(UPLOAD_DIR, dn);
+  if (fs.existsSync(folder) && !fs.readdirSync(folder).length) fs.rmdirSync(folder);
+  json(res, 200, { ok: true, deleted: name });
+}
+
+/* POST /api/upload?dn=<DN>&name=<文件名>（body=原始文件字节）→ Upload/<DN>/<文件名> */
+function uploadFile(u, req, res) {
+  const dn = (u.searchParams.get("dn") || "").replace(/[^\w-]/g, "").slice(0, 32);
+  const name = path.basename((u.searchParams.get("name") || "").replace(/\\/g, "/")).trim();
+  if (!dn || !name) return json(res, 400, { error: "dn 和 name 必填" });
+  const len = parseInt(req.headers["content-length"] || "0", 10);
+  if (!len) return json(res, 400, { error: "空文件" });
+  if (len > 50 * 1024 * 1024) return json(res, 413, { error: "文件过大（>50MB）" });
+  const folder = path.join(UPLOAD_DIR, dn);
+  fs.mkdirSync(folder, { recursive: true });
+  const ws = fs.createWriteStream(path.join(folder, name));
+  req.pipe(ws);
+  ws.on("finish", () => json(res, 201, { ok: true, path: `Upload/${dn}/${name}`, size: len }));
+  ws.on("error", e => json(res, 500, { error: String(e) }));
+}
+
 function listOrders(u, res) {
   const day = u.searchParams.get("date") || "";
   const rows = day
@@ -152,12 +190,15 @@ http.createServer((req, res) => {
   const m = p.match(/\/api\/orders\/(\d+)$/);
   if (req.method === "GET" && /\/api\/orders$/.test(p)) return listOrders(u, res);
   if (req.method === "GET" && /\/api\/stats$/.test(p)) return stats(res);
+  if (req.method === "GET" && /\/api\/upload$/.test(p)) return listUpload(u, res);
   if (req.method === "POST" && /\/api\/orders$/.test(p)) return readBody(req, d => createOrder(d, res));
+  if (req.method === "POST" && /\/api\/upload$/.test(p)) return uploadFile(u, req, res);
   if (m && req.method === "PUT") return readBody(req, d => updateOrder(+m[1], d, res));
   if (m && req.method === "DELETE") {
     const r = db.prepare("DELETE FROM orders WHERE id=?").run(+m[1]);
     return json(res, 200, { deleted: r.changes });
   }
+  if (req.method === "DELETE" && /\/api\/upload$/.test(p)) return deleteUpload(u, res);
   if (req.method === "GET") return serveStatic(p, res);
   json(res, 404, { error: "not found" });
 }).listen(PORT, "0.0.0.0", () => {

@@ -60,6 +60,7 @@
         <textarea id="pasteInput" class="paste-input" placeholder="请把地址粘贴到此处，文本、图片也可以（截图 Ctrl+V / 拖拽 / 点图片按钮），点击识别"></textarea>
         <div class="panel-actions">
           <input type="file" id="fileInput" accept="image/*" hidden>
+          <button id="btnPool" class="btn icon-btn" type="button" title="常用收件信息" aria-label="常用收件信息"><img src="icon/content.svg" alt="通讯录"></button>
           <button id="btnImage" class="btn" type="button">添加图片</button>
           <button id="btnRecognize" class="btn" type="button">识别</button>
         </div>
@@ -114,7 +115,7 @@
             <label class="fld"><span>员工姓名 *</span><input id="empNameInput" class="line-input" type="text"></label>
             <label class="fld"><span>员工电话 *</span><input id="empPhoneInput" class="line-input" type="text" inputmode="numeric" maxlength="11"></label>
           </div>
-          <input type="file" id="upFileInput" hidden>
+          <input type="file" id="upFileInput" hidden multiple>
           <button id="btnUpload" class="btn upload-btn" type="button">上传文件</button>
           <span id="upFileName" class="up-file"></span>
         </div>

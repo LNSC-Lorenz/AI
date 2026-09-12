@@ -166,12 +166,169 @@ if (typeof document !== "undefined") {
     b.addEventListener("click", () => setType(b.dataset.t));
   });
 
-  /* 上传文件（外协单附件等：记录文件名，确认时随备注入库） */
+  /* 上传文件（仅发货单可见）：在线时上传到服务器 Upload/<DN>/ 目录；
+   * 已传文件的行被选中时，虚线框显示「已上传 + 文件名」（文件名不入备注） */
   const upFileInput = document.getElementById("upFileInput");
   const upFileName = document.getElementById("upFileName");
-  document.getElementById("btnUpload").addEventListener("click", () => upFileInput.click());
-  upFileInput.addEventListener("change", () => {
-    upFileName.textContent = upFileInput.files[0] ? upFileInput.files[0].name : "";
+  const btnUpload = document.getElementById("btnUpload");
+  /* 删除服务器上该 DN 的某个上传文件，完成后刷新按钮状态（失败弹窗提示） */
+  function removeUpload(fn) {
+    const dn = soInput.value.trim();
+    if (!dn || !apiOnline) return;
+    fetch(`${API}/upload?dn=${encodeURIComponent(dn)}&name=${encodeURIComponent(fn)}`, { method: "DELETE" })
+      .then(async r => {
+        if (!r.ok) alert(`移除失败（${r.status}）：${fn}\n${(await r.text()).slice(0, 80)}\n\n提示：服务器 server.py 可能不是最新版`);
+      })
+      .catch(e => alert("移除接口不可达：" + e.message))
+      .finally(() => refreshUploadState(dn));
+  }
+  /* 文件名后的 × 移除按钮（阻止冒泡，不触发再次上传） */
+  function mkRemoveX(fn) {
+    const x = document.createElement("b");
+    x.className = "up-x";
+    x.textContent = "×";
+    x.title = "移除该文件";
+    x.addEventListener("click", e => { e.stopPropagation(); removeUpload(fn); });
+    return x;
+  }
+  function setUploadState(fileName, count, files) {
+    btnUpload.classList.remove("done");
+    btnUpload.textContent = "";
+    clearInterval(btnUpload._rollT); btnUpload._rollT = null;   /* 清旧翻滚定时器 */
+    if (!fileName) { btnUpload.textContent = "上传文件"; upFileName.textContent = ""; return; }
+    btnUpload.classList.add("done");
+    const s = document.createElement("span");
+    s.textContent = count > 1 ? `已上传 ${count}个` : "已上传";   /* 多文件显示数量 */
+    btnUpload.append(s);
+    if (count > 1 && files && files.length) {
+      /* 多文件：框高不变，文件名每 2.4s 上滚一行循环翻滚，当前行带 × 可删 */
+      const roll = document.createElement("div"); roll.className = "up-roll";
+      const inner = document.createElement("div"); inner.className = "up-roll-in";
+      files.forEach(fn => {
+        const d = document.createElement("div");
+        const t = document.createElement("span");
+        t.className = "up-fn";
+        t.textContent = fn;
+        d.append(t, mkRemoveX(fn));
+        inner.appendChild(d);
+      });
+      roll.appendChild(inner);
+      btnUpload.append(roll);
+      let idx = 0;
+      btnUpload._rollT = setInterval(() => {
+        idx = (idx + 1) % files.length;
+        inner.style.transform = `translateY(-${idx * 1.5}em)`;
+      }, 2400);
+    } else {
+      const n = document.createElement("span"); n.className = "up-name"; n.textContent = fileName;
+      btnUpload.append(n, mkRemoveX(fileName));   /* 单文件也带 × */
+    }
+    upFileName.textContent = "";
+  }
+  /* 按 DN 查询服务器已传文件并刷新按钮状态（仅在线且有 DN 时） */
+  function refreshUploadState(dn) {
+    setUploadState("");
+    if (!dn || !apiOnline) return;
+    fetch(`${API}/upload?dn=${encodeURIComponent(dn)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.files && d.files.length && soInput.value.trim() === dn) {
+          setUploadState(d.files[d.files.length - 1], d.files.length, d.files);   /* 最新 + 数量 + 全部文件名 */
+        }
+      })
+      .catch(() => { /* 查询失败保持默认状态 */ });
+  }
+  /* 通讯录：常用收件信息（localStorage lnsc-addr-pool），弹层一键回填 */
+  const btnPool = document.getElementById("btnPool");
+  let poolPop = null;
+  function closePool() { if (poolPop) { poolPop.remove(); poolPop = null; } }
+  btnPool.addEventListener("click", e => {
+    e.stopPropagation();
+    if (poolPop) return closePool();
+    const pool = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]");
+    poolPop = document.createElement("div");
+    poolPop.className = "pool-pop";
+    /* 头部：简单搜索（姓名 / 电话 / 地址 模糊匹配） */
+    const head = document.createElement("div");
+    head.className = "pool-head";
+    const search = document.createElement("input");
+    search.className = "pool-search";
+    search.placeholder = "搜索姓名 / 电话 / 地址";
+    head.appendChild(search);
+    const body = document.createElement("div");
+    body.className = "pool-body";
+    poolPop.append(head, body);
+    function renderPool(kw) {
+      body.innerHTML = "";
+      const k = (kw || "").trim().toLowerCase();
+      const list = [...pool].reverse().filter(a =>   /* 最新保存的在最上 */
+        !k || [a.name, a.phone, a.province, a.city, a.district, a.street]
+          .filter(Boolean).join(" ").toLowerCase().includes(k));
+      if (!list.length) {
+        const em = document.createElement("div");
+        em.className = "pool-empty";
+        em.textContent = pool.length
+          ? "无匹配的收件信息"
+          : "暂无保存的收件信息：勾选「存到常用地址池」确认入单后自动入池";
+        body.appendChild(em);
+        return;
+      }
+      list.forEach(a => {
+        const it = document.createElement("button");
+        it.type = "button";
+        it.className = "pool-item";
+        const l1 = document.createElement("b");
+        l1.textContent = (a.name || "--") + (a.phone ? "  " + a.phone : "");
+        const l2 = document.createElement("span");
+        l2.textContent = [a.province, a.city, a.district, a.street].filter(Boolean).join(" ");
+        it.append(l1, l2);
+        it.addEventListener("click", () => {
+          selProvince.value = a.province || "";
+          fillCity(a.province || "", a.city || "");
+          fillDistrict(a.province || "", a.city || "", a.district || "");
+          streetInput.value = a.street || "";
+          nameInput.value = a.name || "";
+          phoneInput.value = a.phone || "";
+          closePool();
+        });
+        body.appendChild(it);
+      });
+    }
+    search.addEventListener("input", () => renderPool(search.value));
+    renderPool("");
+    poolPop.addEventListener("click", ev => ev.stopPropagation());
+    document.querySelector(".paste-panel").appendChild(poolPop);
+    search.focus();
+  });
+  document.addEventListener("click", closePool);
+
+  btnUpload.addEventListener("click", () => {
+    if (orderType === "发货单" && !soInput.value.trim()) {
+      alert("请先填写 DN，上传文件将存到 Upload/<DN>/ 目录"); soInput.focus(); return;
+    }
+    upFileInput.click();
+  });
+  /* 多文件同时上传：逐个 POST 到同一 DN 目录，全部完成后按服务器实际文件刷新按钮 */
+  upFileInput.addEventListener("change", async () => {
+    const files = [...upFileInput.files];
+    upFileInput.value = "";                    /* 允许再次选择同一批文件 */
+    if (!files.length) { upFileName.textContent = ""; return; }
+    const dn = soInput.value.trim();
+    if (dn && apiOnline) {
+      let ok = 0; const fail = [];
+      for (const f of files) {
+        try {
+          const r = await fetch(`${API}/upload?dn=${encodeURIComponent(dn)}&name=${encodeURIComponent(f.name)}`,
+            { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: f });
+          if (r.ok) ok++;
+          else { fail.push(f.name); console.warn("上传失败", f.name, await r.text()); }
+        } catch (e) { fail.push(f.name); console.warn("上传接口不可达", f.name, e); }
+      }
+      if (fail.length) alert(`上传完成 ${ok} 个，失败 ${fail.length} 个：\n${fail.join("、")}`);
+      refreshUploadState(dn);
+      return;
+    }
+    upFileName.textContent = files.map(f => f.name).join("、");   /* 离线：仅提示文件名，不落盘、不入备注 */
   });
 
   /* ----- 下拉填充 ----- */
@@ -402,6 +559,7 @@ if (typeof document !== "undefined") {
     phoneInput.value = o.phone || "";
     soInput.value = o.so || "";
     soNoInput.value = o.so_no || "";
+    refreshUploadState(o.so || "");   /* 有上传过文件的发货单：虚线框显示「已上传 + 文件名」 */
     if (o.ship_date) dateInput.value = o.ship_date;
     document.querySelectorAll(".carrier").forEach(b =>
       b.classList.toggle("active", !!o.carrier && b.dataset.carrier === o.carrier));
@@ -477,7 +635,7 @@ if (typeof document !== "undefined") {
     nameInput.value = ""; phoneInput.value = "";
     soInput.value = ""; soNoInput.value = "";
     poInput.value = ""; buyerInput.value = ""; empNameInput.value = ""; empPhoneInput.value = "";
-    upFileInput.value = ""; upFileName.textContent = "";
+    upFileInput.value = ""; setUploadState("");
     poolCheck.checked = false;
     selProvince.value = ""; fillCity("", ""); fillDistrict("", "", "");
     document.querySelectorAll(".carrier").forEach(b => b.classList.remove("active"));
@@ -499,6 +657,7 @@ if (typeof document !== "undefined") {
     const addr = [[prov, city, dist].filter(Boolean).join(" "), street]
       .filter(Boolean).join(" ");
     if (!addr) { alert("地址为空：请先粘贴地址并点击「识别」"); return; }
+    if (!phoneInput.value.trim()) { alert("联系方式为必填项"); phoneInput.focus(); return; }
     const dn = soInput.value.trim(), soNo = soNoInput.value.trim();
     if (dn && !/^\d{8}$/.test(dn)) {
       alert("DN 必须为 8 位数字"); soInput.focus(); return;
@@ -516,7 +675,7 @@ if (typeof document !== "undefined") {
       if (!empNameInput.value.trim()) { alert("其他（员工快递）必须填写员工姓名"); empNameInput.focus(); return; }
       if (!empPhoneInput.value.trim()) { alert("其他（员工快递）必须填写员工电话"); empPhoneInput.focus(); return; }
     }
-    /* PO / 采购员 / 发件人 / 附件名随备注入库（中栏姓名电话=收件人信息，不混用） */
+    /* PO / 采购员 / 发件人 随备注入库；上传文件名不入备注（备注只保留手写内容） */
     let noteFull = noteInput.value.trim();
     if (orderType === "外协单") {
       if (poInput.value.trim()) noteFull += (noteFull ? " " : "") + "PO：" + poInput.value.trim();
@@ -524,9 +683,6 @@ if (typeof document !== "undefined") {
     }
     if (orderType === "其他" && empNameInput.value.trim()) {
       noteFull += (noteFull ? " " : "") + "发件人：" + empNameInput.value.trim() + " " + empPhoneInput.value.trim();
-    }
-    if (upFileName.textContent) {
-      noteFull += (noteFull ? " " : "") + "附件：" + upFileName.textContent;
     }
 
     /* 勾选：地址信息存到常用地址池（localStorage，按地址去重） */
