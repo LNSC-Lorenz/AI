@@ -84,7 +84,7 @@ const upload = multer({
   dest: path.join(__dirname, '.uploads_tmp'),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB per file
   fileFilter: (req, file, cb) => {
-    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.env','.wasm', '.sh', '.abap', '.c', '.cpp', '.h', '.mf', '.smf', '.so', '.50', '.traineddata','.gitignore'];
+    const allowed = ['.html', '.htm', '.css', '.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.map', '.md', '.txt','.seq', '.xlsx', '.xls', '.pdf', '.doc', '.docx', '.csv', '.pptx', '.ppt', '.zip', '.rar', '.7z', '.db', '.sqlite', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.log', '.mp4', '.mp3', '.wav', '.webm', '.webp','.py', '.bmp', '.env','.wasm', '.sh', '.abap', '.c', '.cpp', '.h', '.mf','.pyc', '.smf', '.so', '.50', '.traineddata','.gitignore'];
     const ext = path.extname(file.originalname).toLowerCase();
     // 无扩展名文件（bash 安装脚本、SDK 工具等）放行
     if (ext === '' || allowed.includes(ext)) {

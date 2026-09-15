@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>可视化模式 | LNSC 发货全链系统</title>
-<link rel="stylesheet" href="style.css">
-<link rel="icon" href="App.ico">
+<title>可视化模式 | LNSC 全链发货平台</title>
+<link rel="stylesheet" href="../shared/style.css">
+<link rel="icon" href="../shared/App.ico">
 </head>
 <body>
 <div class="layout">
@@ -14,30 +14,30 @@
   <aside class="sidebar-left">
     <div class="mode">
       <div class="mode-num">- 1 -</div>
-      <a class="mode-btn" href="index.html">录单模式</a>
+      <a class="mode-btn" href="1-entry.html">录单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 2 -</div>
-      <a class="mode-btn" href="print.html">下单模式</a>
+      <a class="mode-btn" href="2-order.html">下单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 3 -</div>
-      <a class="mode-btn" href="list.html">清单模式</a>
+      <a class="mode-btn" href="3-list.html">清单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 4 -</div>
-      <a class="mode-btn" href="sap.html">SAP模式</a>
+      <a class="mode-btn" href="4-sap.html">SAP</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 5 -</div>
-      <a class="mode-btn active" href="hmi.html">可视化模式</a>
+      <a class="mode-btn active" href="5-trace.html">追溯</a>
     </div>
   </aside>
 
   <!-- 中间：可视化模式（左 1/3 三模块 + 右 2/3 点阵明细） -->
   <main class="main">
     <header class="title-bar">
-      <h1>LNSC 发货全链系统</h1>
+      <h1>LNSC 全链发货平台</h1>
       <span class="tb-mid">LNSC Full-Chain Delivery System</span>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
@@ -70,30 +70,29 @@
   <aside class="sidebar-right">
     <div class="stat">
       <div class="stat-label">昨日发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日待发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">超时未发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">计划发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日回单</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
   </aside>
 
 </div>
-<script src="mock.js"></script>
-<script src="hmi.js"></script>
-<script src="stats.js"></script>
-<script src="topbar.js"></script>
+<script src="5-trace.js"></script>
+<script src="../shared/stats.js"></script>
+<script src="../shared/topbar.js"></script>
 </body>
 </html>

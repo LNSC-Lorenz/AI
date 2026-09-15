@@ -1121,7 +1121,59 @@ async function exportCurrentStock() {
     }
 }
 
-async function exportHistory() {
+// ===== 导出日期范围选择（起留空=不限，止默认当天）=====
+let pendingExportType = null;
+
+function localToday() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function openDateDialog(type) {
+    pendingExportType = type;
+    document.getElementById('dateTitle').textContent =
+        type === 'history' ? '生成出入库记录：选择日期范围' : '新刀具出入记录：选择日期范围';
+    document.getElementById('dateStart').value = '';
+    document.getElementById('dateEnd').value = localToday(); // 止日期默认当天
+    document.getElementById('dateOverlay').style.display = 'flex';
+}
+
+function dateDialogCancel() {
+    pendingExportType = null;
+    document.getElementById('dateOverlay').style.display = 'none';
+}
+
+async function dateDialogConfirm() {
+    const start = document.getElementById('dateStart').value;
+    const end = document.getElementById('dateEnd').value;
+    if (start && end && start > end) {
+        showMessage('起始日期不能晚于截止日期。');
+        return;
+    }
+    const type = pendingExportType;
+    dateDialogCancel();
+    if (type === 'history') await doExportHistory(start, end);
+    else if (type === 'newtool') await doExportNewToolInOut(start, end);
+}
+
+// 历史时间格式 'yyyy-MM-dd HH:mm:ss'，取前10位按日期比较
+function inDateRange(ts, start, end) {
+    const d = (ts || '').substring(0, 10);
+    if (!d) return false;
+    if (start && d < start) return false;
+    if (end && d > end) return false;
+    return true;
+}
+
+function rangeSuffix(start, end) {
+    if (!start && !end) return formatDate();
+    return `_${start || '最早'}至${end || '今天'}`;
+}
+
+function exportHistory() { openDateDialog('history'); }
+
+async function doExportHistory(start, end) {
     try {
         // 读取工单4参数作为筛选条件（都为空则导出全部，保持原行为）
         const fNo = document.getElementById('txtOrderNo').value.trim();
@@ -1132,6 +1184,11 @@ async function exportHistory() {
         const hasFilter = !!(fNo || fMat || fTex || fQty !== null);
 
         let histories = await dbService.getAllInventoryHistory();
+        histories = histories.filter(h => inDateRange(h.timestamp, start, end));
+        if (!histories.length) {
+            showMessage('所选日期范围内没有出入库记录。');
+            return;
+        }
         if (hasFilter) {
             histories = histories.filter(h => {
                 // 工单号、数量：精确匹配；物料名称、材质：包含匹配（不区分大小写）
@@ -1172,7 +1229,7 @@ async function exportHistory() {
         });
 
         const fileSuffix = fNo ? `_工单${fNo}` : '';
-        if (downloadExcel(rows, `出入库记录${fileSuffix}${formatDate()}.xlsx`)) {
+        if (downloadExcel(rows, `出入库记录${fileSuffix}${rangeSuffix(start, end)}.xlsx`)) {
             showMessage(hasFilter ? `导出成功，共 ${rows.length} 条符合工单条件的记录。` : '导出成功。');
         }
     } catch (ex) {
@@ -1221,10 +1278,16 @@ async function exportBelowSafety() {
     }
 }
 
-async function exportNewToolInOut() {
+function exportNewToolInOut() { openDateDialog('newtool'); }
+
+async function doExportNewToolInOut(start, end) {
     try {
         const histories = await dbService.getAllInventoryHistory();
-        const newToolRecords = histories.filter(h => h.isNew);
+        const newToolRecords = histories.filter(h => h.isNew && inDateRange(h.timestamp, start, end));
+        if (!newToolRecords.length) {
+            showMessage('所选日期范围内没有新刀具出入记录。');
+            return;
+        }
 
         // Group by date + uniqueIdentifier
         const groups = {};
@@ -1258,7 +1321,7 @@ async function exportNewToolInOut() {
                 });
             });
 
-        if (downloadExcel(rows, `新刀具出入记录${formatDate()}.xlsx`)) showMessage('导出成功。');
+        if (downloadExcel(rows, `新刀具出入记录${rangeSuffix(start, end)}.xlsx`)) showMessage('导出成功。');
     } catch (ex) {
         showMessage('导出失败：' + ex.message);
     }

@@ -171,6 +171,20 @@
                 <div class="progress-bar"><div class="progress-bar-inner"></div></div>
             </div>
         </div>
+
+        <!-- 导出日期范围选择 -->
+        <div id="dateOverlay" class="msg-overlay" style="display:none;">
+            <div class="msg-box date-box">
+                <p id="dateTitle">选择导出日期范围</p>
+                <div class="date-row"><label>起</label><input type="date" id="dateStart"></div>
+                <div class="date-row"><label>止</label><input type="date" id="dateEnd"></div>
+                <p class="date-hint">起日期留空表示不限；止日期默认当天</p>
+                <div class="date-btns">
+                    <button onclick="dateDialogConfirm()">导出</button>
+                    <button class="date-cancel" onclick="dateDialogCancel()">取消</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>

@@ -1,18 +1,18 @@
-/* ============================================================
- * LNSC 发货全链系统 - SAP模式：SAP 交货单（DN）清单
+﻿/* ============================================================
+ * LNSC 全链发货平台 - SAP模式：SAP 交货单（DN）清单
  * 数据：当前为本地订单库模拟（DN=so）；对接 B1 时替换 fetchOrders 为
  *       Service Layer: GET /DeliveryNotes?$filter=DocumentStatus eq 'O'
  * ============================================================ */
 "use strict";
 
 const $ = id => document.getElementById(id);
-const API_CANDIDATES = ["api", `${location.protocol}//${location.hostname}:8091/api`];
+const API_CANDIDATES = ["../api", `${location.protocol}//${location.hostname}:8091/api`];
 let orders = [];
 
 async function fetchOrders() {
   for (const base of API_CANDIDATES) {
     try {
-      const r = await fetch(base + "/orders");
+      const r = await fetch(base + "/orders", { signal: AbortSignal.timeout(5000) });   /* 5s 超时防假死 */
       if (r.ok) { markApi(true, base); return await r.json(); }
     } catch (e) { /* 尝试下一个 */ }
   }
@@ -45,6 +45,16 @@ function toSapRow(o) {
   };
 }
 
+/* 单号前缀显示：DN=82600 / SO=32600 小号上标加粗，剩余位加粗（2026-09-15 用户规则） */
+const preHtml = (s, pre) => {
+  s = s || "--------";
+  return s.startsWith(pre)
+    ? '<span class="dn-pre">' + pre + '</span><b>' + s.slice(pre.length) + "</b>"
+    : "<b>" + s + "</b>";
+};
+const dnHtml = dn => preHtml(dn, "82600");
+const soHtml = so => preHtml(so, "32600");
+
 function render(list) {
   const body = $("sapBody");
   body.innerHTML = "";
@@ -54,7 +64,9 @@ function render(list) {
      r.open ? "未清" : "已清", r.total, r.prio, r.otype, r.carrier, r.waybill, r.exp
     ].forEach((v, i) => {
       const td = document.createElement("td");
-      td.textContent = v;
+      if (i === 0) td.innerHTML = dnHtml(v);        /* DN 列：82600 前缀上标 */
+      else if (i === 1) td.innerHTML = soHtml(v);   /* SO 列：32600 前缀上标 */
+      else td.textContent = v;
       if (i === 6) td.className = "num";
       if (i === 5 && r.open) td.className = "sap-open-td";
       if (v === "紧急") td.classList.add("prio-hot"); /* 紧急加粗 */

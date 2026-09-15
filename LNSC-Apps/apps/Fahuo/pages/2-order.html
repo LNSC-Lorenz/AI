@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>下单模式 | LNSC 发货全链系统</title>
-<link rel="stylesheet" href="style.css">
-<link rel="icon" href="App.ico">
+<title>下单模式 | LNSC 全链发货平台</title>
+<link rel="stylesheet" href="../shared/style.css">
+<link rel="icon" href="../shared/App.ico">
 </head>
 <body>
 <div class="layout">
@@ -14,30 +14,30 @@
   <aside class="sidebar-left">
     <div class="mode">
       <div class="mode-num">- 1 -</div>
-      <a class="mode-btn" href="index.html">录单模式</a>
+      <a class="mode-btn" href="1-entry.html">录单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 2 -</div>
-      <a class="mode-btn active" href="print.html">下单模式</a>
+      <a class="mode-btn active" href="2-order.html">下单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 3 -</div>
-      <a class="mode-btn" href="list.html">清单模式</a>
+      <a class="mode-btn" href="3-list.html">清单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 4 -</div>
-      <a class="mode-btn" href="sap.html">SAP模式</a>
+      <a class="mode-btn" href="4-sap.html">SAP</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 5 -</div>
-      <a class="mode-btn" href="hmi.html">可视化模式</a>
+      <a class="mode-btn" href="5-trace.html">追溯</a>
     </div>
   </aside>
 
   <!-- 中间：下单模式 -->
   <main class="main">
     <header class="title-bar">
-      <h1>LNSC 发货全链系统</h1>
+      <h1>LNSC 全链发货平台</h1>
       <span class="tb-mid">LNSC Full-Chain Delivery System</span>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
@@ -58,7 +58,7 @@
           <button class="pw-cb" type="button" data-c="德邦">德邦</button>
           <button class="pw-cb" type="button" data-c="跨越">跨越</button>
           <button class="pw-cb" type="button" data-c="专车">专车</button>
-          <button class="pw-cb" type="button" data-c="客户自提">客户自提</button>
+          <button class="pw-cb" type="button" data-c="自提">自提</button>
         </div>
         <section class="pw-bill" id="pwBill">
 
@@ -80,21 +80,21 @@
             </div>
             <div class="pw-block">
               <div class="lbl">寄件人</div>
-              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
             <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>数量：1</span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
-            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-row"><span>DN：<b class="f-dn">--------</b><span class="f-so"></span></span></div>
             <div class="pw-foot">
               <div class="pw-qr"></div>
               <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
             </div>
           </div>
 
-          <!-- 德邦模板（开放平台：DPK 运单号 / 大件快递3.60 / 重量体积 / 送货上楼） -->
+          <!-- 德邦模板（开放平台：DPK 运单号 / 快递标准件(默认) / 重量体积 / 送货上楼） -->
           <div class="bill-tpl" id="billDB" hidden>
-            <div class="pw-head"><span>德邦快递 DEPPON</span><span class="f-product">大件快递 3.60</span></div>
+            <div class="pw-head"><span>德邦快递 DEPPON</span><span class="f-product">快递标准件</span></div>
             <div class="pw-no">
               <div class="pw-barcode"></div>
               <div class="pw-no-text f-waybill">DPK 000 0000 0000</div>
@@ -110,14 +110,14 @@
             </div>
             <div class="pw-block">
               <div class="lbl">寄件人</div>
-              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
             <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
             <div class="pw-row"><span>重量：<span class="f-weight">--</span> kg</span><span>体积：<span class="f-volume">--</span> m³</span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
             <div class="pw-row"><span>送货方式：送货上楼</span></div>
-            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-row"><span>DN：<b class="f-dn">--------</b></span></div>
             <div class="pw-foot">
               <div class="pw-qr"></div>
               <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
@@ -142,20 +142,20 @@
             </div>
             <div class="pw-block">
               <div class="lbl">寄件人</div>
-              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
             <div class="pw-row"><span>时效产品：次日达</span><span>特色服务：昼夜取派</span></div>
             <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
-            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-row"><span>DN：<b class="f-dn">--------</b></span></div>
             <div class="pw-foot">
               <div class="pw-qr"></div>
               <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
             </div>
           </div>
 
-          <!-- 专车 / 客户自提模板（厂内送货单：无快递面单，ZC/ZT 编号） -->
+          <!-- 专车 / 自提模板（厂内送货单：无快递面单，ZC/ZT 编号） -->
           <div class="bill-tpl" id="billOT" hidden>
             <div class="pw-head"><span class="f-ot-title">专车直送单</span><span class="f-product">整车直送</span></div>
             <div class="pw-no">
@@ -173,12 +173,12 @@
             </div>
             <div class="pw-block">
               <div class="lbl">发货方</div>
-              <div class="addr">莱克勒喷嘴系统（常州）有限公司</div>
+              <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
             <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
-            <div class="pw-row"><span>客户单号（DN）：<b class="f-dn">--------</b></span></div>
+            <div class="pw-row"><span>DN：<b class="f-dn">--------</b></span></div>
             <div class="pw-foot">
               <div class="pw-qr"></div>
               <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
@@ -186,6 +186,8 @@
           </div>
 
         </section>
+        <!-- 路由时间线（点击已下单行时显示：模拟节点时间，交互反馈） -->
+        <div class="pw-track" id="pwTrack" hidden></div>
       </div>
 
       <!-- 右 3/4：上中下三段 -->
@@ -228,18 +230,21 @@
                   <input id="cfgInsure" type="text" inputmode="numeric" placeholder="声明价值"> 元
                 </label>
                 <label class="grow">托寄物
-                  <input id="cfgCargo" type="text" placeholder="如：气动元件">
+                  <input id="cfgCargo" type="text" value="喷嘴" placeholder="默认：喷嘴">
                 </label>
                 <label id="cfgWV" hidden>重量
                   <input id="cfgWeight" type="text" inputmode="decimal" placeholder="--"> kg
                   　体积 <input id="cfgVolume" type="text" inputmode="decimal" placeholder="--"> m³
                 </label>
               </div>
+              <!-- 回签单（独立一行，多选：纸质回单 / 拍照回传；承运商映射见 carriers） -->
               <div class="pw-r2">
-                <label><input type="checkbox"> 签单返还</label>
-                <label><input type="checkbox"> 等通知派送</label>
-                <label><input type="checkbox"> 定时派送</label>
+                <label>回签单</label>
+                <label><input type="checkbox" id="cfgReceiptPaper"> 纸质回单</label>
+                <label><input type="checkbox" id="cfgReceiptPhoto"> 拍照回传</label>
               </div>
+              <!-- 选项只留常用项（对齐官方下单必填：产品/付款/保价/托寄物/重量/体积）；
+                   签单返还/等通知派送/定时派送等揽收时核实的选项不下发（用户规则 2026-09-15） -->
             </div>
             <button class="pw-order-btn" id="btnOrder" type="button">下单</button>
           </div>
@@ -251,10 +256,10 @@
             <table class="order-table">
               <colgroup>
                 <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
-                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr"><col class="col2-view">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <thead>
-                <tr><th>DN</th><th>SO</th><th>优先级</th><th>联系人</th><th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th><th>打印</th><th>查看</th></tr>
+                <tr><th>DN</th><th>SO</th><th>优先级</th><th>联系人</th><th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>打印</th><th>查看</th></tr>
               </thead>
             </table>
           </div>
@@ -262,7 +267,7 @@
             <table class="order-table">
               <colgroup>
                 <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
-                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-ret"><col class="col2-pr"><col class="col2-view">
+                <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <tbody id="printBody"></tbody>
             </table>
@@ -277,27 +282,30 @@
   <aside class="sidebar-right">
     <div class="stat">
       <div class="stat-label">昨日发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日待发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">超时未发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">计划发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日回单</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
   </aside>
 
 </div>
+
+<!-- 批量面单打印队列（屏幕隐藏；每单一页 80×130，一次打印任务全部输出） -->
+<div class="print-queue" id="printQueue"></div>
 
 <!-- 文件预览弹窗（PDF / Excel / Word；可打印） -->
 <div class="pv-mask" id="pvMask" hidden>
@@ -313,12 +321,36 @@
   </div>
 </div>
 
-<script src="mock.js"></script>
-<script src="stats.js"></script>
-<script src="topbar.js"></script>
-<script src="lib/jszip.min.js"></script>
-<script src="lib/docx-preview.min.js"></script>
-<script src="lib/xlsx.full.min.js"></script>
-<script src="print.js"></script>
+<!-- 官方面单弹窗：云打印 PDF 内嵌可见，点「打印面单」调系统打印 -->
+<div class="steps-mask" id="labelMask" hidden>
+  <div class="steps-modal label-modal">
+    <div class="steps-head">
+      <b id="labelTitle">官方面单</b>
+      <span>
+        <button class="label-print" id="btnLabelPrint" type="button">打印面单</button>
+        <button class="steps-close" id="labelClose" type="button" title="关闭">×</button>
+      </span>
+    </div>
+    <iframe class="label-frame" id="labelFrame" title="官方面单"></iframe>
+  </div>
+</div>
+
+<!-- 运单步骤弹窗：点击单号打开；第一步固定为下单返回值，其后为承运商轨迹节点 -->
+<div class="steps-mask" id="stepsMask" hidden>
+  <div class="steps-modal">
+    <div class="steps-head">
+      <b id="stepsTitle">运单跟踪</b>
+      <button class="steps-close" id="stepsClose" type="button" title="关闭">×</button>
+    </div>
+    <div class="steps-body" id="stepsBody"></div>
+  </div>
+</div>
+
+<script src="../shared/stats.js"></script>
+<script src="../shared/topbar.js"></script>
+<script src="../shared/lib/jszip.min.js"></script>
+<script src="../shared/lib/docx-preview.min.js"></script>
+<script src="../shared/lib/xlsx.full.min.js"></script>
+<script src="2-order.js"></script>
 </body>
 </html>

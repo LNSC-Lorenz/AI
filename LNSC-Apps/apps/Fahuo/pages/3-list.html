@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>清单模式 | LNSC 发货全链系统</title>
-<link rel="stylesheet" href="style.css">
-<link rel="icon" href="App.ico">
+<title>清单模式 | LNSC 全链发货平台</title>
+<link rel="stylesheet" href="../shared/style.css">
+<link rel="icon" href="../shared/App.ico">
 </head>
 <body>
 <div class="layout">
@@ -14,30 +14,30 @@
   <aside class="sidebar-left">
     <div class="mode">
       <div class="mode-num">- 1 -</div>
-      <a class="mode-btn" href="index.html">录单模式</a>
+      <a class="mode-btn" href="1-entry.html">录单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 2 -</div>
-      <a class="mode-btn" href="print.html">下单模式</a>
+      <a class="mode-btn" href="2-order.html">下单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 3 -</div>
-      <a class="mode-btn active" href="list.html">清单模式</a>
+      <a class="mode-btn active" href="3-list.html">清单</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 4 -</div>
-      <a class="mode-btn" href="sap.html">SAP模式</a>
+      <a class="mode-btn" href="4-sap.html">SAP</a>
     </div>
     <div class="mode">
       <div class="mode-num">- 5 -</div>
-      <a class="mode-btn" href="hmi.html">可视化模式</a>
+      <a class="mode-btn" href="5-trace.html">追溯</a>
     </div>
   </aside>
 
   <!-- 中间：清单模式 -->
   <main class="main">
     <header class="title-bar">
-      <h1>LNSC 发货全链系统</h1>
+      <h1>LNSC 全链发货平台</h1>
       <span class="tb-mid">LNSC Full-Chain Delivery System</span>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
@@ -51,8 +51,13 @@
 
     <div class="lm-main">
 
-      <!-- 上部：优先级过滤 + 搜索框 -->
+      <!-- 上部：类型过滤 + 优先级过滤 + 搜索框 -->
       <div class="lm-search">
+        <div class="prio-btns lm-type">
+          <button class="btn otype" type="button" data-t="发货单">发货单</button>
+          <button class="btn otype" type="button" data-t="外协单">外协单</button>
+          <button class="btn otype" type="button" data-t="其他">其他</button>
+        </div>
         <div class="prio-btns lm-prio">
           <button class="btn prio" type="button" data-p="紧急">紧急</button>
           <button class="btn prio" type="button" data-p="重要">重要</button>
@@ -68,22 +73,22 @@
         <div class="header-wrap">
           <table class="order-table">
             <colgroup>
-              <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-ot"><col class="col3-addr"><col class="col3-name">
-              <col class="col3-phone"><col class="col3-note"><col class="col3-carrier">
+              <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-addr"><col class="col3-name">
+              <col class="col3-note">
               <col class="col3-waybill"><col class="col3-st"><col class="col3-st">
               <col class="col3-ret">
             </colgroup>
             <thead>
-              <tr><th>DN</th><th>SO</th><th>优先级</th><th>类型</th><th>地址</th><th>姓名</th><th>联系方式</th><th>备注</th>
-                  <th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th></tr>
+              <tr><th>DN</th><th>SO</th><th></th><th>地址</th><th>姓名</th><th>备注</th>
+                  <th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th></tr>
             </thead>
           </table>
         </div>
         <div class="table-section">
           <table class="order-table">
             <colgroup>
-              <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-ot"><col class="col3-addr"><col class="col3-name">
-              <col class="col3-phone"><col class="col3-note"><col class="col3-carrier">
+              <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-addr"><col class="col3-name">
+              <col class="col3-note">
               <col class="col3-waybill"><col class="col3-st"><col class="col3-st">
               <col class="col3-ret">
             </colgroup>
@@ -99,30 +104,29 @@
   <aside class="sidebar-right">
     <div class="stat">
       <div class="stat-label">昨日发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日待发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">超时未发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">计划发货</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
     <div class="stat">
       <div class="stat-label">今日回单</div>
-      <div class="stat-value">16</div>
+      <div class="stat-value">00</div>
     </div>
   </aside>
 
 </div>
-<script src="mock.js"></script>
-<script src="stats.js"></script>
-<script src="topbar.js"></script>
-<script src="list.js"></script>
+<script src="../shared/stats.js"></script>
+<script src="../shared/topbar.js"></script>
+<script src="3-list.js"></script>
 </body>
 </html>

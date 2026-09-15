@@ -1,12 +1,12 @@
 /* ============================================================
- * LNSC 发货全链系统 - 可视化模式
+ * LNSC 全链发货平台 - 可视化模式
  * 左 1/3：优先级占比(环形) / 在途完成度(同心环) / 专车情况
  * 右 2/3：点击左侧模块 → 点阵动态明细；每 60s 自动刷新
  * ============================================================ */
 "use strict";
 
 const $ = id => document.getElementById(id);
-const API_CANDIDATES = ["api", `${location.protocol}//${location.hostname}:8091/api`];
+const API_CANDIDATES = ["../api", `${location.protocol}//${location.hostname}:8091/api`];
 const TODAY = new Date().toLocaleDateString("sv-SE");
 const pad2 = n => String(n).padStart(2, "0");
 
@@ -15,11 +15,11 @@ const C_RED = "#d32f2f", C_AMBER = "#f0a13a", C_GREEN = "#2e7d32", C_BLUE = "#1D
 const PRIO_COLOR = { "紧急": C_RED, "重要": C_AMBER, "一般": "var(--black)" };
 const ROUTE_TARGET_H = 48;                 /* 在途目标时效：48 小时 */
 
-/* ----- 数据加载：API 在线优先，离线回退 mock.js 快照 ----- */
+/* ----- 数据加载：API 在线优先，离线显示空（正式模式无模拟数据） ----- */
 async function fetchOrders() {
   for (const base of API_CANDIDATES) {
     try {
-      const r = await fetch(base + "/orders");
+      const r = await fetch(base + "/orders", { signal: AbortSignal.timeout(5000) });   /* 5s 超时防假死 */
       if (r.ok) { markApi(true, base); return await r.json(); }
     } catch (e) { /* 尝试下一个 */ }
   }
@@ -29,6 +29,15 @@ async function fetchOrders() {
 
 /* 目的地城市：优先 city 字段，否则取地址第二段 */
 const destCity = o => o.city || (o.address || "").split(" ").filter(Boolean)[1] || "--";
+/* 单号前缀显示：DN=82600 / SO=32600 小号上标加粗，剩余位加粗（2026-09-15 用户规则） */
+const preHtml = (s, pre) => {
+  s = s || "--------";
+  return s.startsWith(pre)
+    ? '<span class="dn-pre">' + pre + '</span><b>' + s.slice(pre.length) + "</b>"
+    : "<b>" + s + "</b>";
+};
+const dnHtml = dn => preHtml(dn, "82600");
+const soHtml = so => preHtml(so, "32600");
 
 /* 在途进度：已发运时长 / 48h，节点状态修正，6%~97% 之间 */
 function routeProgress(o) {
@@ -140,7 +149,7 @@ function renderRings(list) {
   growSvg(box);
 }
 
-/* ----- 左下：专车情况（承运商=专车/客户自提，简单列表） ----- */
+/* ----- 左下：专车情况（承运商=专车/自提，简单列表） ----- */
 function renderTrucks(list) {
   const box = $("vizTrucks");
   if (!list.length) {
@@ -149,7 +158,7 @@ function renderTrucks(list) {
   }
   box.innerHTML = `<div class="tk-list anim">` + [...list].sort(byState).slice(0, 5).map(o => {
     const s = chainState(o);
-    return `<div class="tk-row"><i style="background:${s.c}"></i><b>${o.so || "--------"}</b>` +
+    return `<div class="tk-row"><i style="background:${s.c}"></i>${dnHtml(o.so)}` +
       `<span>${destCity(o)}</span>` +
       (s.t === "待下单" ? "" : `<em>${s.t}</em>`) + `</div>`;
   }).join("") + `</div>`;
@@ -179,9 +188,9 @@ function pathRow(o) {
       : `<i style="transition-delay:${col * 12}ms"></i>`;
   }
   return `<div class="vd-path">` +
-    `<div class="vd-phead"><b>${o.so || "--------"}</b>` +
+    `<div class="vd-phead">${dnHtml(o.so)}` +
     `<span>${o.order_type && o.order_type !== "发货单" ? o.order_type + " · " : ""}` +
-    `${o.so_no ? "SO " + o.so_no + " · " : ""}${o.carrier || "—"} · ${o.name || "--"} · ${o.waybill_no || "未下单"}</span>` +
+    `${o.so_no ? "SO " + soHtml(o.so_no) + " · " : ""}${o.carrier || "—"} · ${o.name || "--"} · ${o.waybill_no || "未下单"}</span>` +
     (s.t === "待下单" ? "" : `<em style="color:${s.c}">${s.t}</em>`) + `</div>` +
     `<div class="vd-ptrack">` +
     `<div class="vd-pdots">${dots}</div>` +
@@ -213,7 +222,7 @@ async function refresh() {
   const orders = await fetchOrders();
   DATA.active  = orders.filter(o => o.status !== "returned");              /* 在办 */
   DATA.shipped = orders.filter(o => o.status === "shipped");               /* 在途 */
-  DATA.special = DATA.active.filter(o => o.carrier === "专车" || o.carrier === "客户自提"); /* 专车/自提 */
+  DATA.special = DATA.active.filter(o => o.carrier === "专车" || o.carrier === "自提"); /* 专车/自提 */
   renderDonut(DATA.active);
   renderRings(DATA.shipped);
   renderTrucks(DATA.special);

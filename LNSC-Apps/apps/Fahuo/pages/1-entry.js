@@ -1,5 +1,5 @@
 /* ============================================================
- * LNSC 发货全链系统 - 录单模式：地址智能识别
+ * LNSC 全链发货平台 - 录单模式：地址智能识别
  * 纯前端实现：粘贴地址 -> 识别解析 -> 确认写入发货清单
  * ============================================================ */
 "use strict";
@@ -238,73 +238,62 @@ if (typeof document !== "undefined") {
       })
       .catch(() => { /* 查询失败保持默认状态 */ });
   }
-  /* 通讯录：常用收件信息（localStorage lnsc-addr-pool），弹层一键回填 */
-  const btnPool = document.getElementById("btnPool");
-  let poolPop = null;
-  function closePool() { if (poolPop) { poolPop.remove(); poolPop = null; } }
-  btnPool.addEventListener("click", e => {
-    e.stopPropagation();
-    if (poolPop) return closePool();
-    const pool = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]");
-    poolPop = document.createElement("div");
-    poolPop.className = "pool-pop";
-    /* 头部：简单搜索（姓名 / 电话 / 地址 模糊匹配） */
-    const head = document.createElement("div");
-    head.className = "pool-head";
-    const search = document.createElement("input");
-    search.className = "pool-search";
-    search.placeholder = "搜索姓名 / 电话 / 地址";
-    head.appendChild(search);
-    const body = document.createElement("div");
-    body.className = "pool-body";
-    poolPop.append(head, body);
-    function renderPool(kw) {
-      body.innerHTML = "";
-      const k = (kw || "").trim().toLowerCase();
-      const list = [...pool].reverse().filter(a =>   /* 最新保存的在最上 */
-        !k || [a.name, a.phone, a.province, a.city, a.district, a.street]
-          .filter(Boolean).join(" ").toLowerCase().includes(k));
-      if (!list.length) {
-        const em = document.createElement("div");
-        em.className = "pool-empty";
-        em.textContent = pool.length
-          ? "无匹配的收件信息"
-          : "暂无保存的收件信息：勾选「存到常用地址池」确认入单后自动入池";
-        body.appendChild(em);
-        return;
-      }
-      list.forEach(a => {
-        const it = document.createElement("button");
-        it.type = "button";
-        it.className = "pool-item";
-        const l1 = document.createElement("b");
-        l1.textContent = (a.name || "--") + (a.phone ? "  " + a.phone : "");
-        const l2 = document.createElement("span");
-        l2.textContent = [a.province, a.city, a.district, a.street].filter(Boolean).join(" ");
-        it.append(l1, l2);
-        it.addEventListener("click", () => {
-          selProvince.value = a.province || "";
-          fillCity(a.province || "", a.city || "");
-          fillDistrict(a.province || "", a.city || "", a.district || "");
-          streetInput.value = a.street || "";
-          nameInput.value = a.name || "";
-          phoneInput.value = a.phone || "";
-          closePool();
-        });
-        body.appendChild(it);
-      });
+  /* 顶部搜索框：输入自动匹配共享地址池并下拉显示，点选一键回填
+     （池子存服务端 SQLite，全用户共享；离线回退本地 localStorage 池） */
+  const poolSearch = document.getElementById("poolSearch");
+  const poolListEl = document.getElementById("poolSearchList");
+  let poolCache = [];
+  async function refreshPool() {
+    if (apiOnline) {
+      try {
+        const r = await fetch(`${API}/addrpool`);
+        if (r.ok) { poolCache = await r.json(); return; }   /* 服务端已按最新在前排序 */
+      } catch (e) { /* 回退本地 */ }
     }
-    search.addEventListener("input", () => renderPool(search.value));
-    renderPool("");
-    poolPop.addEventListener("click", ev => ev.stopPropagation());
-    document.querySelector(".paste-panel").appendChild(poolPop);
-    search.focus();
+    try { poolCache = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]").reverse(); }
+    catch (e) { poolCache = []; }
+  }
+  poolSearch.addEventListener("focus", refreshPool);
+  poolSearch.addEventListener("input", () => {
+    const k = poolSearch.value.trim().toLowerCase();
+    poolListEl.innerHTML = "";
+    if (!k) { poolListEl.hidden = true; return; }
+    const list = poolCache.filter(a =>
+      [a.name, a.phone, a.province, a.city, a.district, a.street]
+        .filter(Boolean).join(" ").toLowerCase().includes(k));
+    if (!list.length) { poolListEl.hidden = true; return; }
+    list.slice(0, 8).forEach(a => {   /* 最多显示 8 条，最新在顶 */
+      const it = document.createElement("div");
+      it.className = "ps-item";
+      const b = document.createElement("b");
+      b.textContent = (a.name || "--") + (a.phone ? "  " + a.phone : "");
+      const s = document.createElement("span");
+      s.textContent = [a.province, a.city, a.district, a.street].filter(Boolean).join(" ");
+      it.append(b, s);
+      it.addEventListener("mousedown", e => {   /* mousedown 先于 input blur */
+        e.preventDefault();
+        selProvince.value = a.province || "";
+        fillCity(a.province || "", a.city || "");
+        fillDistrict(a.province || "", a.city || "", a.district || "");
+        streetInput.value = a.street || "";
+        nameInput.value = a.name || "";
+        phoneInput.value = a.phone || "";
+        poolListEl.hidden = true;
+        poolSearch.value = "";
+      });
+      poolListEl.appendChild(it);
+    });
+    poolListEl.hidden = false;
   });
-  document.addEventListener("click", closePool);
+  poolSearch.addEventListener("blur", () => { poolListEl.hidden = true; });
 
   btnUpload.addEventListener("click", () => {
-    if (orderType === "发货单" && !soInput.value.trim()) {
-      alert("请先填写 DN，上传文件将存到 Upload/<DN>/ 目录"); soInput.focus(); return;
+    if (orderType === "发货单") {
+      const dn = soInput.value.trim();
+      if (!dn) { alert("请先填写 DN，上传文件将存到 Upload/<DN>/ 目录"); soInput.focus(); return; }
+      if (!/^\d{10}$/.test(dn)) {   /* 防半截 DN 上传归错目录（2026-09-15 真实事故：位数不足先传，补全后查无文件） */
+        alert("DN 需补全为 10 位数字后再上传（防止文件归到错误目录）"); soInput.focus(); return;
+      }
     }
     upFileInput.click();
   });
@@ -377,10 +366,21 @@ if (typeof document !== "undefined") {
       if (!was) btn.classList.add("active");
     });
   });
+  /* 承运商启用开关（设置页 localStorage lnsc-carriers）：关闭的承运商隐藏 */
+  (function applyCarrierGate() {
+    let cfg = {};
+    try { cfg = JSON.parse(localStorage.getItem("lnsc-carriers") || "{}"); } catch (e) {}
+    document.querySelectorAll(".carrier").forEach(b => {
+      if (cfg[b.dataset.carrier] === false) {
+        b.style.display = "none";
+        b.classList.remove("active");
+      }
+    });
+  })();
 
-  /* ----- DN：仅允许数字，最多 8 位 ----- */
+  /* ----- DN：仅允许数字，最多 10 位（DN=10 位数字，用户规则 2026-09-15） ----- */
   soInput.addEventListener("input", () => {
-    soInput.value = soInput.value.replace(/\D/g, "").slice(0, 8);
+    soInput.value = soInput.value.replace(/\D/g, "").slice(0, 10);
   });
 
   /* ----- 识别（文本） ----- */
@@ -400,27 +400,15 @@ if (typeof document !== "undefined") {
   /* ----- 图片识别（OCR：截图 / 照片 → 文字 → 自动解析） ----- */
   const fileInput = document.getElementById("fileInput");
   const btnImage  = document.getElementById("btnImage");
-  const imgThumb  = document.getElementById("imgThumb");
   const pastePanel = document.querySelector(".paste-panel");
   let ocrBusy = false;
-
-  function showThumb(file) { /* 图片缩略图预览 */
-    if (imgThumb.src) URL.revokeObjectURL(imgThumb.src);
-    imgThumb.src = URL.createObjectURL(file);
-    imgThumb.hidden = false;
-  }
-  function clearThumb() {
-    if (imgThumb.src) URL.revokeObjectURL(imgThumb.src);
-    imgThumb.removeAttribute("src");
-    imgThumb.hidden = true;
-  }
 
   async function ocrImage(file) {
     if (!file || ocrBusy) return;
     if (typeof Tesseract === "undefined") {
       alert("OCR 组件未加载：请确认 lib/tesseract.min.js 存在"); return;
     }
-    showThumb(file);
+    /* 图片只识别不显示：大图会撑开页面，放弃缩略图预览（文字识别后直接填入） */
     /* file:// 下浏览器拦截 Worker/WASM/语言包，会静默卡死：直接快速失败并指引 */
     if (location.protocol === "file:") {
       alert("本地预览（file://）不支持图片识别：\n" +
@@ -434,9 +422,9 @@ if (typeof document !== "undefined") {
     btnRecognize.textContent = "识别中…";
     try {
       const ocr = Tesseract.recognize(file, "chi_sim+eng", {
-        workerPath: "lib/worker.min.js",
-        corePath: "lib",          /* 目录前缀，自动选择 simd/lstm 变体 */
-        langPath: "lib",          /* chi_sim.traineddata / eng.traineddata */
+        workerPath: "../shared/lib/worker.min.js",
+        corePath: "../shared/lib",          /* 目录前缀，自动选择 simd/lstm 变体 */
+        langPath: "../shared/lib",          /* chi_sim.traineddata / eng.traineddata */
         gzip: false,
         logger: m => {
           if (m.status === "recognizing text") {
@@ -500,7 +488,7 @@ if (typeof document !== "undefined") {
 
   /* ----- SQLite API 层（离线自动降级为本地模式） ----- */
   /* 候选地址：同源相对路径（nginx 反代）→ 服务器 8091 直连（无需改 nginx） */
-  const API_CANDIDATES = ["api", `${location.protocol}//${location.hostname}:8091/api`];
+  const API_CANDIDATES = ["../api", `${location.protocol}//${location.hostname}:8091/api`];
   let API = API_CANDIDATES[0];
   let apiOnline = false;
 
@@ -515,25 +503,62 @@ if (typeof document !== "undefined") {
   /* 备注列只显示收件区纯备注：剥离入库时拼接的发件方结构化标签 */
   const cleanNote = n => (n || "")
     .replace(/PO：\S+|采购员：\S+|发件人：\S+(?:\s+\d+)?|附件：\S+/g, "").trim();
-  /* 行显示值（10 列：DN SO 优先级 类型 地址 姓名 电话 备注 承运商 要求发货日期） */
+  /* 姓名+电话两行（2026-09-15 用户规则：独立电话列已取消，电话换行显示在姓名下） */
+  function fillNameCell(td, o) {
+    const d1 = document.createElement("div"); d1.textContent = o.name || "";
+    td.appendChild(d1);
+    if (o.phone) { const d2 = document.createElement("div"); d2.textContent = o.phone; td.appendChild(d2); }
+  }
+  /* 行显示值（9 列：DN SO 优先级 类型 地址 姓名(含电话) 备注 承运商 要求发货日期） */
   function rowValues(o) {
     return [o.so || "", o.so_no || "", o.priority || "一般", o.order_type || "发货单",
-            o.address || "", o.name || "", o.phone || "", cleanNote(o.note),
+            o.address || "", o.name || "", cleanNote(o.note),
             o.carrier || "", o.ship_date || ""];
   }
-  function fillRowCells(tr, v) {
+  /* 地址两行显示（2026-09-15 用户规则）：省市区一行（直辖市去重），街道详情一行 */
+  function addrLines(o) {
+    const p = [];
+    for (const x of [o.province, o.city, o.district]) if (x && p[p.length - 1] !== x) p.push(x);
+    return [p.join(""), o.street || ""];
+  }
+  function fillAddrCell(td, o) {
+    const [l1, l2] = addrLines(o);
+    const d1 = document.createElement("div"); d1.textContent = l1 || (o.address || "");
+    td.appendChild(d1);
+    if (l2) { const d2 = document.createElement("div"); d2.textContent = l2; td.appendChild(d2); }
+  }
+  /* 单号前缀显示：DN=82600 / SO=32600 小号上标加粗，剩余位加粗（2026-09-15 用户规则） */
+  const preHtml = (s, pre) => {
+    s = s || "--------";
+    return s.startsWith(pre)
+      ? '<span class="dn-pre">' + pre + '</span><b>' + s.slice(pre.length) + "</b>"
+      : "<b>" + s + "</b>";
+  };
+  const dnHtml = dn => preHtml(dn, "82600");
+  const soHtml = so => preHtml(so, "32600");
+  function fillRowCells(tr, v, o) {
     tr.innerHTML = "";
-    v.forEach(x => {
+    v.forEach((x, i) => {
       const td = document.createElement("td");
-      td.textContent = x;
+      if (i === 4 && o) fillAddrCell(td, o);   /* 地址列（第5列）：两行 */
+      else if (i === 0 && o) td.innerHTML = dnHtml(o.so);   /* DN 列：前缀上标 */
+      else if (i === 1 && o) td.innerHTML = o.so_no ? soHtml(o.so_no) : "";   /* SO 列：32600 前缀上标 */
+      else if (i === 5 && o) fillNameCell(td, o);   /* 姓名列（第6列）：姓名+电话两行 */
+      else td.textContent = x;
       if (x === "紧急") td.classList.add("prio-hot"); /* 紧急加粗 */
       tr.appendChild(td);
     });
   }
   function addRow(v, o) {
     const tr = document.createElement("tr");
-    fillRowCells(tr, v);
-    if (o) tr._order = o;                 /* 挂载订单数据：行内修改用 */
+    fillRowCells(tr, v, o);
+    if (o) {
+      tr._order = o;                      /* 挂载订单数据：行内修改用 */
+      if (o.waybill_no) {                 /* 已下单：锁定，禁止行内修改 */
+        tr.classList.add("row-locked");
+        tr.title = "已下单（" + o.waybill_no + "），不允许修改";
+      }
+    }
     orderBody.appendChild(tr);
   }
 
@@ -545,15 +570,18 @@ if (typeof document !== "undefined") {
     fillCity(o.province || "", o.city || "");
     fillDistrict(o.province || "", o.city || "", o.district || "");
     streetInput.value = o.street || "";
-    /* 备注中拆出 PO：xxx / 采购员：xxx / 发件人：xxx 电话，回填到各自字段并还原纯备注 */
+    /* PO/采购员/发件人：优先取独立字段；旧数据（标签塞在 note 里的）回退标签反解并还原纯备注 */
     let noteText = o.note || "";
-    poInput.value = ""; buyerInput.value = ""; empNameInput.value = ""; empPhoneInput.value = "";
-    const mPO = noteText.match(/PO：(\S+)/);
-    if (mPO) { poInput.value = mPO[1]; noteText = noteText.replace(mPO[0], "").trim(); }
-    const mB = noteText.match(/采购员：(\S+)/);
-    if (mB) { buyerInput.value = mB[1]; noteText = noteText.replace(mB[0], "").trim(); }
-    const mE = noteText.match(/发件人：(\S+)\s*(\d*)/);
-    if (mE) { empNameInput.value = mE[1]; empPhoneInput.value = mE[2] || ""; noteText = noteText.replace(mE[0], "").trim(); }
+    poInput.value = o.po || ""; buyerInput.value = o.buyer || "";
+    empNameInput.value = o.emp_name || ""; empPhoneInput.value = o.emp_phone || "";
+    if (!o.po && !o.buyer && !o.emp_name) {   /* 旧数据兼容：从 note 标签反解 */
+      const mPO = noteText.match(/PO：(\S+)/);
+      if (mPO) { poInput.value = mPO[1]; noteText = noteText.replace(mPO[0], "").trim(); }
+      const mB = noteText.match(/采购员：(\S+)/);
+      if (mB) { buyerInput.value = mB[1]; noteText = noteText.replace(mB[0], "").trim(); }
+      const mE = noteText.match(/发件人：(\S+)\s*(\d*)/);
+      if (mE) { empNameInput.value = mE[1]; empPhoneInput.value = mE[2] || ""; noteText = noteText.replace(mE[0], "").trim(); }
+    }
     noteInput.value = noteText;
     nameInput.value = o.name || "";
     phoneInput.value = o.phone || "";
@@ -578,6 +606,10 @@ if (typeof document !== "undefined") {
   orderBody.addEventListener("click", e => {
     const tr = e.target.closest("tr");
     if (!tr || !tr._order) return;
+    if (tr._order.waybill_no) {                 /* 已下单：禁止行内修改 */
+      alert("该单已下单（单号 " + tr._order.waybill_no + "），不允许再修改");
+      return;
+    }
     if (editingRow === tr) { exitEdit(); resetForm(); return; }  /* 再点同一行：取消 */
     exitEdit();
     editingRow = tr;
@@ -608,7 +640,7 @@ if (typeof document !== "undefined") {
     for (const base of API_CANDIDATES) {
       try {
         API = base;
-        const orders = await api("/orders");
+        const orders = await api("/orders", { signal: AbortSignal.timeout(5000) });   /* 探测 5s 超时防假死 */
         apiOnline = true;
         markApi(true, API);
         orders.forEach(o => addRow(rowValues(o), o));
@@ -618,7 +650,7 @@ if (typeof document !== "undefined") {
     }
     apiOnline = false;
     markApi(false);
-    /* 离线演示：加载内置模拟数据快照（mock.js） */
+    /* 离线：正式模式无模拟数据（MOCK_ORDERS 已移除，恒为未定义） */
     if (typeof MOCK_ORDERS !== "undefined") {
       MOCK_ORDERS.forEach(o => addRow(rowValues(o), o));
       if (typeof MOCK_STATS !== "undefined") setStats(MOCK_STATS);
@@ -630,7 +662,6 @@ if (typeof document !== "undefined") {
 
   function resetForm() {
     pasteInput.value = "";
-    clearThumb();
     streetInput.value = ""; noteInput.value = "";
     nameInput.value = ""; phoneInput.value = "";
     soInput.value = ""; soNoInput.value = "";
@@ -659,13 +690,12 @@ if (typeof document !== "undefined") {
     if (!addr) { alert("地址为空：请先粘贴地址并点击「识别」"); return; }
     if (!phoneInput.value.trim()) { alert("联系方式为必填项"); phoneInput.focus(); return; }
     const dn = soInput.value.trim(), soNo = soNoInput.value.trim();
-    if (dn && !/^\d{8}$/.test(dn)) {
-      alert("DN 必须为 8 位数字"); soInput.focus(); return;
+    if (dn && !/^\d{10}$/.test(dn)) {
+      alert("DN 必须为 10 位数字"); soInput.focus(); return;
     }
-    /* 发货单：DN+SO 必填；外协单：采购员必填；其他（员工快递）：员工姓名+电话必填 */
+    /* 发货单：DN 必填、SO 选填（用户规则 2026-09-15）；外协单：采购员必填；其他（员工快递）：员工姓名+电话必填 */
     if (orderType === "发货单") {
       if (!dn) { alert("发货单必须填写 DN"); soInput.focus(); return; }
-      if (!soNo) { alert("发货单必须填写 SO 号"); soNoInput.focus(); return; }
     }
     if (orderType === "外协单") {
       if (!poInput.value.trim()) { alert("外协单必须填写 PO"); poInput.focus(); return; }
@@ -675,25 +705,29 @@ if (typeof document !== "undefined") {
       if (!empNameInput.value.trim()) { alert("其他（员工快递）必须填写员工姓名"); empNameInput.focus(); return; }
       if (!empPhoneInput.value.trim()) { alert("其他（员工快递）必须填写员工电话"); empPhoneInput.focus(); return; }
     }
-    /* PO / 采购员 / 发件人 随备注入库；上传文件名不入备注（备注只保留手写内容） */
-    let noteFull = noteInput.value.trim();
-    if (orderType === "外协单") {
-      if (poInput.value.trim()) noteFull += (noteFull ? " " : "") + "PO：" + poInput.value.trim();
-      if (buyerInput.value.trim()) noteFull += (noteFull ? " " : "") + "采购员：" + buyerInput.value.trim();
-    }
-    if (orderType === "其他" && empNameInput.value.trim()) {
-      noteFull += (noteFull ? " " : "") + "发件人：" + empNameInput.value.trim() + " " + empPhoneInput.value.trim();
-    }
+    /* 备注纯净化：note 只存手写备注；PO/采购员/发件人走独立字段入库（运单备注在下单时另组） */
+    const notePure = noteInput.value.trim();
 
-    /* 勾选：地址信息存到常用地址池（localStorage，按地址去重） */
+    /* 勾选：地址信息存到共享地址池（在线写服务端全用户共享，按地址去重；离线写本地池） */
     if (poolCheck.checked) {
-      const pool = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]");
-      const key = [prov, city, dist, street].filter(Boolean).join(" ");
-      if (key && !pool.some(a => [a.province, a.city, a.district, a.street].filter(Boolean).join(" ") === key)) {
-        pool.push({ province: prov, city, district: dist, street,
-                    name: nameInput.value.trim(), phone: phoneInput.value.trim() });
-        localStorage.setItem("lnsc-addr-pool", JSON.stringify(pool));
+      const entry = { province: prov, city, district: dist, street,
+                      name: nameInput.value.trim(), phone: phoneInput.value.trim() };
+      if (apiOnline) {
+        try {
+          await fetch(`${API}/addrpool`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(entry)
+          });
+        } catch (e) { /* 入池失败不阻断入单 */ }
+      } else {
+        const pool = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]");
+        const key = [prov, city, dist, street].filter(Boolean).join(" ");
+        if (key && !pool.some(a => [a.province, a.city, a.district, a.street].filter(Boolean).join(" ") === key)) {
+          pool.push(entry);
+          localStorage.setItem("lnsc-addr-pool", JSON.stringify(pool));
+        }
       }
+      refreshPool();   /* 刷新搜索缓存 */
     }
 
     const activeCarrier = document.querySelector(".carrier.active");
@@ -705,9 +739,13 @@ if (typeof document !== "undefined") {
       name: nameInput.value.trim(),
       phone: phoneInput.value.trim(),
       carrier: activeCarrier ? activeCarrier.dataset.carrier : "",
-      note: noteFull,
+      note: notePure,
       priority: priority,
-      ship_date: dateInput.value.trim()
+      ship_date: dateInput.value.trim(),
+      po: orderType === "外协单" ? poInput.value.trim() : "",
+      buyer: orderType === "外协单" ? buyerInput.value.trim() : "",
+      emp_name: orderType === "其他" ? empNameInput.value.trim() : "",
+      emp_phone: orderType === "其他" ? empPhoneInput.value.trim() : ""
     };
 
     /* 行内修改模式：保存修改（在线 PUT / 离线本地改行） */
@@ -716,14 +754,14 @@ if (typeof document !== "undefined") {
       if (apiOnline && editingId) {
         try {
           const saved = await api(`/orders/${editingId}`, { method: "PUT", body: JSON.stringify(local) });
-          fillRowCells(editingRow, rowValues(saved));
+          fillRowCells(editingRow, rowValues(saved), saved);
           editingRow._order = saved;
         } catch (e) {
           alert("服务器连接失败，修改未保存！");
           return;
         }
       } else {
-        fillRowCells(editingRow, rowValues(local));
+        fillRowCells(editingRow, rowValues(local), local);
         editingRow._order = local;
       }
       resetForm();
@@ -760,6 +798,6 @@ if (typeof document !== "undefined") {
     if (!FLOWS[i]) return;
     el.style.cursor = "pointer";
     el.title = "点击在清单模式中查看：" + el.querySelector(".stat-label").textContent;
-    el.addEventListener("click", () => { location.href = "list.html?f=" + FLOWS[i]; });
+    el.addEventListener("click", () => { location.href = "3-list.html?f=" + FLOWS[i]; });
   });
 }

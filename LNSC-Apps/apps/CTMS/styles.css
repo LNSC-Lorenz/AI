@@ -1070,3 +1070,52 @@ body {
     }
 }
 
+
+
+/* ===== 导出日期范围弹窗 ===== */
+.date-box {
+    min-width: 340px;
+}
+
+.date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    text-align: left;
+}
+
+.date-row label {
+    width: 24px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+.date-row input {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 15px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+}
+
+.date-hint {
+    font-size: 12px !important;
+    color: #888;
+    margin-bottom: 14px !important;
+}
+
+.date-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.date-btns .date-cancel {
+    background: #999;
+}
+
+.date-btns .date-cancel:hover {
+    background: #777;
+}
