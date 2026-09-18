@@ -75,15 +75,21 @@
           <select id="selCity" class="select-btn"><option value="">市</option></select>
           <select id="selDistrict" class="select-btn"><option value="">区</option></select>
         </div>
-        <div class="street-row">
-          <input id="streetInput" class="street-input" type="text" placeholder="街道与公司">
-          <input id="noteInput" class="street-input" type="text" placeholder="备注">
+        <!-- 街道/公司拆两字段（2026-09-17 用户规则）：公司独立入库并下发承运商（面单收件公司）；
+             两字段一行均分整行（sc-row 两列，同用户规则） -->
+        <div class="street-row sc-row">
+          <input id="streetInput" class="street-input" type="text" placeholder="街道">
+          <input id="companyInput" class="street-input" type="text" placeholder="公司">
         </div>
         <div class="contact-row">
           <input id="nameInput" class="line-input" type="text" placeholder="姓名">
           <input id="phoneInput" class="line-input" type="text" placeholder="联系方式">
           <span class="date-label">选择发货日期</span>
           <input id="dateInput" class="line-input date-input" type="date">
+        </div>
+        <!-- 备注在姓名下面（2026-09-17 用户规则） -->
+        <div class="street-row note-row">
+          <input id="noteInput" class="street-input" type="text" placeholder="备注">
         </div>
         <div class="pool-row">
           <label class="pool-label" for="poolCheck">勾选表示将地址信息存到常用地址池里</label>
@@ -147,21 +153,21 @@
       <div class="header-wrap">
         <table class="order-table">
           <colgroup>
-            <col class="col-so"><col class="col-so-no"><col class="col-prio"><col class="col-otype"><col class="col-addr"><col class="col-name">
+            <col class="col-so"><col class="col-so-no"><col class="col-prio"><col class="col-addr"><col class="col-name">
             <col class="col-note"><col class="col-carrier">
-            <col class="col-date">
+            <col class="col-date"><col class="col-del">
           </colgroup>
           <thead>
             <tr>
               <th class="col-so">DN</th>
               <th class="col-so-no">SO</th>
-              <th class="col-prio">优先级</th>
-              <th class="col-otype">类型</th>
+              <th class="col-prio"></th><!-- 优先级/类型合并列（无标题，两行显示，同清单） -->
               <th class="col-addr">地址</th>
               <th class="col-name">姓名</th>
               <th class="col-note">备注</th>
               <th class="col-carrier">承运商</th>
               <th class="col-date">要求发货日期</th>
+              <th class="col-del"></th><!-- 删除列（无标题，未下单行显示删除按钮） -->
             </tr>
           </thead>
         </table>
@@ -169,9 +175,9 @@
       <div class="table-section">
         <table class="order-table">
           <colgroup>
-            <col class="col-so"><col class="col-so-no"><col class="col-prio"><col class="col-otype"><col class="col-addr"><col class="col-name">
+            <col class="col-so"><col class="col-so-no"><col class="col-prio"><col class="col-addr"><col class="col-name">
             <col class="col-note"><col class="col-carrier">
-            <col class="col-date">
+            <col class="col-date"><col class="col-del">
           </colgroup>
           <tbody id="orderBody">
             <!-- 数据行由 script.js 动态填充 -->

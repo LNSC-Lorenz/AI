@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS orders (
   city        TEXT DEFAULT '',
   district    TEXT DEFAULT '',
   street      TEXT DEFAULT '',
+  company     TEXT DEFAULT '',   /* 公司独立列（2026-09-17 街道/公司拆两字段，与 server.py 对齐） */
   name        TEXT DEFAULT '',
   phone       TEXT DEFAULT '',
   carrier     TEXT DEFAULT '',
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS addr_pool (
   city        TEXT DEFAULT '',
   district    TEXT DEFAULT '',
   street      TEXT DEFAULT '',
+  company     TEXT DEFAULT '',   /* 公司独立列（2026-09-17） */
   name        TEXT DEFAULT '',
   phone       TEXT DEFAULT '',
   addr_key    TEXT UNIQUE,
@@ -72,10 +74,14 @@ CREATE TABLE IF NOT EXISTS addr_pool (
   if (!cols.includes("order_type")) db.exec("ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT '发货单'");
   if (!cols.includes("so_no")) db.exec("ALTER TABLE orders ADD COLUMN so_no TEXT DEFAULT ''");
   if (!cols.includes("order_resp")) db.exec("ALTER TABLE orders ADD COLUMN order_resp TEXT DEFAULT ''");  /* 下单返回值原文（追溯第一步展示） */
+  if (!cols.includes("route_checked_at")) db.exec("ALTER TABLE orders ADD COLUMN route_checked_at TEXT DEFAULT ''");  /* 轨迹检查时间（与 server.py 对齐） */
+  if (!cols.includes("route_latest")) db.exec("ALTER TABLE orders ADD COLUMN route_latest TEXT DEFAULT ''");  /* 最新路由节点文本（与 server.py 对齐） */
   /* PO/采购员/发件人：独立列（原塞在 note 标签里；备注列只存手写备注） */
-  for (const col of ["po", "buyer", "emp_name", "emp_phone"]) {
+  for (const col of ["po", "buyer", "emp_name", "emp_phone", "company"]) {
     if (!cols.includes(col)) db.exec(`ALTER TABLE orders ADD COLUMN ${col} TEXT DEFAULT ''`);
   }
+  const pcols = db.prepare("PRAGMA table_info(addr_pool)").all().map(c => c.name);
+  if (!pcols.includes("company")) db.exec("ALTER TABLE addr_pool ADD COLUMN company TEXT DEFAULT ''");
 }
 
 const STATUS_TS = { printed: "printed_at", shipped: "shipped_at", returned: "returned_at" };
@@ -123,16 +129,16 @@ function serveStatic(p, res) {
 /* 共享地址池：GET 列表（最新在前） / POST 入池（addr_key 去重） */
 function addrpoolList(res) {
   const rows = db.prepare(
-    "SELECT province,city,district,street,name,phone FROM addr_pool ORDER BY id DESC LIMIT 500").all();
+    "SELECT province,city,district,company,street,name,phone FROM addr_pool ORDER BY id DESC LIMIT 500").all();
   json(res, 200, rows);
 }
 function addrpoolAdd(d, res) {
-  const key = [d.province, d.city, d.district, d.street].filter(Boolean).join(" ");
+  const key = [d.province, d.city, d.district, d.company, d.street].filter(Boolean).join(" ");
   if (!key) return json(res, 400, { error: "地址为空" });
   const r = db.prepare(
-    "INSERT OR IGNORE INTO addr_pool (province,city,district,street,name,phone,addr_key)" +
-    " VALUES (?,?,?,?,?,?,?)"
-  ).run(d.province || "", d.city || "", d.district || "", d.street || "",
+    "INSERT OR IGNORE INTO addr_pool (province,city,district,company,street,name,phone,addr_key)" +
+    " VALUES (?,?,?,?,?,?,?,?)"
+  ).run(d.province || "", d.city || "", d.district || "", d.company || "", d.street || "",
         d.name || "", d.phone || "", key);
   json(res, 201, { added: r.changes });
 }
@@ -172,6 +178,57 @@ function carrierOrder(d, res) {
       if (code !== 0 || j.error) return json(res, 400, { error: j.error || ("下单失败 exit " + code) });
       if (!j.waybill_no) return json(res, 502, { error: "承运商下单成功判定失败：响应中无运单号" });
       json(res, 200, j);
+    });
+  };
+  attempt(0);
+}
+/* POST /api/carrier/cancel {id} — 仅未揽收可取消（路由状态=待揽收；专车/自提=厂内单本地清除）。
+   承运商取消成功 → 清空 waybill_no/route_status/route_latest，单回待下单（order_resp 保留审计） */
+function carrierCancel(d, res) {
+  const rowId = parseInt(d.id || "0", 10) || 0;
+  const row = db.prepare("SELECT * FROM orders WHERE id=?").get(rowId);
+  if (!row) return json(res, 404, { error: "订单不存在" });
+  const wb = row.waybill_no || "";
+  if (!wb) return json(res, 400, { error: "该单尚未下单，无需取消" });
+  const carrier = (row.carrier || "").trim();
+  const rs = row.route_status || "";
+  const clear = () => {
+    db.prepare("UPDATE orders SET waybill_no='', route_status='', route_latest='' WHERE id=?").run(rowId);
+    json(res, 200, { ok: true, cleared: wb });
+  };
+  if (carrier === "专车" || carrier === "自提") return clear();   /* 厂内单：无外部承运商 */
+  if (rs !== "待揽收") {
+    return json(res, 400, { error: "仅未揽收（路由状态=待揽收）可取消下单；当前路由状态：" + (rs || "—") });
+  }
+  let orderId = "", logisticId = "";
+  try {
+    const rd = JSON.parse(row.order_resp || "{}");
+    orderId = String(rd.order_id || "");
+    logisticId = String(rd.logistic_id || "");
+  } catch (_) { /* 无下单返回值记录 */ }
+  if (carrier === "顺丰" && !orderId) {
+    return json(res, 400, { error: "该单无承运商客户单号（order_resp 无 order_id），无法在线取消；请到丰桥后台人工取消" });
+  }
+  const script = path.join(BASE, "carriers", "cli.py");
+  /* python3 → python → uv run --no-project 依次探测运行环境 */
+  const tries = [["python3", [script, "cancel", carrier, orderId, wb, logisticId]],
+                 ["python", [script, "cancel", carrier, orderId, wb, logisticId]],
+                 ["uv", ["run", "--no-project", script, "cancel", carrier, orderId, wb, logisticId]]];
+  const attempt = idx => {
+    if (idx >= tries.length) {
+      return json(res, 500, { error: "无法调用取消下单：服务器未找到 python3/uv 运行环境" });
+    }
+    const [cmd, args] = tries[idx];
+    const cp = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    cp.stdout.on("data", c => out += c);
+    cp.on("error", () => attempt(idx + 1));
+    cp.on("close", code => {
+      let j = null;
+      try { j = JSON.parse(out.trim()); } catch (_) { /* 非 JSON = 运行环境异常，换下一个 */ }
+      if (!j) return attempt(idx + 1);
+      if (code !== 0 || j.error) return json(res, 400, { error: j.error || ("取消失败 exit " + code) });
+      clear();
     });
   };
   attempt(0);
@@ -241,11 +298,24 @@ function carrierRoute(u, res) {
   attempt(0);
 }
 
-/* GET /api/upload?dn=<DN> → { dn, files:[...] }（无目录时 files=[]） */
+/* GET /api/upload?dn=<DN> → { dn, files:[...] }（无目录时 files=[]）；
+   无 dn → { counts:{dn:n} } 全量照片计数（清单"发货照片"列一次取数，避免逐单请求；2026-09-15） */
 function listUpload(u, res) {
   const dn = (u.searchParams.get("dn") || "").replace(/[^\w-]/g, "").slice(0, 32);
+  if (!dn) {
+    const counts = {};
+    if (fs.existsSync(UPLOAD_DIR)) {
+      for (const d of fs.readdirSync(UPLOAD_DIR)) {
+        try {
+          const f = path.join(UPLOAD_DIR, d);
+          if (fs.statSync(f).isDirectory()) counts[d] = fs.readdirSync(f).length;
+        } catch (_) { /* 单个目录异常不影响整体 */ }
+      }
+    }
+    return json(res, 200, { counts });
+  }
   const folder = path.join(UPLOAD_DIR, dn);
-  const files = (dn && fs.existsSync(folder)) ? fs.readdirSync(folder).sort() : [];
+  const files = fs.existsSync(folder) ? fs.readdirSync(folder).sort() : [];
   json(res, 200, { dn, files });
 }
 
@@ -288,9 +358,9 @@ function listOrders(u, res) {
 
 function createOrder(d, res) {
   const r = db.prepare(
-    "INSERT INTO orders (so,province,city,district,street,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)" +
-    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-  ).run(d.so || "", d.province || "", d.city || "", d.district || "", d.street || "",
+    "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)" +
+    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+  ).run(d.so || "", d.province || "", d.city || "", d.district || "", d.street || "", d.company || "",
         d.name || "", d.phone || "", d.carrier || "", d.note || "", d.ship_date || "",
         d.priority || "一般", d.order_type || "发货单", d.so_no || "",
         d.po || "", d.buyer || "", d.emp_name || "", d.emp_phone || "");
@@ -298,7 +368,7 @@ function createOrder(d, res) {
 }
 
 function updateOrder(id, d, res) {
-  const cols = ["so", "province", "city", "district", "street", "name",
+  const cols = ["so", "province", "city", "district", "street", "company", "name",
                 "phone", "carrier", "note", "ship_date", "status",
                 "waybill_no", "route_status", "priority", "order_type", "so_no",
                 "order_resp", "po", "buyer", "emp_name", "emp_phone"];
@@ -311,17 +381,21 @@ function updateOrder(id, d, res) {
   row ? json(res, 200, rowToJson(row)) : json(res, 404, { error: "not found" });
 }
 
+/* 看板统计（2026-09-16 用户规则修正：以"揽收"为发货判定——已发货=运单存在且路由状态≠待揽收；
+   旧口径 status/shipped_at 在下单揽收后仍 pending，超时/昨日发货全错；与 server.py 一致） */
 function stats(res) {
+  const shipped = "waybill_no<>'' AND COALESCE(route_status,'')<>'待揽收'";
+  const unshipped = "(waybill_no='' OR COALESCE(route_status,'')='待揽收')";
   const r = db.prepare(
     "SELECT" +
-    " (SELECT COUNT(*) FROM orders WHERE status='shipped'" +
-    "   AND date(shipped_at)=date('now','localtime','-1 day')) AS yesterday_shipped," +
-    " (SELECT COUNT(*) FROM orders WHERE status='pending'" +
-    "   AND ship_date=date('now','localtime')) AS today_pending," +
-    " (SELECT COUNT(*) FROM orders WHERE status='pending'" +
-    "   AND ship_date<>'' AND ship_date<date('now','localtime')) AS overdue," +
-    " (SELECT COUNT(*) FROM orders WHERE status='pending'" +
-    "   AND ship_date>date('now','localtime')) AS planned," +
+    ` (SELECT COUNT(*) FROM orders WHERE ship_date=date('now','localtime','-1 day')` +
+    `   AND ${shipped}) AS yesterday_shipped,` +
+    ` (SELECT COUNT(*) FROM orders WHERE ship_date=date('now','localtime')` +
+    `   AND ${unshipped}) AS today_pending,` +
+    ` (SELECT COUNT(*) FROM orders WHERE ship_date<>'' AND ship_date<date('now','localtime')` +
+    `   AND ${unshipped}) AS overdue,` +
+    ` (SELECT COUNT(*) FROM orders WHERE ship_date>date('now','localtime')` +
+    `   AND ${unshipped}) AS planned,` +
     " (SELECT COUNT(*) FROM orders WHERE status='returned'" +
     "   AND date(returned_at)=date('now','localtime')) AS returned"
   ).get();
@@ -350,6 +424,7 @@ http.createServer((req, res) => {
   if (req.method === "POST" && /\/api\/orders$/.test(p)) return readBody(req, d => createOrder(d, res));
   if (req.method === "POST" && /\/api\/upload$/.test(p)) return uploadFile(u, req, res);
   if (req.method === "POST" && /\/api\/carrier\/order$/.test(p)) return readBody(req, d => carrierOrder(d, res));
+  if (req.method === "POST" && /\/api\/carrier\/cancel$/.test(p)) return readBody(req, d => carrierCancel(d, res));
   if (req.method === "POST" && /\/api\/admin\/clear-orders$/.test(p)) {
     const r = db.prepare("DELETE FROM orders").run();   /* 设置页「清除模拟数据」 */
     return json(res, 200, { deleted: r.changes });

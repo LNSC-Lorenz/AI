@@ -85,8 +85,8 @@ function markApi(online, base) {
       '<span class="ms-switch"><input type="checkbox" data-c="' + c + '"><i></i></span></label>'
     ).join("") +
     '    <div class="set-sec" style="margin-top:16px">数据维护</div>' +
-    '    <div class="set-row"><span>清除模拟数据（清空订单表全部数据，不可恢复）</span>' +
-    '<button class="btn set-clear" type="button">立即清除</button></div>' +
+    '    <div class="set-row"><span>清空订单表（功能已停用，防误清真实数据）</span>' +
+    '<button class="btn set-clear" type="button" disabled>立即清空</button></div>' +   /* 2026-09-16 用户规则：灰色禁用不可点 */
     '  </div>' +
     '</div>';
   document.body.appendChild(mask);

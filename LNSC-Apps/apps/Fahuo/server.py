@@ -55,10 +55,57 @@ def next_oid():
 
 # 承运商对接包（carriers/）：缺失时端点返回明确错误，不影响订单/上传主流程
 sys.path.insert(0, BASE)
+
+
+def _audit(msg):
+    """危险操作审计日志（清表/删单/取消下单）→ audit.log（部署不覆盖；2026-09-16 数据丢失复盘新增）"""
+    try:
+        with open(os.path.join(BASE, "audit.log"), "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except Exception:
+        pass
+
+
+def _merge_pdfs(b64_list):
+    """多份单页面单 PDF 合并为一个多页 PDF（一票多件一次预览/打印，减少点击；2026-09-17 用户规则）"""
+    import io
+    from pypdf import PdfReader, PdfWriter
+    w = PdfWriter()
+    for b in b64_list:
+        w.append(PdfReader(io.BytesIO(base64.b64decode(b))))
+    buf = io.BytesIO()
+    w.write(buf)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+# 面单内容缩放烙进 PDF（2026-09-17 用户反馈：Chrome 对话框缩放完全失效、右缘仍被裁）：
+# pypdf 对内容流加变换矩阵——纸面 MediaBox 不变（仍 76×130），内容缩到 93% 并
+# 上下左右居中（四边安全边均等，约 2.7mm），打印对话框选"实际大小"即可
+LABEL_SHRINK = float(os.environ.get("LABEL_SHRINK", "0.93"))
+
+
+def _shrink_pdf_b64(pdf_b64, scale=LABEL_SHRINK):
+    import io
+    from pypdf import PdfReader, PdfWriter, Transformation
+    if scale >= 0.999:
+        return pdf_b64
+    r = PdfReader(io.BytesIO(base64.b64decode(pdf_b64)))
+    w = PdfWriter()
+    for p in r.pages:
+        pw, ph = float(p.mediabox.width), float(p.mediabox.height)
+        # 左边距 1.66mm（用户微调 2026-09-17；右侧自然让出 ~3.66mm），上下仍居中
+        t = (Transformation().scale(scale, scale)
+             .translate(tx=1.66 * 72 / 25.4, ty=ph * (1 - scale) / 2))
+        p.add_transformation(t)     # 内容缩放+定位，页面尺寸不变
+        w.add_page(p)
+    buf = io.BytesIO()
+    w.write(buf)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 try:
     from carriers import place_order as carrier_place_order, query_route as carrier_query_route
+    from carriers import cancel_order as carrier_cancel_order
 except Exception:
-    carrier_place_order = carrier_query_route = None
+    carrier_place_order = carrier_query_route = carrier_cancel_order = None
 
 # ---------- 路由状态自动刷新（2026-09-15：列表路由状态不更新问题） ----------
 # route_status 下单时写入一次即为旧值；列表加载时后台刷新非终态运单：
@@ -73,6 +120,14 @@ _route_lock = threading.Lock()
 
 def _route_is_final(st):
     return any(k in (st or "") for k in ("签收", "回单"))
+
+
+def _is_canceled_err(msg):
+    """承运商明确反馈"运单已取消/不存在"（区别于网络/未开通等瞬时失败）：
+    识别后平台同步回待下单（2026-09-16 用户规则：他方在承运商后台取消的运单不得卡死平台单）"""
+    m = str(msg or "")
+    return any(k in m for k in ("已取消", "不存在", "已作废", "被取消", "无效",
+                                "已撤销", "不允许撤销"))   # 德邦撤销措辞（2026-09-17 #490 实测）
 
 
 def _refresh_routes():
@@ -105,8 +160,15 @@ def _refresh_routes():
                         t = str(last.get("acceptTime") or "")[5:16]
                         latest_txt = (t + " " + str(
                             last.get("remark") or last.get("acceptAddress") or "")).strip()
-                except Exception:
-                    pass    # 未开通轨迹/网络失败：保持旧值，照常写检查时间节流
+                except Exception as e:
+                    if _is_canceled_err(e):
+                        # 他方已在承运商后台取消：同步清空运单字段 → 回待下单（可重新下单）
+                        _audit(f"ROUTE-CANCELED-SYNC id={r['id']} waybill={r['waybill_no']} err={e}")
+                        c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='',"
+                                  " route_checked_at=datetime('now','localtime') WHERE id=?",
+                                  (r["id"],))
+                        continue
+                    # 其余失败（未开通轨迹/网络）：保持旧值，照常写检查时间节流
                 if latest_txt:
                     c.execute("UPDATE orders SET route_status=?, route_latest=?,"
                               " route_checked_at=datetime('now','localtime') WHERE id=?",
@@ -143,6 +205,7 @@ CREATE TABLE IF NOT EXISTS orders (
   city        TEXT DEFAULT '',
   district    TEXT DEFAULT '',
   street      TEXT DEFAULT '',
+  company     TEXT DEFAULT '',   -- 公司独立列（2026-09-17 街道/公司拆两字段）
   name        TEXT DEFAULT '',
   phone       TEXT DEFAULT '',
   carrier     TEXT DEFAULT '',
@@ -162,6 +225,7 @@ CREATE TABLE IF NOT EXISTS addr_pool (
   city        TEXT DEFAULT '',
   district    TEXT DEFAULT '',
   street      TEXT DEFAULT '',
+  company     TEXT DEFAULT '',   -- 公司独立列（2026-09-17）
   name        TEXT DEFAULT '',
   phone       TEXT DEFAULT '',
   addr_key    TEXT UNIQUE,
@@ -200,22 +264,28 @@ def init_db():
             c.execute("ALTER TABLE orders ADD COLUMN route_checked_at TEXT DEFAULT ''")  # 轨迹检查时间（自动刷新节流）
         if "route_latest" not in cols:
             c.execute("ALTER TABLE orders ADD COLUMN route_latest TEXT DEFAULT ''")  # 最新路由节点文本（"MM-dd HH:mm 内容"）
-        # PO/采购员/发件人：独立列（原塞在 note 标签里；备注列只存手写备注）
-        for col in ("po", "buyer", "emp_name", "emp_phone"):
+        # PO/采购员/发件人/公司：独立列（原塞在 note 标签/street 里；备注列只存手写备注）
+        for col in ("po", "buyer", "emp_name", "emp_phone", "company"):
             if col not in cols:
                 c.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT DEFAULT ''")
+        pcols = [r[1] for r in c.execute("PRAGMA table_info(addr_pool)")]
+        if "company" not in pcols:
+            c.execute("ALTER TABLE addr_pool ADD COLUMN company TEXT DEFAULT ''")  # 公司独立列（2026-09-17）
 
 
 def row_to_json(r):
     """拼接展示用地址（直辖市去重：省=市）"""
     parts = []
-    for p in (r["province"], r["city"], r["district"], r["street"]):
+    for p in (r["province"], r["city"], r["district"],
+              r["company"] if "company" in r.keys() else "", r["street"]):
         if p and (not parts or parts[-1] != p):
             parts.append(p)
     return {
         "id": r["id"], "so": r["so"],
         "province": r["province"], "city": r["city"], "district": r["district"],
-        "street": r["street"], "address": " ".join(parts),
+        "street": r["street"],
+        "company": r["company"] if "company" in r.keys() else "",
+        "address": " ".join(parts),
         "name": r["name"], "phone": r["phone"],
         "carrier": r["carrier"], "note": r["note"],
         "status": r["status"], "ship_date": r["ship_date"],
@@ -297,6 +367,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._upload()
         if re.search(r"/api/carrier/order$", p):
             return self._carrier_order()
+        if re.search(r"/api/carrier/cancel$", p):
+            return self._carrier_cancel()
         if re.search(r"/api/admin/clear-orders$", p):
             return self._clear_orders()
         if re.search(r"/api/addrpool$", p):
@@ -314,6 +386,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._upload_delete()
         m = re.search(r"/api/orders/(\d+)$", urlparse(self.path).path)
         if m:
+            _audit(f"DELETE-ORDER id={m.group(1)}")   # 危险操作留痕
             with db() as c:
                 cur = c.execute("DELETE FROM orders WHERE id=?", (int(m.group(1)),))
             return self._json(200, {"deleted": cur.rowcount})
@@ -324,7 +397,7 @@ class Handler(SimpleHTTPRequestHandler):
         """GET /api/addrpool → 共享地址池列表（最新在前）"""
         with db() as c:
             rows = c.execute(
-                "SELECT province,city,district,street,name,phone FROM addr_pool"
+                "SELECT province,city,district,company,street,name,phone FROM addr_pool"
                 " ORDER BY id DESC LIMIT 500").fetchall()
         self._json(200, [dict(r) for r in rows])
 
@@ -332,22 +405,25 @@ class Handler(SimpleHTTPRequestHandler):
         """POST /api/addrpool → 勾选入池（addr_key 去重：同地址跳过）"""
         d = self._body()
         key = " ".join(x for x in (d.get("province", ""), d.get("city", ""),
-                                   d.get("district", ""), d.get("street", "")) if x)
+                                   d.get("district", ""), d.get("company", ""),
+                                   d.get("street", "")) if x)
         if not key:
             return self._json(400, {"error": "地址为空"})
         with db() as c:
             cur = c.execute(
                 "INSERT OR IGNORE INTO addr_pool"
-                " (province,city,district,street,name,phone,addr_key)"
-                " VALUES (?,?,?,?,?,?,?)",
+                " (province,city,district,company,street,name,phone,addr_key)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (d.get("province", ""), d.get("city", ""), d.get("district", ""),
-                 d.get("street", ""), d.get("name", ""), d.get("phone", ""), key))
+                 d.get("company", ""), d.get("street", ""),
+                 d.get("name", ""), d.get("phone", ""), key))
         self._json(201, {"added": cur.rowcount})
 
     def _clear_orders(self):
         """POST /api/admin/clear-orders → 清空订单表（设置页「清除模拟数据」用）"""
         with db() as c:
             cur = c.execute("DELETE FROM orders")
+        _audit(f"CLEAR-ORDERS deleted={cur.rowcount}")   # 危险操作留痕（2026-09-16 数据丢失复盘）
         self._json(200, {"deleted": cur.rowcount})
 
     def _carrier_order(self):
@@ -367,12 +443,67 @@ class Handler(SimpleHTTPRequestHandler):
                 order["so"] = dn
                 order["oid"] = next_oid()  # 承运商客户单号：持久自增（服务端统一分配，永不复用）
                 res = carrier_place_order(carrier, order)
+                res.setdefault("order_id", order["oid"])   # oid 随返回值持久化到 order_resp（取消下单要用）
         except Exception as e:
             return self._json(400, {"error": str(e)})
         # 兜底：任何路径不得返回"成功但无运单号"（前端据 waybill_no 判成败）
         if not res.get("waybill_no"):
             return self._json(502, {"error": "承运商下单成功判定失败：响应中无运单号"})
         self._json(200, res)
+
+    def _carrier_cancel(self):
+        """POST /api/carrier/cancel  {id}
+        仅未揽收可取消（路由状态=待揽收；专车/自提=厂内单无外部承运商，直接本地清除）。
+        承运商取消成功 → 清空 waybill_no/route_status/route_latest，单回到待下单：
+        录单页可改数据、下单页可改承运参数后重新下单（重新下单走 next_oid，永不复用）。
+        order_resp 保留作审计追溯。"""
+        if carrier_cancel_order is None:
+            return self._json(500, {"error": "carriers 包缺失，请部署 carriers/ 目录"})
+        d = self._body()
+        try:
+            row_id = int(d.get("id") or 0)
+        except Exception:
+            row_id = 0
+        with db() as c:
+            row = c.execute("SELECT * FROM orders WHERE id=?", (row_id,)).fetchone()
+        if not row:
+            return self._json(404, {"error": "订单不存在"})
+        o = row_to_json(row)
+        wb = o.get("waybill_no") or ""
+        if not wb:
+            return self._json(400, {"error": "该单尚未下单，无需取消"})
+        carrier = (o.get("carrier") or "").strip()
+        rs = o.get("route_status") or ""
+        if carrier not in ("专车", "自提"):
+            if rs != "待揽收":
+                return self._json(400, {"error": "仅未揽收（路由状态=待揽收）可取消下单；当前路由状态：%s"
+                                        % (rs or "—")})
+            order_id, logistic_id = "", ""
+            try:
+                rd = json.loads(o.get("order_resp") or "{}")
+                order_id = str(rd.get("order_id") or "")
+                logistic_id = str(rd.get("logistic_id") or "")
+            except Exception:
+                pass
+            if carrier == "顺丰" and not order_id:
+                return self._json(400, {"error": "该单无承运商客户单号（order_resp 无 order_id），"
+                                        "无法在线取消；请到丰桥后台人工取消"})
+            try:
+                carrier_cancel_order(carrier, order_id, wb, logistic_id)
+            except Exception as e:
+                if _is_canceled_err(e):
+                    # 承运商侧早已取消：目标状态一致，直接同步回待下单（2026-09-16 用户规则）
+                    _audit(f"CANCEL-ALREADY id={row_id} waybill={wb} err={e}")
+                    with db() as c:
+                        c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='' WHERE id=?",
+                                  (row_id,))
+                    return self._json(200, {"ok": True, "cleared": wb,
+                                            "note": "承运商侧已是取消状态，已同步回待下单"})
+                return self._json(400, {"error": str(e)})
+        with db() as c:
+            c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='' WHERE id=?",
+                      (row_id,))
+        self._json(200, {"ok": True, "cleared": wb})
 
     def _carrier_route(self, qs):
         """GET /api/carrier/route?carrier=顺丰&waybill_no=xxx → 轨迹/最新状态"""
@@ -388,29 +519,39 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": str(e)})
         self._json(200, res)
 
-    def _carrier_label(self, qs):
-        """GET /api/carrier/label?carrier=顺丰&waybill_no=xxx → 官方面单 PDF（base64）"""
-        carrier = (qs.get("carrier", [""])[0]).strip()
-        waybill = re.sub(r"[^\w-]", "", qs.get("waybill_no", [""])[0])[:40]
-        if not carrier or not waybill:
-            return self._json(400, {"error": "carrier 和 waybill_no 必填"})
-        try:
-            from carriers import print_label, find_pdf_b64, find_label_files
-            from carriers.base import fetch_url_pdf_b64
-            data = print_label(carrier, waybill)
-        except Exception as e:
-            return self._json(400, {"error": str(e)})
+    def _label_pdf_b64(self, carrier, waybill):
+        """单运单取官方面单 PDF base64（内嵌 base64 / url+token 两形态；失败抛承运商原始错误）"""
+        from carriers import print_label, find_pdf_b64, find_label_files
+        from carriers.base import fetch_url_pdf_b64
+        data = print_label(carrier, waybill)
         pdf = find_pdf_b64(data)                      # 形态1：响应内嵌 base64
         if not pdf:
             files = find_label_files(data)            # 形态2：url+token（顺丰 v2.0）
             if files:
-                try:
-                    pdf = fetch_url_pdf_b64(files[0]["url"], files[0]["token"])
-                except Exception as e:
-                    return self._json(400, {"error": str(e)})
+                pdf = fetch_url_pdf_b64(files[0]["url"], files[0]["token"])
+        if pdf:
+            pdf = _shrink_pdf_b64(pdf)                # 90% 安全边烙进文件（对话框缩放不可靠）
+        return pdf, data
+
+    def _carrier_label(self, qs):
+        """GET /api/carrier/label?carrier=顺丰&waybill_no=xxx → 官方面单 PDF（base64）。
+        一票多件：waybill_no 逗号分隔多运单 → 逐件取面单合并为一个多页 PDF（2026-09-17 用户规则）"""
+        carrier = (qs.get("carrier", [""])[0]).strip()
+        waybills = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
+                                for x in qs.get("waybill_no", [""])[0].split(",")) if w]
+        if not carrier or not waybills:
+            return self._json(400, {"error": "carrier 和 waybill_no 必填"})
+        pdfs, last_data = [], None
+        try:
+            for w in waybills:
+                pdf, last_data = self._label_pdf_b64(carrier, w)
+                if not pdf:
+                    return self._json(400, {"error": "运单 %s 无面单 PDF" % w})
+                pdfs.append(pdf)
+        except Exception as e:
+            return self._json(400, {"error": str(e)})
+        pdf = pdfs[0] if len(pdfs) == 1 else _merge_pdfs(pdfs)   # 多件合并为一个文件
         if qs.get("raw", [""])[0] == "1":             # 原始 PDF 输出（iframe 同源直显，避开 blob 拦截）
-            if not pdf:
-                return self._json(404, {"error": "无 PDF"})
             body = base64.b64decode(pdf)
             self.send_response(200)
             self._cors()
@@ -419,13 +560,22 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        self._json(200, {"pdf": pdf, "raw": None if pdf else data})
+        self._json(200, {"pdf": pdf, "raw": None if pdf else last_data})
 
     def _upload_list(self, qs):
-        """GET /api/upload?dn=<DN> → {"dn":..., "files":[文件名...]}（无目录时 files=[]）"""
+        """GET /api/upload?dn=<DN> → {"dn":..., "files":[文件名...]}（无目录时 files=[]）；
+        无 dn → {"counts": {dn: n}} 全量照片计数（清单"发货照片"列一次取数；2026-09-15）"""
         dn = re.sub(r"[^\w-]", "", qs.get("dn", [""])[0])[:32]
-        folder = os.path.join(UPLOAD_DIR, dn) if dn else None
-        files = sorted(os.listdir(folder)) if folder and os.path.isdir(folder) else []
+        if not dn:
+            counts = {}
+            if os.path.isdir(UPLOAD_DIR):
+                for d in os.listdir(UPLOAD_DIR):
+                    f = os.path.join(UPLOAD_DIR, d)
+                    if os.path.isdir(f):
+                        counts[d] = len(os.listdir(f))
+            return self._json(200, {"counts": counts})
+        folder = os.path.join(UPLOAD_DIR, dn)
+        files = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
         self._json(200, {"dn": dn, "files": files})
 
     def _upload_delete(self):
@@ -480,10 +630,11 @@ class Handler(SimpleHTTPRequestHandler):
         d = self._body()
         with db() as c:
             cur = c.execute(
-                "INSERT INTO orders (so,province,city,district,street,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (d.get("so", ""), d.get("province", ""), d.get("city", ""),
-                 d.get("district", ""), d.get("street", ""), d.get("name", ""),
+                 d.get("district", ""), d.get("street", ""), d.get("company", ""),
+                 d.get("name", ""),
                  d.get("phone", ""), d.get("carrier", ""), d.get("note", ""),
                  d.get("ship_date", ""), d.get("priority", "一般"),
                  d.get("order_type", "发货单"), d.get("so_no", ""),
@@ -495,7 +646,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _update_order(self, oid):
         d = self._body()
         fields, vals = [], []
-        for k in ("so", "province", "city", "district", "street", "name",
+        for k in ("so", "province", "city", "district", "street", "company", "name",
                   "phone", "carrier", "note", "ship_date", "status",
                   "waybill_no", "route_status", "priority", "order_type", "so_no",
                   "order_resp", "po", "buyer", "emp_name", "emp_phone"):
@@ -515,17 +666,22 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(200, row_to_json(r))
 
     def _stats(self):
+        """看板统计（2026-09-16 用户规则修正：以"揽收"为发货判定——
+        已发货 = 运单存在且路由状态≠待揽收；未揽收（含未下单）才算待发货/超时。
+        旧口径用 status/shipped_at，下单揽收后 status 仍 pending，超时/昨日发货全错）"""
+        shipped = "waybill_no<>'' AND COALESCE(route_status,'')<>'待揽收'"
+        unshipped = "(waybill_no='' OR COALESCE(route_status,'')='待揽收')"
         with db() as c:
             r = c.execute(
                 "SELECT"
-                " (SELECT COUNT(*) FROM orders WHERE status='shipped'"
-                "   AND date(shipped_at)=date('now','localtime','-1 day')) AS yesterday_shipped,"
-                " (SELECT COUNT(*) FROM orders WHERE status='pending'"
-                "   AND ship_date=date('now','localtime')) AS today_pending,"
-                " (SELECT COUNT(*) FROM orders WHERE status='pending'"
-                "   AND ship_date<>'' AND ship_date<date('now','localtime')) AS overdue,"
-                " (SELECT COUNT(*) FROM orders WHERE status='pending'"
-                "   AND ship_date>date('now','localtime')) AS planned,"
+                f" (SELECT COUNT(*) FROM orders WHERE ship_date=date('now','localtime','-1 day')"
+                f"   AND {shipped}) AS yesterday_shipped,"
+                f" (SELECT COUNT(*) FROM orders WHERE ship_date=date('now','localtime')"
+                f"   AND {unshipped}) AS today_pending,"
+                f" (SELECT COUNT(*) FROM orders WHERE ship_date<>'' AND ship_date<date('now','localtime')"
+                f"   AND {unshipped}) AS overdue,"
+                f" (SELECT COUNT(*) FROM orders WHERE ship_date>date('now','localtime')"
+                f"   AND {unshipped}) AS planned,"
                 " (SELECT COUNT(*) FROM orders WHERE status='returned'"
                 "   AND date(returned_at)=date('now','localtime')) AS returned"
             ).fetchone()

@@ -39,18 +39,22 @@ const preHtml = (s, pre) => {
 const dnHtml = dn => preHtml(dn, "82600");
 const soHtml = so => preHtml(so, "32600");
 
-/* 在途进度：已发运时长 / 48h，节点状态修正，6%~97% 之间 */
+/* 在途进度（2026-09-16 用户规则：根据在途点模拟——阶段定档 + 下单后时长/48h 目标时效内插；
+   旧版依赖 shipped_at（恒为空）导致在途单恒停 10%）：待揽收 8% → 在途 15%~85% → 派送/到达 90% → 签收/回单 100% */
 function routeProgress(o) {
   if (o.status === "returned") return 1;
   const rs = o.route_status || "";
   if (/签收|回单/.test(rs)) return 1;
-  let p = 0.1;
-  if (o.shipped_at) {
-    const hrs = (Date.now() - new Date(String(o.shipped_at).replace(" ", "T"))) / 36e5;
-    p = hrs / ROUTE_TARGET_H;
+  if (/派送|到达/.test(rs)) return 0.9;
+  let p = 0.08;                                    /* 待揽收 8% */
+  if (/揽收|发出|运输|运送/.test(rs)) {
+    p = 0.15;
+    const t0 = new Date(String(o.created_at || "").replace(" ", "T"));
+    if (!isNaN(t0)) {
+      const hrs = (Date.now() - t0) / 36e5;
+      p = Math.max(p, Math.min(0.85, 0.15 + (hrs / ROUTE_TARGET_H) * 0.7));   /* 48h 走到 85% */
+    }
   }
-  if (/派送|到达/.test(rs)) p = Math.max(p, 0.88);
-  else if (/揽收|发出|运输/.test(rs)) p = Math.max(p, 0.15);
   return Math.min(0.97, Math.max(0.06, p));
 }
 
@@ -167,11 +171,10 @@ function renderTrucks(list) {
 /* ----- 右 3/4：运单路径明细（点击左侧类别 → 该类别全部运单，逐单显示路径进度） ----- */
 const PATH_COLS = 64;    /* 4 行 × 64 列点网：按列同步点亮 */
 
-/* 运单链路进度：待下单 8% / 已下单 35% / 在途按发运时长 / 回单 100% */
+/* 运单链路进度：待下单 8% / 已下单≥35%（在途按节点模拟推进；status 无自动 shipped，2026-09-16 修正） / 回单 100% */
 function pathProgress(o) {
   if (o.status === "returned") return 1;
-  if (o.status === "shipped") return routeProgress(o);
-  if (o.waybill_no) return 0.35;
+  if (o.waybill_no) return Math.max(0.35, routeProgress(o));   /* 已下单：保底 35%，在途随节点模拟增长到 90%+ */
   return 0.08;
 }
 

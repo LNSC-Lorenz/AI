@@ -128,6 +128,7 @@ if (typeof document !== "undefined") {
   const selCity     = document.getElementById("selCity");
   const selDistrict = document.getElementById("selDistrict");
   const streetInput = document.getElementById("streetInput");
+  const companyInput = document.getElementById("companyInput");   /* 公司独立字段（2026-09-17 拆分） */
   const noteInput   = document.getElementById("noteInput");
   const nameInput   = document.getElementById("nameInput");
   const phoneInput  = document.getElementById("phoneInput");
@@ -268,7 +269,7 @@ if (typeof document !== "undefined") {
       const b = document.createElement("b");
       b.textContent = (a.name || "--") + (a.phone ? "  " + a.phone : "");
       const s = document.createElement("span");
-      s.textContent = [a.province, a.city, a.district, a.street].filter(Boolean).join(" ");
+      s.textContent = [a.province, a.city, a.district, a.company, a.street].filter(Boolean).join(" ");
       it.append(b, s);
       it.addEventListener("mousedown", e => {   /* mousedown 先于 input blur */
         e.preventDefault();
@@ -276,6 +277,7 @@ if (typeof document !== "undefined") {
         fillCity(a.province || "", a.city || "");
         fillDistrict(a.province || "", a.city || "", a.district || "");
         streetInput.value = a.street || "";
+        companyInput.value = a.company || "";   /* 公司独立字段回填（2026-09-17） */
         nameInput.value = a.name || "";
         phoneInput.value = a.phone || "";
         poolListEl.hidden = true;
@@ -391,7 +393,11 @@ if (typeof document !== "undefined") {
     if (parsed.province) selProvince.value = parsed.province;
     fillCity(parsed.province || selProvince.value, parsed.city);
     fillDistrict(selProvince.value, selCity.value, parsed.district);
-    streetInput.value = parsed.street;
+    /* 街道/公司自动拆分（2026-09-17 拆分字段）：识别结果以公司后缀开头（公司/集团/研究院/
+       事务所/服务中心）时，前段进公司框、余下进街道框；保守匹配防"厂路"类误拆 */
+    const mC = (parsed.street || "").match(/^(.+?(?:公司|集团|研究院|事务所|服务中心))\s*[，,、]?\s*(.*)$/);
+    if (mC) { companyInput.value = mC[1]; streetInput.value = mC[2]; }
+    else { companyInput.value = ""; streetInput.value = parsed.street; }
     nameInput.value = parsed.name;
     phoneInput.value = parsed.phone;
   }
@@ -509,11 +515,39 @@ if (typeof document !== "undefined") {
     td.appendChild(d1);
     if (o.phone) { const d2 = document.createElement("div"); d2.textContent = o.phone; td.appendChild(d2); }
   }
-  /* 行显示值（9 列：DN SO 优先级 类型 地址 姓名(含电话) 备注 承运商 要求发货日期） */
+  /* 行显示值（8 列：DN SO (优先级/类型合并列) 地址 姓名(含电话) 备注 承运商 要求发货日期；
+     优先级/类型合并一列、换行显示（2026-09-16 用户规则，同清单页） */
   function rowValues(o) {
-    return [o.so || "", o.so_no || "", o.priority || "一般", o.order_type || "发货单",
+    return [o.so || "", o.so_no || "", null,
             o.address || "", o.name || "", cleanNote(o.note),
-            o.carrier || "", o.ship_date || ""];
+            o.carrier || "", o.ship_date || "", null];   /* 末位=删除列（2026-09-16 用户要求） */
+  }
+  /* 删除列（最后列）：未下单可删除整单（确认后 DELETE /api/orders/<id>）；
+     已下单不出按钮（需先取消下单）；图标=应用统一 Feather 风格（垃圾桶） */
+  const TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/>'
+    + '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'
+    + '<line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+  function fillDelCell(td, tr, o) {
+    if (o.waybill_no) return;                       /* 已下单：不提供删除 */
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "del-btn";
+    b.innerHTML = TRASH_SVG;
+    b.title = "删除该录单（不可恢复）";
+    b.addEventListener("click", async e => {
+      e.stopPropagation();                          /* 不触发行选中编辑 */
+      if (!apiOnline) { alert("当前离线，无法删除"); return; }
+      if (!confirm("删除该录单？\n\nDN：" + (o.so || "—") + "　姓名：" + (o.name || "—") +
+                   "\n此操作不可恢复！")) return;
+      try {
+        await api("/orders/" + o.id, { method: "DELETE" });
+        if (editingRow === tr) exitEdit();
+        tr.remove();
+        refreshStats();
+        updateWarn();                                   /* 警告灯联动（删除行后） */
+      } catch (err) { alert("删除失败：" + err.message); }
+    });
+    td.appendChild(b);
   }
   /* 地址两行显示（2026-09-15 用户规则）：省市区一行（直辖市去重），街道详情一行 */
   function addrLines(o) {
@@ -540,14 +574,23 @@ if (typeof document !== "undefined") {
     tr.innerHTML = "";
     v.forEach((x, i) => {
       const td = document.createElement("td");
-      if (i === 4 && o) fillAddrCell(td, o);   /* 地址列（第5列）：两行 */
+      if (i === 2 && o) {                            /* 合并列：优先级/类型 两行（紧急加粗，同清单） */
+        const d1 = document.createElement("div");
+        d1.textContent = o.priority || "一般";
+        if (d1.textContent === "紧急") d1.classList.add("prio-hot");
+        td.appendChild(d1);
+        const d2 = document.createElement("div"); d2.textContent = o.order_type || "发货单";
+        td.appendChild(d2);
+      }
+      else if (i === 3 && o) fillAddrCell(td, o);   /* 地址列（第4列）：两行 */
       else if (i === 0 && o) td.innerHTML = dnHtml(o.so);   /* DN 列：前缀上标 */
       else if (i === 1 && o) td.innerHTML = o.so_no ? soHtml(o.so_no) : "";   /* SO 列：32600 前缀上标 */
-      else if (i === 5 && o) fillNameCell(td, o);   /* 姓名列（第6列）：姓名+电话两行 */
+      else if (i === 4 && o) fillNameCell(td, o);   /* 姓名列（第5列）：姓名+电话两行 */
+      else if (i === 8 && o) fillDelCell(td, tr, o);   /* 删除列（最后列） */
       else td.textContent = x;
-      if (x === "紧急") td.classList.add("prio-hot"); /* 紧急加粗 */
       tr.appendChild(td);
     });
+    updateWarn();   /* 警告灯联动（编辑保存后优先级可能变更） */
   }
   function addRow(v, o) {
     const tr = document.createElement("tr");
@@ -560,6 +603,21 @@ if (typeof document !== "undefined") {
       }
     }
     orderBody.appendChild(tr);
+    updateWarn();                         /* 警告灯联动（新增/载入行后） */
+  }
+
+  /* 警告灯（2026-09-16 用户规则）：有待下单紧急录单 → 顶栏警告图标红色闪现；
+     超过 3 个 → 闪烁频率加大；数量写进图标 title */
+  function updateWarn() {
+    const btn = document.querySelector('button[title="警告"], button[aria-label="警告"]');
+    if (!btn) return;
+    const n = [...orderBody.querySelectorAll("tr")].filter(tr => {
+      const o = tr._order;
+      return o && !o.waybill_no && (o.priority || "一般") === "紧急";
+    }).length;
+    btn.classList.toggle("warn-on", n > 0);
+    btn.classList.toggle("warn-fast", n > 3);
+    if (n) btn.title = `警告：${n} 笔紧急录单待处理`;
   }
 
   /* ----- 行内修改：点选行 → 回填收件信息 → 保存 ----- */
@@ -570,6 +628,7 @@ if (typeof document !== "undefined") {
     fillCity(o.province || "", o.city || "");
     fillDistrict(o.province || "", o.city || "", o.district || "");
     streetInput.value = o.street || "";
+    companyInput.value = o.company || "";   /* 公司独立字段（2026-09-17） */
     /* PO/采购员/发件人：优先取独立字段；旧数据（标签塞在 note 里的）回退标签反解并还原纯备注 */
     let noteText = o.note || "";
     poInput.value = o.po || ""; buyerInput.value = o.buyer || "";
@@ -643,7 +702,13 @@ if (typeof document !== "undefined") {
         const orders = await api("/orders", { signal: AbortSignal.timeout(5000) });   /* 探测 5s 超时防假死 */
         apiOnline = true;
         markApi(true, API);
-        orders.forEach(o => addRow(rowValues(o), o));
+        /* 已下单：只在单据当天显示，隔天自动出录单列表（工作队列只留待办；2026-09-16 用户规则。
+           以 created_at 为单据日期——录入+下单同日常态下准确；下单动作不写库日期，此处为最贴近口径） */
+        const todayStr = new Date().toLocaleDateString("sv-SE");
+        orders.forEach(o => {
+          if (o.waybill_no && String(o.created_at || "").slice(0, 10) < todayStr) return;
+          addRow(rowValues(o), o);
+        });
         refreshStats();
         return;
       } catch (e) { /* 尝试下一个候选地址 */ }
@@ -662,7 +727,7 @@ if (typeof document !== "undefined") {
 
   function resetForm() {
     pasteInput.value = "";
-    streetInput.value = ""; noteInput.value = "";
+    streetInput.value = ""; companyInput.value = ""; noteInput.value = "";
     nameInput.value = ""; phoneInput.value = "";
     soInput.value = ""; soNoInput.value = "";
     poInput.value = ""; buyerInput.value = ""; empNameInput.value = ""; empPhoneInput.value = "";
@@ -685,7 +750,8 @@ if (typeof document !== "undefined") {
   btnConfirm.addEventListener("click", async () => {
     const prov = selProvince.value, city = selCity.value, dist = selDistrict.value;
     const street = streetInput.value.trim();
-    const addr = [[prov, city, dist].filter(Boolean).join(" "), street]
+    const company = companyInput.value.trim();   /* 公司独立字段（2026-09-17 拆分） */
+    const addr = [[prov, city, dist].filter(Boolean).join(" "), company, street]
       .filter(Boolean).join(" ");
     if (!addr) { alert("地址为空：请先粘贴地址并点击「识别」"); return; }
     if (!phoneInput.value.trim()) { alert("联系方式为必填项"); phoneInput.focus(); return; }
@@ -710,7 +776,7 @@ if (typeof document !== "undefined") {
 
     /* 勾选：地址信息存到共享地址池（在线写服务端全用户共享，按地址去重；离线写本地池） */
     if (poolCheck.checked) {
-      const entry = { province: prov, city, district: dist, street,
+      const entry = { province: prov, city, district: dist, street, company,
                       name: nameInput.value.trim(), phone: phoneInput.value.trim() };
       if (apiOnline) {
         try {
@@ -721,8 +787,8 @@ if (typeof document !== "undefined") {
         } catch (e) { /* 入池失败不阻断入单 */ }
       } else {
         const pool = JSON.parse(localStorage.getItem("lnsc-addr-pool") || "[]");
-        const key = [prov, city, dist, street].filter(Boolean).join(" ");
-        if (key && !pool.some(a => [a.province, a.city, a.district, a.street].filter(Boolean).join(" ") === key)) {
+        const key = [prov, city, dist, company, street].filter(Boolean).join(" ");
+        if (key && !pool.some(a => [a.province, a.city, a.district, a.company, a.street].filter(Boolean).join(" ") === key)) {
           pool.push(entry);
           localStorage.setItem("lnsc-addr-pool", JSON.stringify(pool));
         }
@@ -735,7 +801,7 @@ if (typeof document !== "undefined") {
       so: orderType === "发货单" ? dn : "",        /* 外协单/其他 没有 DN 和 SO 号 */
       so_no: orderType === "发货单" ? soNo : "",
       order_type: orderType,
-      province: prov, city: city, district: dist, street: street,
+      province: prov, city: city, district: dist, street: street, company: company,
       name: nameInput.value.trim(),
       phone: phoneInput.value.trim(),
       carrier: activeCarrier ? activeCarrier.dataset.carrier : "",

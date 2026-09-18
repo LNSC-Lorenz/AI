@@ -83,7 +83,7 @@
               <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
-            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>数量：1</span></div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>数量：<span class="f-qty">1</span></span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
             <div class="pw-row"><span>DN：<b class="f-dn">--------</b><span class="f-so"></span></span></div>
             <div class="pw-foot">
@@ -92,7 +92,7 @@
             </div>
           </div>
 
-          <!-- 德邦模板（开放平台：DPK 运单号 / 快递标准件(默认) / 重量体积 / 送货上楼） -->
+          <!-- 德邦模板（开放平台：DPK 运单号 / 快递标准件(默认) / 数量 / 送货上楼） -->
           <div class="bill-tpl" id="billDB" hidden>
             <div class="pw-head"><span>德邦快递 DEPPON</span><span class="f-product">快递标准件</span></div>
             <div class="pw-no">
@@ -113,8 +113,7 @@
               <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
               <div>江苏常州金坛 德城路99号（邮编 213200）</div>
             </div>
-            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
-            <div class="pw-row"><span>重量：<span class="f-weight">--</span> kg</span><span>体积：<span class="f-volume">--</span> m³</span></div>
+            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>数量：<span class="f-qty">1</span></span></div>
             <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
             <div class="pw-row"><span>送货方式：送货上楼</span></div>
             <div class="pw-row"><span>DN：<b class="f-dn">--------</b></span></div>
@@ -232,18 +231,55 @@
                 <label class="grow">托寄物
                   <input id="cfgCargo" type="text" value="喷嘴" placeholder="默认：喷嘴">
                 </label>
-                <label id="cfgWV" hidden>重量
-                  <input id="cfgWeight" type="text" inputmode="decimal" placeholder="--"> kg
-                  　体积 <input id="cfgVolume" type="text" inputmode="decimal" placeholder="--"> m³
-                </label>
+                <!-- 重量/体积选项移除（2026-09-17 用户规则；德邦 totalWeight/totalVolume 用后端默认值） -->
               </div>
-              <!-- 回签单（独立一行，多选：纸质回单 / 拍照回传；承运商映射见 carriers） -->
+              <!-- 回签单（独立一行；2026-09-16 用户规则：只留纸质回单——德邦 backSignBill=1/R1；
+                   拍照回传（电子签收单=2，需另对接查询接口）选项移除） -->
               <div class="pw-r2">
                 <label>回签单</label>
-                <label><input type="checkbox" id="cfgReceiptPaper"> 纸质回单</label>
-                <label><input type="checkbox" id="cfgReceiptPhoto"> 拍照回传</label>
+                <label><input type="checkbox" id="cfgReceiptPaper" class="pool-check" checked> 纸质回单</label>
+                <!-- 拍照回传（2026-09-17 用户规则）：顺丰增值服务，仅选顺丰时可勾选，其他承运商禁用；
+                     可与纸质回单同时勾选（2026-09-18 用户规则）：都勾 → isSignBack=2（含纸质回单流程） -->
+                <label><input type="checkbox" id="cfgReceiptPhoto" class="pool-check" disabled> 拍照回传</label>
+                <!-- 件数（2026-09-16 用户版式）：1-6 方框单选（选中实心白字），≥7 数字框（箭头增减/手输） -->
+                <span class="parcels-wrap">
+                  <label>件数</label>
+                  <span class="parcels-btns">
+                    <button type="button" class="btn pc-num active" data-v="1">1</button>
+                    <button type="button" class="btn pc-num" data-v="2">2</button>
+                    <button type="button" class="btn pc-num" data-v="3">3</button>
+                    <button type="button" class="btn pc-num" data-v="4">4</button>
+                    <button type="button" class="btn pc-num" data-v="5">5</button>
+                    <button type="button" class="btn pc-num" data-v="6">6</button>
+                  </span>
+                  <!-- ≥7：左位 ▼ 减 / 右位 ▲ 增（无边框大箭头），或直接手动输入 -->
+                  <span class="pc-step">
+                    <button type="button" class="btn pc-step-btn" data-d="-1" title="减 1 件">▼</button>
+                    <input type="number" id="cfgParcelsN" min="7" max="99" placeholder="7"
+                           title="≥7 件：▼▲ 增减或直接手动输入">
+                    <button type="button" class="btn pc-step-btn" data-d="1" title="加 1 件">▲</button>
+                  </span>
+                </span>
+                <!-- 数量（2026-09-17 用户规则：替换重量/体积，形式与件数一致；
+                     >1 时随托寄物打印到官方面单"喷嘴 300pcs"样式；
+                     不要 ▼▲ 步进箭头；聚焦即填充 7 并实心白字（全选高亮，打字直接替换）） -->
+                <span class="qty-wrap">
+                  <label>数量</label>
+                  <span class="parcels-btns">
+                    <button type="button" class="btn qc-num active" data-v="1">1</button>
+                    <button type="button" class="btn qc-num" data-v="2">2</button>
+                    <button type="button" class="btn qc-num" data-v="3">3</button>
+                    <button type="button" class="btn qc-num" data-v="4">4</button>
+                    <button type="button" class="btn qc-num" data-v="5">5</button>
+                    <button type="button" class="btn qc-num" data-v="6">6</button>
+                  </span>
+                  <span class="pc-step">
+                    <input type="number" id="cfgQtyN" min="7" max="99999" placeholder="≥7"
+                           title="≥7：直接手动输入">
+                  </span>
+                </span>
               </div>
-              <!-- 选项只留常用项（对齐官方下单必填：产品/付款/保价/托寄物/重量/体积）；
+              <!-- 选项只留常用项（对齐官方下单必填：产品/付款/保价/托寄物/件数/数量）；
                    签单返还/等通知派送/定时派送等揽收时核实的选项不下发（用户规则 2026-09-15） -->
             </div>
             <button class="pw-order-btn" id="btnOrder" type="button">下单</button>
@@ -313,6 +349,7 @@
     <div class="pv-head">
       <b id="pvTitle">预览</b>
       <div class="pv-actions">
+        <a class="btn" id="pvDl" href="#" download>下载</a>   <!-- 查看文件均可下载（2026-09-17 用户规则） -->
         <button class="btn" id="pvPrint" type="button">打印</button>
         <button class="btn" id="pvClose" type="button">关闭</button>
       </div>
@@ -327,11 +364,28 @@
     <div class="steps-head">
       <b id="labelTitle">官方面单</b>
       <span>
+        <a class="label-print" id="btnLabelDl" href="#" download>⤓ 下载</a>   <!-- 面单 PDF 下载（2026-09-17 用户规则） -->
         <button class="label-print" id="btnLabelPrint" type="button">打印面单</button>
         <button class="steps-close" id="labelClose" type="button" title="关闭">×</button>
       </span>
     </div>
     <iframe class="label-frame" id="labelFrame" title="官方面单"></iframe>
+  </div>
+</div>
+
+<!-- 操作密码弹窗（下单/取消下单；应用主题，替代浏览器原生 prompt；2026-09-16 用户要求） -->
+<div class="steps-mask" id="passMask" hidden>
+  <div class="steps-modal pass-modal">
+    <div class="steps-head"><b>操作验证</b></div>
+    <div class="pass-body">
+      <label for="passInput">请输入操作密码</label>
+      <input type="password" id="passInput" autocomplete="off">
+      <div class="pass-err" id="passErr" hidden>密码错误，请重试</div>
+      <div class="pass-btns">
+        <button class="btn pass-ok" id="passOk" type="button">确定</button>
+        <button class="btn" id="passCancel" type="button">取消</button>
+      </div>
+    </div>
   </div>
 </div>
 

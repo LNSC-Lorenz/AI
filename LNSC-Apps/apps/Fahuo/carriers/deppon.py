@@ -25,6 +25,13 @@ _PREFIX = "DPK"
 _ENDPOINT = "https://gwapi.deppon.com/dop-interface-async/standard-order/createOrderNotify.action"
 # 官方面单打印（签单 100×150，用户指定尺寸）：queryBillPrint（协议同下单，已实测鉴权通过）
 _ENDPOINT_PRINT = "https://dpapi.deppon.com/dop-interface-sync/standard-query/queryBillPrint.action"
+# 取消下单（2026-09-16 假单探测：async 网关 cancelOrder/cancelOrderNotify 均存在，
+# 本账号报 3002 接口权限不足 → 需德邦开放平台订阅；dpapi sync 路径 404 已排除。
+# 默认 cancelOrder，可用环境变量 DB_CANCEL_IF 覆盖为 cancelOrderNotify）
+_ENDPOINT_CANCEL = "https://gwapi.deppon.com/dop-interface-async/standard-order/" \
+                   + os.environ.get("DB_CANCEL_IF", "cancelOrder") + ".action"
+# 新标准轨迹查询（2026-09-17 用户提供官方地址，实测打通；sync 网关协议同下单）：
+_ENDPOINT_TRACE = "https://dpapi.deppon.com/dop-interface-sync/standard-query/newTraceQuery.action"
 # 标准轨迹订阅（官方提供，轨迹功能接入时用）：
 # https://dpapi.deppon.com/dop-interface-sync/dop-nonstandard-extension/standTraceSubscribe.action
 
@@ -59,11 +66,48 @@ def place_order(order, cfg=None):
 
 
 def query_route(waybill_no, cfg=None):
-    """轨迹查询（德邦轨迹接口暂无报文样例，暂留 TODO）"""
+    """轨迹查询（新标准轨迹 newTraceQuery，2026-09-17 对接）→ {"route_status", "detail"}"""
     cfg = cfg or _cfg()
     if not _configured(cfg):
         raise base.CarrierError("德邦未配置密钥，无法查询轨迹")
-    raise base.CarrierError("德邦轨迹查询未启用：待德邦轨迹接口报文样例")
+    return _real_query_route(waybill_no, cfg)
+
+
+def _real_query_route(waybill_no, cfg):
+    # 实测（2026-09-17 真单探测）：参数 mailNo + customerCode
+    # （waybillNo/waybillNos/缺 customerCode 均报 2006 参数校验失败）；
+    # 响应 responseParam.trace_list——待揽收/无记录时为空数组（reason="暂无查询记录"），不算错误
+    body = {"mailNo": waybill_no, "customerCode": cfg["cust_code"]}
+    resp = _signed_post(_ENDPOINT_TRACE, cfg, json.dumps(body, ensure_ascii=False), timeout=30)
+    if str(resp.get("result", "")).lower() not in ("true", "1"):
+        raise base.CarrierError("德邦轨迹查询失败 %s：%s" % (
+            resp.get("resultCode", ""), resp.get("reason", "")))
+    rp = resp.get("responseParam") or {}
+    traces = rp.get("trace_list") or rp.get("traceList") or []
+    # 归一化为顺丰同构节点（前端步骤弹窗/服务端 route_latest 统一吃 acceptTime/acceptAddress/remark）
+    detail = []
+    for t in traces:
+        if not isinstance(t, dict):
+            continue
+        detail.append({
+            "acceptTime": str(t.get("time") or t.get("acceptTime") or t.get("opTime") or ""),
+            "acceptAddress": str(t.get("city") or t.get("acceptAddress") or ""),
+            "remark": str(t.get("description") or t.get("remark") or t.get("scanType") or ""),
+        })
+    # 时间升序（"YYYY-MM-DD HH:mm:ss" 字典序即时间序），与顺丰 detail[-1]=最新 对齐
+    detail.sort(key=lambda x: x["acceptTime"])
+    txt = (detail[-1].get("remark", "") + detail[-1].get("acceptAddress", "")) if detail else ""
+    if not detail:
+        status = "待揽收"
+    elif "签收" in txt:
+        status = "已签收"
+    elif "派" in txt:
+        status = "派送中"
+    elif any(k in txt for k in ("揽收", "收件", "取件")):
+        status = "已揽收"
+    else:
+        status = "运输中"
+    return {"route_status": status, "detail": detail[-10:]}
 
 
 def cloud_print(waybill_no, cfg=None):
@@ -135,13 +179,24 @@ def _next_logistic_id(cfg):
     try:
         with open(state, "w", encoding="ascii") as f:
             f.write(str(nxt))
-    except Exception:
-        pass  # 写失败不阻断下单（下次可能重号再调）
+    except Exception as e:
+        # 计数写不进去 = 下一单必然重号（2026-09-17 实测事故：探针以非 root 运行写失败被静默吞掉，
+        # 真单复用 NLHL3391198 → 德邦把它挂成已取消测试单的子件）——宁可下单失败也不放重号出去
+        raise base.CarrierError("德邦 logisticID 计数持久化失败（%s）：%s" % (state, e))
     return prefix + str(nxt).zfill(len(digits))
 
 
 def _real_place_order(order, cfg):
     cargo = order.get("cargo") or ""   # 托寄物原样传递，为空不自动填充
+    # 数量（2026-09-17 用户规则）：>1 时随托寄物打印到官方面单（"喷嘴 300pcs"样式，与用户手工习惯一致）
+    qty = int(float(order.get("qty") or 1))
+    cargo_print = cargo + (" %dpcs" % qty if qty > 1 and cargo else "")
+    # 寄件联系人随类型：发货单=范蓓蓓；其他=员工姓名+员工电话（2026-09-17 用户规则）；兜底公司电话
+    if (order.get("order_type") or "发货单") == "其他" and order.get("emp_name"):
+        s_name, s_mobile = order["emp_name"], order.get("emp_phone") or "051968228088"
+    else:
+        s_name, s_mobile = _SENDER_CONTACT.get(order.get("order_type") or "发货单",
+                                               ("发货部", "051968228088"))
     # custOrderNo = 平台内部订单号（oid）：与 SAP 的 DN 无任何关系，DN 不下发承运商
     body = {
         "companyCode": cfg["app_key"],
@@ -151,9 +206,10 @@ def _real_place_order(order, cfg):
         "needTraceInfo": 1,
         "orderType": "2",
         "packageInfo": {
-            "cargoName": cargo,
+            "cargoName": cargo_print,
             "deliveryType": "4",
-            "totalNumber": 1,
+            # 件数随设置区（2026-09-16 一票多件子母单）：≥2 德邦出母单+子单号
+            "totalNumber": int(float(order.get("parcels") or 1)),
             "totalVolume": float(order.get("volume") or 0.01),   # 体积随设置区，未填默认 0.01
             "totalWeight": float(order.get("weight") or 1),
             "packageService": "纸",
@@ -164,21 +220,26 @@ def _real_place_order(order, cfg):
             "name": order.get("name", ""), "mobile": order.get("phone", ""),
             "companyName": order.get("company", ""),
         },
-        # 寄件联系人随类型：发货单=范蓓蓓 15190535163（公司名保留在 companyName）
-        "sender": dict(_SENDER, **dict(zip(("name", "mobile"),
-                       _SENDER_CONTACT.get(order.get("order_type") or "发货单",
-                                           ("发货部", "051968228088"))))),
+        # 寄件联系人（上方已按类型选定：发货单=范蓓蓓；其他=员工姓名+员工电话）
+        "sender": dict(_SENDER, name=s_name, mobile=s_mobile),
         # 设置区只传常用项（用户规则 2026-09-15：对齐官方下单必填——托寄物/重量/体积随设置区；
         # 签单返还/等通知派送/定时派送/保价等揽收时再核实的选项一律不下发、不猜参数）。
         # transportType=PACKAGE = 快递标准件（471 官方面单实测为"标准快递"；用户指定默认产品）。
         # 前端 product（大件快递3.60/精准卡航/精准汽运）暂未映射——零担产品枚举值待德邦文档/实测
         "transportType": "PACKAGE",
         "gmtCommit": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-        "payType": "1",
+        # payType 官方枚举（2026-09-17 文档+面单双证）：0=寄付现结(现付·注:大客户模式可能不支持)
+        # 1=到付（面单"到付"）2=寄付月结（面单"月结"）；曾写死 1 致寄付月结错显"到付/无月结"（#492 用户反馈）
+        "payType": {"到付": "1", "寄付现结": "0"}.get(order.get("pay") or "", "2"),
         "isOut": "N",
     }
     if str(order.get("remark") or "").strip():           # 运单备注（DN+SO / PO；有值才传）
         body["remark"] = str(order["remark"]).strip()
+    # 回签单（2026-09-17 官方文档《【新】下单服务接口 德邦.doc》终定）：三个字段是
+    # addServices 对象的【子字段】——此前放顶层被静默忽略（12 种形态实测面单均"无需返单"）；
+    # backSignBill=1(签收单原件返回) 时 returnRequirement(R1:签名)+returnBillQty(返单张数) 必填
+    if "纸质回单" in (order.get("receipt") or []):
+        body["addServices"] = {"backSignBill": "1", "returnRequirement": "R1", "returnBillQty": 1}
     params = json.dumps(body, ensure_ascii=False)
     resp = _signed_post(_ENDPOINT, cfg, params, timeout=30)
     # 成功判定（严格按返回值）：result=true 且 resultCode=1000 且取到运单号，缺一不可
@@ -191,7 +252,49 @@ def _real_place_order(order, cfg):
     waybill = _extract_waybill(resp)
     if not waybill:
         raise base.CarrierError("德邦下单响应未取到运单号：" + json.dumps(resp, ensure_ascii=False)[:200])
-    return {"waybill_no": waybill, "route_status": "待揽收"}
+    # 一票多件（2026-09-17 实测）：德邦 mailNo 逗号拼接"母单,子单…"——拆分为列表：
+    # 母单为主运单号（显示/查轨迹/取消用它），全部单号存档 waybills（角标件数+逐件取面单合并打印）
+    wbs = [w.strip() for w in waybill.split(",") if w.strip()]
+    # order_id/logistic_id 随返回值持久化到 order_resp（取消下单要用 custOrderNo/logisticID）
+    res = {"waybill_no": wbs[0], "route_status": "待揽收",
+           "order_id": body.get("custOrderNo", ""), "logistic_id": body.get("logisticID", ""),
+           "parcels": body["packageInfo"]["totalNumber"],   # 实际下发件数存档（追溯用）
+           "qty": qty}                                      # 实际下发数量存档（追溯用）
+    if len(wbs) > 1:
+        res["waybills"] = wbs
+    return res
+
+
+def cancel_order(order_id, waybill_no, logistic_id="", cfg=None):
+    """取消下单（cancelOrder；async 网关，协议同下单）。
+    params 发送全部已知标识（customerCode/custOrderNo/logisticID/mailNo），多余字段官方忽略。
+    仅未揽收可取消——已揽收德邦会拒，错误原样上抛。
+    2026-09-17 真单闭环验证通过（接口权限已开通；曾报 3002，用户订阅后解除）"""
+    cfg = cfg or _cfg()
+    if not _configured(cfg):
+        raise base.CarrierError("德邦未配置密钥，无法取消下单")
+    body = {"customerCode": cfg["cust_code"]}
+    if order_id:
+        body["custOrderNo"] = order_id
+    if logistic_id:
+        body["logisticID"] = logistic_id
+    if waybill_no:
+        body["mailNo"] = waybill_no
+    # 实测（2026-09-17 真单闭环）：createOrderNotify 是 async 接口，订单入账有延迟（约1-2分钟），
+    # 下单后立即取消报"不存在订单信息"，稍候重试即成功（resultCode=1000）——
+    # 对该错误做短退避重试（5s/15s），其余错误原样上抛
+    last = {}
+    for d in (0, 5, 15):
+        if d:
+            time.sleep(d)
+        resp = _signed_post(_ENDPOINT_CANCEL, cfg, json.dumps(body, ensure_ascii=False), timeout=30)
+        if str(resp.get("result", "")).lower() in ("true", "1"):
+            return {"ok": True, "raw": resp}
+        last = resp
+        if "不存在订单信息" not in str(resp.get("reason", "")):
+            break
+    raise base.CarrierError("德邦取消下单失败 %s：%s" % (
+        last.get("resultCode", ""), last.get("reason", "")))
 
 
 def _extract_waybill(resp):

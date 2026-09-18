@@ -5,6 +5,7 @@
   python3 carriers/cli.py order '<order JSON>'      下单（JSON 含 carrier/oid/so 等）
   python3 carriers/cli.py route '<carrier>' '<no>'  轨迹查询
   python3 carriers/cli.py label '<carrier>' '<no>'  官方面单（输出 {"pdf": "<base64>"}）
+  python3 carriers/cli.py cancel '<carrier>' '<order_id>' '<waybill_no>' ['<logistic_id>']  取消下单
 输出：成功=结果 JSON；失败={"error": ...} 且退出码 1"""
 import json
 import os
@@ -21,7 +22,7 @@ if os.path.isfile(ENV_FILE):
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
-from carriers import place_order, query_route, print_label, find_pdf_b64, find_label_files  # noqa: E402
+from carriers import place_order, query_route, print_label, cancel_order, find_pdf_b64, find_label_files  # noqa: E402
 from carriers.base import fetch_url_pdf_b64  # noqa: E402
 
 
@@ -33,6 +34,9 @@ def main():
         return place_order(carrier, d)
     if cmd == "route":
         return query_route(sys.argv[2], sys.argv[3])
+    if cmd == "cancel":
+        return cancel_order(sys.argv[2], sys.argv[3], sys.argv[4],
+                            sys.argv[5] if len(sys.argv) > 5 else "")
     if cmd == "label":
         data = print_label(sys.argv[2], sys.argv[3])
         pdf = find_pdf_b64(data)                          # 形态1：响应内嵌 base64

@@ -2,10 +2,10 @@
 """承运商注册表与统一分发：server.py / cli.py 只调这里，不关心各家差异。
 专车 / 自提 不走外部 API（在 server 内直接出 ZC/ZT 厂内单号）。
 
-  承运商          模块            下单            轨迹        官方面单
-  顺丰           sf_express.py   生产 ✅        待开权限    云打印 ✅（按 SF.txt）
-  德邦           deppon.py       生产 ✅        TODO        queryBillPrint ✅（协议已通，待真实运单验证）
-  跨越           kye.py          待报文样例      TODO        —
+  承运商          模块            下单            轨迹        官方面单      取消下单
+  顺丰           sf_express.py   生产 ✅        待开权限    云打印 ✅      EXP_RECE_CANCEL_ORDER（服务存在，账号待开权限）
+  德邦           deppon.py       生产 ✅        TODO        queryBillPrint ✅  cancelOrder（路径存在，账号待订阅 3002）
+  跨越           kye.py          待报文样例      TODO        —            —
 """
 from . import base, sf_express, deppon, kye
 
@@ -34,6 +34,14 @@ def print_label(carrier, waybill_no):
     if not mod or not hasattr(mod, "cloud_print"):
         raise base.CarrierError("该承运商暂无官方面单：" + str(carrier))
     return mod.cloud_print(waybill_no)
+
+
+def cancel_order(carrier, order_id, waybill_no, logistic_id=""):
+    """按承运商名分发取消下单（仅未揽收；专车/自提无外部单，server 内本地清除）"""
+    mod = CARRIERS.get(carrier)
+    if not mod or not hasattr(mod, "cancel_order"):
+        raise base.CarrierError("该承运商不支持在线取消下单：" + str(carrier))
+    return mod.cancel_order(order_id, waybill_no, logistic_id)
 
 
 def find_pdf_b64(o):

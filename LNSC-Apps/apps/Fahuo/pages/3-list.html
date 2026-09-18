@@ -66,6 +66,13 @@
         <input id="lmSearch" type="search" autocomplete="off"
                placeholder="搜索 DN / 地址 / 姓名 / 电话 / 备注 / 承运商 / 单号 / 状态…">
         <span class="lm-count" id="lmCount"></span>
+        <!-- 分享四件套（照搬 PO-Closing：复制/邮件/Teams/导出；2026-09-16 用户要求） -->
+        <div class="lm-share">
+          <button class="btn" id="btnLmCopy" title="复制：把当前筛选的行复制到剪贴板"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3.5 11V3.5a1 1 0 0 1 1-1H11"/></svg></button>
+          <button class="btn" id="btnLmMail" title="邮件：调起本机 Outlook，附上当前筛选的行"><svg viewBox="0 0 16 16" fill="none" stroke="#0F6CBD" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="3.4" width="12.8" height="9.2" rx="1.2"/><path d="M2.4 4.6 8 9.2l5.6-4.6"/></svg></button>
+          <button class="btn" id="btnLmTeams" title="Teams：复制消息并打开 Teams，粘贴到会话发送"><svg viewBox="0 0 16 16"><rect x="1" y="2.5" width="10.5" height="10.5" rx="1.8" fill="#4F5BA9"/><text x="6.2" y="10.6" font-size="7" font-weight="bold" fill="#fff" text-anchor="middle" font-family="Arial,sans-serif">T</text><circle cx="13" cy="5.6" r="1.9" fill="#7C85C0"/><path d="M10.8 13.5v-3.2c0-.9.9-1.5 2.2-1.5s2.2.6 2.2 1.5v3.2z" fill="#7C85C0"/></svg></button>
+          <button class="btn" id="btnLmExport" title="导出当前筛选的行为 Excel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7M5 7l3 3 3-3M2.5 12.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5"/></svg></button>
+        </div>
       </div>
 
       <!-- 整合清单：录单列 + 下单列 -->
@@ -74,13 +81,12 @@
           <table class="order-table">
             <colgroup>
               <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-addr"><col class="col3-name">
-              <col class="col3-note">
               <col class="col3-waybill"><col class="col3-st"><col class="col3-st">
-              <col class="col3-ret">
+              <col class="col3-photo"><col class="col3-ret"><col class="col3-note">
             </colgroup>
             <thead>
-              <tr><th>DN</th><th>SO</th><th></th><th>地址</th><th>姓名</th><th>备注</th>
-                  <th>单号</th><th>下单状态</th><th>路由状态</th><th>回单日期</th></tr>
+              <tr><th>DN</th><th>SO</th><th></th><th>地址</th><th>姓名</th>
+                  <th>单号</th><th>下单状态</th><th>路由状态</th><th></th><th>回单日期</th><th>备注</th></tr>
             </thead>
           </table>
         </div>
@@ -88,9 +94,8 @@
           <table class="order-table">
             <colgroup>
               <col class="col3-dn"><col class="col3-so"><col class="col3-prio"><col class="col3-addr"><col class="col3-name">
-              <col class="col3-note">
               <col class="col3-waybill"><col class="col3-st"><col class="col3-st">
-              <col class="col3-ret">
+              <col class="col3-photo"><col class="col3-ret"><col class="col3-note">
             </colgroup>
             <tbody id="listBody"></tbody>
           </table>
@@ -125,6 +130,17 @@
   </aside>
 
 </div>
+<!-- 运单步骤弹窗：点击单号打开（与下单页同款）；第一步固定为下单返回值，其后为承运商轨迹节点 -->
+<div class="steps-mask" id="stepsMask" hidden>
+  <div class="steps-modal">
+    <div class="steps-head">
+      <b id="stepsTitle">运单跟踪</b>
+      <button class="steps-close" id="stepsClose" type="button" title="关闭">×</button>
+    </div>
+    <div class="steps-body" id="stepsBody"></div>
+  </div>
+</div>
+
 <script src="../shared/stats.js"></script>
 <script src="../shared/topbar.js"></script>
 <script src="3-list.js"></script>

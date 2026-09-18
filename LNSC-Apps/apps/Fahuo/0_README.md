@@ -30,10 +30,11 @@ backup/fahuo-YYYYMMDD.db
 | PUT | `/api/orders/<id>` | 更新任意字段；status 变更自动打时间戳（printed/shipped/returned） |
 | DELETE | `/api/orders/<id>` | 删除 |
 | GET | `/api/stats` | 看板统计：昨日发货 / 今日待发货 / 计划发货 / 今日回单 |
-| GET | `/api/upload?dn=` | 该 DN 已上传文件列表 `{dn, files[]}` |
+| GET | `/api/upload?dn=` | 该 DN 已上传文件列表 `{dn, files[]}`；**不带 dn → `{counts:{dn:n}}` 全量照片计数**（清单"发货照片"列一次取数） |
 | POST | `/api/upload?dn=&name=` | 上传文件到 `Upload/<DN>/<文件名>`（body=原始字节，≤50MB） |
 | DELETE | `/api/upload?dn=&name=` | 删除该 DN 的某个上传文件（目录删空自动移除） |
 | POST | `/api/carrier/order` | 承运商下单（顺丰/德邦/跨越→carriers 包；专车/自提→厂内 ZC/ZT 单号） |
+| POST | `/api/carrier/cancel` | 取消下单 `{id}`：**仅未揽收**（route_status=待揽收；专车/自提本地清除）；成功后清空运单字段回待下单，可改数据/参数重新下单 |
 | GET | `/api/carrier/route?carrier=&waybill_no=` | 承运商轨迹查询 |
 | POST | `/api/admin/clear-orders` | 清空订单表（设置页「清除模拟数据」） |
 
@@ -105,9 +106,38 @@ Fahuo/
 
 ## 承运商 API 对接（carriers/ 包）
 
-**架构**：不开独立服务，`server.py` 内嵌 `carriers/` 包，统一端点 `/api/carrier/order|route|label`；
+**架构**：不开独立服务，`server.py` 内嵌 `carriers/` 包，统一端点 `/api/carrier/order|route|label|cancel`；
 本地 `server.js` 经 python 子进程（`carriers/cli-*.py`）调**同一个包**，行为一致。
 密钥经 `carriers.env`（chmod 600）+ systemd `EnvironmentFile` 注入，**永不入代码库**。
+
+**取消下单**（2026-09-16 接入，假单探测结论）：
+- 顺丰 `EXP_RECE_CANCEL_ORDER`：服务存在，本账号报 **A1004 无对应服务权限** → 需丰桥控制台开通
+- 德邦 `standard-order/cancelOrder.action`（async 网关）：**2026-09-17 真单闭环验证通过**（权限已开通，3002 解除）；
+  ⚠️ async 入账延迟：下单后立即取消报"不存在订单信息"，代码内已做 5s/15s 退避重试；
+  `cancelOrderNotify` 同名存在，可用 `DB_CANCEL_IF` 环境变量切换；dpapi sync 路径 404 已排除
+- 德邦轨迹 `standard-query/newTraceQuery.action`（sync 网关，2026-09-17 对接）：参数 **`mailNo`+`customerCode`**
+  （waybillNo/waybillNos 均报 2006）；响应 `responseParam.trace_list`（无记录=空数组非错误）；
+  节点归一化为顺丰同构 acceptTime/acceptAddress/remark，状态映射 待揽收/已揽收/运输中/派送中/已签收
+- 下单返回持久化 `order_id`（oid）+ 德邦 `logistic_id` 到 `order_resp`，取消时取用（老单无 oid 需人工后台取消）
+
+**回签单**（2026-09-17 官方文档《【新】下单服务接口 德邦.doc》终定，真单面单验证"签收单原件返回"）：
+- 德邦：**纸质回单 → `addServices` 对象子字段 `{backSignBill:"1", returnRequirement:"R1", returnBillQty:1}`**——
+  ⚠️ 三个字段必须在 **addServices 内**，放顶层被静默忽略（12 种形态实测面单均"无需返单"，教训：层级错了不报错）；
+  backSignBill=1(原件返回)/2(电子签收单) 时 returnRequirement+returnBillQty 必填；R1:签名 R2:盖章 … R8:面单
+- 德邦 `payType` 官方枚举（文档+面单双证）：**0=寄付现结(现付) 1=到付 2=寄付月结**；
+  曾写死 1 致寄付月结错显"到付"（#492）；大客户模式可能不支持 0
+- 顺丰：**纸质回单 → `isSignBack=1`（签单返还，Number 型，默认 0 不要求）**，已映射生效
+- 顺丰：**纸质回单 → `isSignBack=1`（签单返还，Number 型，默认 0 不要求）**，已映射生效；
+  ⚠️ **副作用实测（2026-09-17 "选1显示2"根因）**：`isSignBack=1` 时下单响应 `waybillNoInfoList` 会**多返一条
+  `waybillType=3` 的签单返还回单运单**（SF1064 号段）——**件数只认 `waybillType` 1(母)/2(子)**，
+  回单运单存档 `order_resp.sign_back_no` 备查（不计件数、不参与合并打印）；此前未过滤导致回单被误判为子件
+  （清单②角标/打印2页）
+- 顺丰 **拍照回传 → `isSignBack=2`**（2026-09-17 探针 _sf_pod_probe2/3/4 真单实测）：
+  `extraInfoList attrCode POD` 三种结构（=1/=Y/无值）均被 **S0003** 拒绝 → isSignBack 是唯一通道；
+  =2 顺丰接受且与 =1 同样多返 type=3 回单运单（SF1064 号段）；
+  前端 UI：仅选顺丰时可勾选（其他承运商禁用+强制取消）；
+  **可与纸质回单同时勾选（2026-09-18 用户规则）**：都勾 → 发 2（type=3 回单运单 =1/=2 均返 → =2 已含纸质流程）；
+  ⚠️ **`=3` 组合值实测无效**（探针 _sf_signback3_probe：顺丰接受但不返 type=3 运单，静默忽略）→ 勿用
 
 ### 编号体系设计（重要·不可违反）
 
@@ -154,11 +184,25 @@ carriers/
 **顺丰（生产 ✅）**：
 - 下单 `EXP_RECE_CREATE_ORDER`：表单 + `Base64(MD5(msgData+timestamp+checkword))`；
   响应双层嵌套，运单在 `apiResultData.msgData.waybillNoInfoList`
-- 随设置区传递：产品类型（`expressTypeId` 映射表 `_PRODUCT_TYPE`：**1=标快 / 2=特快**，
-  经 467 单实测修正——撞单面单不可作依据）/
+- 随设置区传递：产品类型（`expressTypeId` 映射表 `_PRODUCT_TYPE`：**1=特快 / 2=标快**，
+  2026-09-18 A/B 对照终定，见下）/
+
+> **⚠️ 硬规则（用户 2026-09-18 明令，不得质疑）：`expressTypeId=1` 就是顺丰特快，`2` 是顺丰标快。**
+> 顺丰客服口径 + A/B 真单对照双重确认；近线"1→标快"是特快产品近线不可用被降级，绝非 1=标快。
   托寄物原样（不自动填充；**为空时面单显示的是丰桥模板/账户默认文案**（如"气动元件"），
   需在控制台模板里改默认，或下单时在设置区填写）/
   付款方式（月结=1带卡·现结=1·到付=2）/ 保价（`declaredValue`，不写=不保价）
+- 产品/时效字段（**2026-09-18 A/B 对照终定，推翻 9-17 矩阵的错误解读**）：
+  - **`expressTypeId`：1=特快 / 2=标快**（235=卡航 232=同城半日达；请求只发此字段，无 limitTypeCode/cargoTypeCode）——
+    探针 `_sf_type12_contrast` 同时刻同路线唯一变量对照：济南 **1→特快T4、2→标快T6**；
+    **历史映射写反**，致选"标快"实发特快请求 → 远线单全被按特快执行/计费（#478 长春 #493 济南 #494 玉溪）
+  - **近线无特快产品**：1(特快)请求在常州等同城/近线被顺丰**降级**为标快（proCode 标快 T6）——
+    9-17"1→标快铁证"实系降级误判（用户指正）；**请求产品真迹在面单二维码 k4 字段**（k4=T4=特快）
+  - 响应 `routeLabelInfo`：`expressTypeCode` 恒定 **B1**（不随请求/结果变，别用它判断）；
+    **`limitTypeCode`/`proCode` = 实际执行产品**：T4=特快 ⇔ proCode=特快，T6=标快 ⇔ proCode=标快
+  - 旧证据均不可靠：首张"特快"面单=撞单他方订单；"467 发 2→特快"=撞单 oid 幂等重放污染；
+    "远线强制升级/傍晚降级"的改派理论随映射翻案作废（傍晚空运截单降级仍属合理推测，未单测）
+  - 前端可见性：运单悬浮提示显示 `实际产品：proCode`（2-order/3-list wbLink）
 - 云打印面单 `COM_RECE_CLOUD_PRINT_WAYBILLS`（模板 `fm_76130_standard_LKLPZA6VYES4`，76×130mm，2026-09-15 用户指定；原 150mm 模板弃用）：
   返回 **url+token**（非内嵌 PDF），下载需请求头 **`X-Auth-Token: <token>`**（无头/Authorization 头均 404）；
   新单立即取可能"找不到该运单"（下单→云打印同步延迟），前端按 1/2/4/8s 退避重试
@@ -312,8 +356,17 @@ ssh sysadmin@10.86.180.76 'sudo bash /home/sysadmin/1_install-api.sh'
 
 - **组合筛选**：类型组（发货单/外协单/其他）× 优先级组（紧急/重要/一般）独立单选、AND 组合，
   再与顶部搜索框关键词叠加；全部在右侧看板口径（?f=）基础集合内进行
-- 列：DN SO 优先级 类型 地址 姓名 备注 承运商 单号 下单状态 路由状态 回单日期
+- 列：DN SO （优先级/类型合并列） 地址 姓名 备注 单号 下单状态 路由状态 **发货照片** 回单日期
   （**无联系方式列**；搜索仍覆盖手机号）
+- **发货照片列**（路由状态后、回单日期前；2026-09-16）：无列标题，Feather 风格灰色图片图标占位；
+  共享盘检索到对应 DN 照片时图标**变深可点** → 弹出预览（整列大图，点图开原图）
+- **发货照片链路**（参照 LibQ 1_mount/2_scan 模式）：
+  - `4_mount_shipphotos.sh`：cifs 挂载 `\\10.86.180.24\VideoandPhoto\LNSC-05\01_ShippingPhotos_Send`
+    到应用内 `ShippingPhotos/`（年/月/日递进目录；nginx 静态直出免改配置；fstab 开机自动挂）
+  - `5_scan_shipphotos.sh`：find 扫描 DN 命名图片（`8260034320_1.jpg`/`8260034320.jpg`）
+    → `shipphotos.json`（`{DN:[相对路径]}`）；**root cron 每 5 分钟**自动重扫
+  - 前端直接读静态 `shipphotos.json`（?t= 防缓存），图片 URL = `../ShippingPhotos/<相对路径>`
+  - `shipphotos.json`/`ShippingPhotos` 已入 excludes.conf，部署永不覆盖
 - 备注列只显示收件区纯备注（发件方结构化标签显示时剥离，搜索覆盖完整内容）
 
 ## 本地预览
