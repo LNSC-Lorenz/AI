@@ -14,6 +14,7 @@ LNSC 全链发货平台 - SQLite API 服务
     PUT    /api/orders/<id>              更新（状态/备注等）
     DELETE /api/orders/<id>              删除
     GET    /api/stats                    右侧看板统计
+GET    /api/signback_addr            顺丰回单返回到方地址（平台唯一权威源 sf_express.SIGN_BACK_ADDR）
 同时提供当前目录静态文件（index.html 等），可直接 http://host:8091/ 访问。
 """
 import base64
@@ -122,6 +123,77 @@ def _route_is_final(st):
     return any(k in (st or "") for k in ("签收", "回单"))
 
 
+# ---------- 回单运单追踪（2026-09-23 顺丰 isSignBack=2 静默无效事故后新增） ----------
+# 主运单签收终态后，改查 type=3 回单运单（下单存档 order_resp.sign_back_no）：
+# 回单运单出现终态节点（签收/回单返还）→ 订单自动置 returned + returned_at（回单日期自动填）。
+# 只发货日起 SIGN_BACK_WINDOW_D 天内追踪，历史单不空转；复用 route_checked_at 节流（主单终态后该字段空闲）。
+SIGN_BACK_WINDOW_D = 30
+# 口径修正（2026-09-29 用户定夺：对新单生效）：回单运单终态 ≠ 纸质回单已返还
+# （485/487/494/543 被自动置"已回单"但实物回单未回）。created_at ≥ 此日期的订单：
+# 回单运单终态只写提示标记 order_resp.sign_back_final（步骤弹窗可见）+ 审计，不再自动置
+# returned；实物回单返还后人工置回单（PUT /api/orders/<id> status=returned）。
+# 此前订单维持原自动置 returned 逻辑（历史不回溯）。
+SIGN_BACK_MANUAL_SINCE = "2026-09-29"
+
+
+def _sign_back_no(r):
+    try:
+        return (json.loads(r["order_resp"] or "{}") or {}).get("sign_back_no") or ""
+    except Exception:
+        return ""
+
+
+def _refresh_sign_back(c, r, now):
+    if r["status"] == "returned" or r["carrier"] != "顺丰":
+        return
+    sb = _sign_back_no(r)
+    if not sb:
+        return
+    try:
+        resp0 = json.loads(r["order_resp"] or "{}") or {}
+    except Exception:
+        resp0 = {}
+    # 新单口径（2026-09-29）：created_at ≥ SIGN_BACK_MANUAL_SINCE 只提示不自动置 returned
+    manual = (r["created_at"] or "")[:10] >= SIGN_BACK_MANUAL_SINCE
+    if manual and resp0.get("sign_back_final"):
+        return        # 已提示过终态：停查省接口，等人工核实实物回单后置 returned
+    try:                                   # 时间窗：发货日超 30 天不再查
+        if r["ship_date"]:
+            age = (now - time.mktime(time.strptime(r["ship_date"], "%Y-%m-%d"))) / 86400.0
+            if age > SIGN_BACK_WINDOW_D:
+                return
+    except Exception:
+        pass
+    try:
+        checked = time.mktime(time.strptime(
+            r["route_checked_at"] or "1970-01-01 00:00:00", "%Y-%m-%d %H:%M:%S"))
+    except Exception:
+        checked = 0
+    if now - checked < ROUTE_THROTTLE_S:
+        return
+    st = ""
+    try:
+        st = (carrier_query_route(r["carrier"], sb) or {}).get("route_status") or ""
+    except Exception:
+        pass                                 # 查询失败照常写检查时间节流，下一轮再试
+    c.execute("UPDATE orders SET route_checked_at=datetime('now','localtime') WHERE id=?",
+              (r["id"],))
+    if not _route_is_final(st):
+        return
+    if manual:                               # 新单：只写提示标记 + 审计，不自动置 returned
+        resp0["sign_back_final"] = "%s @ %s（回单运单终态；实物回单待人工核实，核实后手动置回单）" % (
+            st, time.strftime("%Y-%m-%d %H:%M:%S"))
+        c.execute("UPDATE orders SET order_resp=? WHERE id=?",
+                  (json.dumps(resp0, ensure_ascii=False), r["id"]))
+        _audit("SIGNBACK-FINAL id=%s waybill=%s sign_back=%s st=%s (只提示不自动置回单)"
+               % (r["id"], r["waybill_no"], sb, st))
+    else:                                    # 历史单（< 2026-09-29）：维持自动回单
+        c.execute("UPDATE orders SET status='returned',"
+                  " returned_at=datetime('now','localtime') WHERE id=?", (r["id"],))
+        _audit("SIGNBACK-RETURNED id=%s waybill=%s sign_back=%s st=%s"
+               % (r["id"], r["waybill_no"], sb, st))
+
+
 def _is_canceled_err(msg):
     """承运商明确反馈"运单已取消/不存在"（区别于网络/未开通等瞬时失败）：
     识别后平台同步回待下单（2026-09-16 用户规则：他方在承运商后台取消的运单不得卡死平台单）"""
@@ -137,10 +209,12 @@ def _refresh_routes():
         now = time.time()
         with db() as c:
             rows = c.execute(
-                "SELECT id, carrier, waybill_no, route_status, route_checked_at"
+                "SELECT id, carrier, waybill_no, route_status, route_checked_at,"
+                " status, order_resp, ship_date, created_at"
                 " FROM orders WHERE waybill_no != ''").fetchall()
             for r in rows:
                 if _route_is_final(r["route_status"]):
+                    _refresh_sign_back(c, r, now)   # 主单终态 → 回单运单追踪（2026-09-23）
                     continue
                 try:
                     checked = time.mktime(time.strptime(
@@ -264,8 +338,9 @@ def init_db():
             c.execute("ALTER TABLE orders ADD COLUMN route_checked_at TEXT DEFAULT ''")  # 轨迹检查时间（自动刷新节流）
         if "route_latest" not in cols:
             c.execute("ALTER TABLE orders ADD COLUMN route_latest TEXT DEFAULT ''")  # 最新路由节点文本（"MM-dd HH:mm 内容"）
-        # PO/采购员/发件人/公司：独立列（原塞在 note 标签/street 里；备注列只存手写备注）
-        for col in ("po", "buyer", "emp_name", "emp_phone", "company"):
+        # PO/采购员/发件人/公司/并单组：独立列（原塞在 note 标签/street 里；备注列只存手写备注）
+        # merge_group：多 DN 合并发货同组标记（2026-09-20；同组下单只下一次承运商单、共享运单号）
+        for col in ("po", "buyer", "emp_name", "emp_phone", "company", "merge_group"):
             if col not in cols:
                 c.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT DEFAULT ''")
         pcols = [r[1] for r in c.execute("PRAGMA table_info(addr_pool)")]
@@ -301,6 +376,7 @@ def row_to_json(r):
         "buyer": r["buyer"] if "buyer" in r.keys() else "",
         "emp_name": r["emp_name"] if "emp_name" in r.keys() else "",
         "emp_phone": r["emp_phone"] if "emp_phone" in r.keys() else "",
+        "merge_group": r["merge_group"] if "merge_group" in r.keys() else "",   # 并单组（2026-09-20 多 DN 合并发货）
         "created_at": r["created_at"],
     }
 
@@ -355,8 +431,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self._carrier_route(qs)
         if re.search(r"/api/carrier/label$", path):
             return self._carrier_label(qs)
+        if re.search(r"/api/carrier/label_ot$", path):
+            return self._carrier_label_ot_get(qs)
         if re.search(r"/api/addrpool$", path):
             return self._addrpool_list()
+        if re.search(r"/api/signback_addr$", path):
+            return self._signback_addr()
         return super().do_GET()  # 静态文件
 
     def do_POST(self):
@@ -367,6 +447,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._upload()
         if re.search(r"/api/carrier/order$", p):
             return self._carrier_order()
+        if re.search(r"/api/carrier/label_ot$", p):
+            return self._carrier_label_ot_post()
         if re.search(r"/api/carrier/cancel$", p):
             return self._carrier_cancel()
         if re.search(r"/api/admin/clear-orders$", p):
@@ -393,12 +475,21 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     # ---------- 业务 ----------
+    def _signback_addr(self):
+        """GET /api/signback_addr → 顺丰回单返回到方地址（2026-09-29 平台统一维护；
+        唯一权威源 carriers/sf_express.SIGN_BACK_ADDR，前端维护申请文案引用）"""
+        try:
+            from carriers import sf_express
+            self._json(200, sf_express.SIGN_BACK_ADDR)
+        except Exception as e:                              # noqa: BLE001
+            self._json(500, {"error": str(e)})
+
     def _addrpool_list(self):
         """GET /api/addrpool → 共享地址池列表（最新在前）"""
         with db() as c:
             rows = c.execute(
                 "SELECT province,city,district,company,street,name,phone FROM addr_pool"
-                " ORDER BY id DESC LIMIT 500").fetchall()
+                " ORDER BY id DESC LIMIT 5000").fetchall()   # 500→5000（2026-09-24 DN 地址回填后防挤出）
         self._json(200, [dict(r) for r in rows])
 
     def _addrpool_add(self):
@@ -436,7 +527,18 @@ class Handler(SimpleHTTPRequestHandler):
         dn = re.sub(r"[^\w-]", "", str(d.get("so") or ""))[:32]
         try:
             if carrier in ("专车", "自提"):
-                res = {"waybill_no": ("ZC" if carrier == "专车" else "ZT") + dn + ("01" if carrier == "专车" else "02"),
+                # 厂内自编号：ZC/ZT + 年月日 + 2位当日流水（2026-09-21 用户规则；原 ZC+DN+01/02 弃用）
+                # 持久计数器表 ot_seq：取消/删单也不复用流水号（与 next_oid 同一"永不复用"原则）
+                prefix = "ZC" if carrier == "专车" else "ZT"
+                day = time.strftime("%Y%m%d")
+                with db() as c:
+                    c.execute("CREATE TABLE IF NOT EXISTS ot_seq (day TEXT NOT NULL, prefix TEXT NOT NULL,"
+                              " n INTEGER NOT NULL, PRIMARY KEY (day, prefix))")
+                    c.execute("INSERT INTO ot_seq(day, prefix, n) VALUES(?,?,1)"
+                              " ON CONFLICT(day, prefix) DO UPDATE SET n = n + 1", (day, prefix))
+                    n = c.execute("SELECT n FROM ot_seq WHERE day=? AND prefix=?",
+                                  (day, prefix)).fetchone()[0]
+                res = {"waybill_no": f"{prefix}{day}{n:02d}",
                        "route_status": "专车直送" if carrier == "专车" else "待自提", "mock": True}
             else:
                 order = dict(d)          # 完整订单字段（省市区/街道/姓名/电话/托寄物…）
@@ -533,12 +635,66 @@ class Handler(SimpleHTTPRequestHandler):
             pdf = _shrink_pdf_b64(pdf)                # 90% 安全边烙进文件（对话框缩放不可靠）
         return pdf, data
 
+    def _carrier_label_ot_post(self):
+        """POST /api/carrier/label_ot {waybill_no, bar_png, qr_png}
+        专车/自提厂内面单（2026-09-21 用户反馈 HTML 打印屡次乱版/乱码，改服务端渲染 PDF）：
+        浏览器用前端库画好条码/二维码 PNG 上传（服务端无 symbology 库），
+        ot_label 模块 PIL 渲染 100×150mm PDF 并缓存，GET raw 供 iframe 显示/打印。"""
+        d = self._body()
+        wb = re.sub(r"[^\w-]", "", str(d.get("waybill_no") or ""))[:40]
+        if not wb:
+            return self._json(400, {"error": "waybill_no 必填"})
+        with db() as c:
+            row = c.execute("SELECT * FROM orders WHERE waybill_no=? ORDER BY id DESC LIMIT 1",
+                            (wb,)).fetchone()
+        if not row:
+            return self._json(404, {"error": "运单 %s 无对应订单" % wb})
+        try:
+            import ot_label
+            pdf = ot_label.render_pdf(row_to_json(row),
+                                      d.get("bar_png") or "", d.get("qr_png") or "")
+            ot_label.cache_put(wb, pdf)
+        except Exception as e:
+            return self._json(500, {"error": "厂内面单渲染失败：%s" % e})
+        self._json(200, {"ok": 1, "bytes": len(pdf)})
+
+    def _carrier_label_ot_get(self, qs):
+        """GET /api/carrier/label_ot?waybill_no=&raw=1 → 已渲染缓存的厂内面单 PDF（iframe 同源直显）"""
+        wb = re.sub(r"[^\w-]", "", qs.get("waybill_no", [""])[0])[:40]
+        if not wb:
+            return self._json(400, {"error": "waybill_no 必填"})
+        try:
+            import ot_label
+            pdf = ot_label.cache_get(wb)
+        except Exception as e:
+            return self._json(500, {"error": "厂内面单模块异常：%s" % e})
+        if not pdf:
+            return self._json(404, {"error": "面单未渲染，请重新点击打印（先 POST 渲染）"})
+        if qs.get("raw", [""])[0] == "1":
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(pdf)))
+            self.end_headers()
+            self.wfile.write(pdf)
+            return
+        self._json(200, {"pdf": base64.b64encode(pdf).decode()})
+
     def _carrier_label(self, qs):
         """GET /api/carrier/label?carrier=顺丰&waybill_no=xxx → 官方面单 PDF（base64）。
-        一票多件：waybill_no 逗号分隔多运单 → 逐件取面单合并为一个多页 PDF（2026-09-17 用户规则）"""
+        一票多件：waybill_no 逗号分隔多运单 → 逐件取面单合并为一个多页 PDF（2026-09-17 用户规则）
+        optional_no：附加面单（回签单 SF106 等）——**2026-09-29 自查后默认放弃追加**：
+        #557 实证（_sb_pages.py 归档）SF106 号云打印=1 页正向 POD 签收联（收=客户，与主面单
+        同收件人、单号不同），追加出纸即用户指出的"两张面单同收件人不同单号"重复缺陷，
+        也与速打官方两联（主面单+反向回签单）不符。仅显式 with_optional=1 才合并追加
+        （供 _sb_pages.py 探针逐页核验用）；官方反向回签单的云打印取得路径（单据类型/阶段）
+        核验通过后才接回默认链路——目标出纸=速打同款两联，自绘永久作废"""
         carrier = (qs.get("carrier", [""])[0]).strip()
         waybills = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
                                 for x in qs.get("waybill_no", [""])[0].split(",")) if w]
+        optional = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
+                                for x in qs.get("optional_no", [""])[0].split(","))
+                    if w and w not in waybills]
         if not carrier or not waybills:
             return self._json(400, {"error": "carrier 和 waybill_no 必填"})
         pdfs, last_data = [], None
@@ -550,6 +706,16 @@ class Handler(SimpleHTTPRequestHandler):
                 pdfs.append(pdf)
         except Exception as e:
             return self._json(400, {"error": str(e)})
+        # 2026-09-29 放弃回签单附加页（同收件人不同单号重复缺陷，见 docstring）：
+        # 仅显式 with_optional=1 才合并（探针核验用），默认出纸=仅官方主面单
+        if qs.get("with_optional", [""])[0] == "1":
+            for w in optional:      # 回签单等附加页：失败跳过，不阻塞主面单
+                try:
+                    pdf_opt, _ = self._label_pdf_b64(carrier, w)
+                    if pdf_opt:
+                        pdfs.append(pdf_opt)
+                except Exception:
+                    pass
         pdf = pdfs[0] if len(pdfs) == 1 else _merge_pdfs(pdfs)   # 多件合并为一个文件
         if qs.get("raw", [""])[0] == "1":             # 原始 PDF 输出（iframe 同源直显，避开 blob 拦截）
             body = base64.b64decode(pdf)
@@ -630,8 +796,8 @@ class Handler(SimpleHTTPRequestHandler):
         d = self._body()
         with db() as c:
             cur = c.execute(
-                "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone,merge_group)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (d.get("so", ""), d.get("province", ""), d.get("city", ""),
                  d.get("district", ""), d.get("street", ""), d.get("company", ""),
                  d.get("name", ""),
@@ -639,7 +805,20 @@ class Handler(SimpleHTTPRequestHandler):
                  d.get("ship_date", ""), d.get("priority", "一般"),
                  d.get("order_type", "发货单"), d.get("so_no", ""),
                  d.get("po", ""), d.get("buyer", ""),
-                 d.get("emp_name", ""), d.get("emp_phone", "")))
+                 d.get("emp_name", ""), d.get("emp_phone", ""), d.get("merge_group", "")))
+            # DN 发货单收件地址自动入池（2026-09-24）：addr_key 去重 OR IGNORE 零副作用，
+            # 地址簿恒覆盖全部 DN 收件地址（历史单已一次性回填）；外协/其他单仍走录入页勾选
+            if d.get("order_type", "发货单") == "发货单":
+                _key = " ".join(x for x in (d.get("province", ""), d.get("city", ""),
+                                            d.get("district", ""), d.get("company", ""),
+                                            d.get("street", "")) if x)
+                if _key:
+                    c.execute("INSERT OR IGNORE INTO addr_pool"
+                              " (province,city,district,company,street,name,phone,addr_key)"
+                              " VALUES (?,?,?,?,?,?,?,?)",
+                              (d.get("province", ""), d.get("city", ""), d.get("district", ""),
+                               d.get("company", ""), d.get("street", ""), d.get("name", ""),
+                               d.get("phone", ""), _key))
             r = c.execute("SELECT * FROM orders WHERE id=?", (cur.lastrowid,)).fetchone()
         self._json(201, row_to_json(r))
 
@@ -649,7 +828,7 @@ class Handler(SimpleHTTPRequestHandler):
         for k in ("so", "province", "city", "district", "street", "company", "name",
                   "phone", "carrier", "note", "ship_date", "status",
                   "waybill_no", "route_status", "priority", "order_type", "so_no",
-                  "order_resp", "po", "buyer", "emp_name", "emp_phone"):
+                  "order_resp", "po", "buyer", "emp_name", "emp_phone", "merge_group"):
             if k in d:
                 fields.append(f"{k}=?")
                 vals.append(str(d[k]))

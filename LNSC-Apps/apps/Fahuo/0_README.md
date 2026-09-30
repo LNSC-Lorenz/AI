@@ -110,8 +110,14 @@ Fahuo/
 本地 `server.js` 经 python 子进程（`carriers/cli-*.py`）调**同一个包**，行为一致。
 密钥经 `carriers.env`（chmod 600）+ systemd `EnvironmentFile` 注入，**永不入代码库**。
 
-**取消下单**（2026-09-16 接入，假单探测结论）：
-- 顺丰 `EXP_RECE_CANCEL_ORDER`：服务存在，本账号报 **A1004 无对应服务权限** → 需丰桥控制台开通
+**取消下单**（2026-09-16 接入；**2026-09-24 顺丰真单闭环验证通过**）：
+- 顺丰 `EXP_RECE_UPDATE_ORDER`：✅ **有权限**，四张真实测试单全部取消成功（resStatus=2）；
+  报文 `{orderId, dealType:"2"}`（waybillNo 非必需）。
+  ⚠️ **A1004"无对应服务权限"双重根因**（09-16/09-24 两次误诊教训）：
+  ① **密钥污染**——`carriers.env`(CRLF) 经 bash `source` 注入使 partnerID 尾带 `\r`，网关不识别 → A1004
+  （已修：`base.get_cfg` 一律 strip + 服务器 env 转 LF；systemd EnvironmentFile 注入本就干净，生产从未受影响）；
+  ② **服务确实未订阅**——净密钥复测 `EXP_RECE_CANCEL_ORDER`（老取消）/`EXP_RECE_SEARCH_ORDER_RESP`（订单回显）仍 A1004，需丰桥申请开通。
+  遇 A1004 先用净密钥复测再下结论
 - 德邦 `standard-order/cancelOrder.action`（async 网关）：**2026-09-17 真单闭环验证通过**（权限已开通，3002 解除）；
   ⚠️ async 入账延迟：下单后立即取消报"不存在订单信息"，代码内已做 5s/15s 退避重试；
   `cancelOrderNotify` 同名存在，可用 `DB_CANCEL_IF` 环境变量切换；dpapi sync 路径 404 已排除
@@ -126,18 +132,193 @@ Fahuo/
   backSignBill=1(原件返回)/2(电子签收单) 时 returnRequirement+returnBillQty 必填；R1:签名 R2:盖章 … R8:面单
 - 德邦 `payType` 官方枚举（文档+面单双证）：**0=寄付现结(现付) 1=到付 2=寄付月结**；
   曾写死 1 致寄付月结错显"到付"（#492）；大客户模式可能不支持 0
-- 顺丰：**纸质回单 → `isSignBack=1`（签单返还，Number 型，默认 0 不要求）**，已映射生效
-- 顺丰：**纸质回单 → `isSignBack=1`（签单返还，Number 型，默认 0 不要求）**，已映射生效；
+- 顺丰：**纸质回签单 `isSignBack=1`（签单返还，官方唯一有效值；2026-09-23 现网事故终定）；
+  拍照回传=增值服务 `IN91`（serviceList 下发，2026-09-24 官方产品表终定）**；
   ⚠️ **副作用实测（2026-09-17 "选1显示2"根因）**：`isSignBack=1` 时下单响应 `waybillNoInfoList` 会**多返一条
   `waybillType=3` 的签单返还回单运单**（SF1064 号段）——**件数只认 `waybillType` 1(母)/2(子)**，
   回单运单存档 `order_resp.sign_back_no` 备查（不计件数、不参与合并打印）；此前未过滤导致回单被误判为子件
   （清单②角标/打印2页）
-- 顺丰 **拍照回传 → `isSignBack=2`**（2026-09-17 探针 _sf_pod_probe2/3/4 真单实测）：
-  `extraInfoList attrCode POD` 三种结构（=1/=Y/无值）均被 **S0003** 拒绝 → isSignBack 是唯一通道；
-  =2 顺丰接受且与 =1 同样多返 type=3 回单运单（SF1064 号段）；
-  前端 UI：仅选顺丰时可勾选（其他承运商禁用+强制取消）；
-  **可与纸质回单同时勾选（2026-09-18 用户规则）**：都勾 → 发 2（type=3 回单运单 =1/=2 均返 → =2 已含纸质流程）；
-  ⚠️ **`=3` 组合值实测无效**（探针 _sf_signback3_probe：顺丰接受但不返 type=3 运单，静默忽略）→ 勿用
+- ⚠️ **`isSignBack=2/3`（拍照回传）运营端静默无效——2026-09-23 现网事故**：近期顺丰单双勾"纸质+拍照"按旧规则
+  发 2，面单照印回签单号（type=3 运单号），但**收方快递员终端无回单任务、打不了回单**；服务器实测
+  （_sf_signback_route_probe）：主运单轨迹完整已签收，**回单运单恒"待揽收"0 节点** → 顺丰网关接受 =2
+  并返号，但运营端不启动签单返还流程；09-17 探针"=2 已含纸质流程"系 API 表面误判。
+  `extraInfoList attrCode POD` 被 S0003 拒、`=3` 组合值同样静默无效（_sf_signback3_probe）。
+  **修复（2026-09-24 官方《增值服务产品表》终定）**：纸质回单 → `isSignBack=1`（签单返还唯一有效字段值；
+  纸质签单返还增值服务 IN03 下单时无需下发）；**拍照回传 → 增值服务
+  `serviceList:[{"name":"IN91","value":"13"}]`**（IN91=拍照回传，value 固定 13=签回单拍照，见下表），
+  不再借用 isSignBack=2/3；实际下发存档 `order_resp.serviceList` 备查（_sf_in91_probe 真单验证）。
+  **方案A 面单标识（2026-09-24）**：勾选回单/拍照时下单 `remark` 自动追加「需纸质回单/需拍照回传」
+  （如并单 DN 清单后），实际下发存档 `order_resp.remark`；标准模板 fm_76130 备注区是否打印以真实面单实证。
+  平台侧新增**回单运单追踪**（server.py `_refresh_sign_back`）：主单签收终态后改追踪 sign_back_no 轨迹，
+  回单运单终态 → 自动置 returned + returned_at（回单日期自动填；发货日起 30 天窗口、复用节流）
+  （2026-09-29 口径修正：仅历史单自动置；新单只提示，见下"修复状态清单"）
+  **回签单面单打印（2026-09-25 用户规则）**：回单回不来系到方地址未维护——回签单（type=3 SF1064）面单
+  必须打印随货走：打印链路追加 `optional_no` 参数（服务端取到即合并追加、取不到静默跳过，绝不阻塞主面单），
+  件数角标/步骤弹窗仍不计回单（"选1显示2"教训不复发）；实测 SF1064997481417 云打印可出纸
+  （单张=2页，与主单 SF1223687759657 合并=3页 154KB）
+  （⚠️ 该追加 2026-09-29 自查后已放弃——见下方"自查更正"：追加页=正向 POD 签收联，与主面单同收件人不同单号）
+  **速打反向回签单面单实测（2026-09-29）**：SF 速打客户端同一打印任务出纸主运单+反向回签单两张
+  （SF5155825356371 + SF1065003763540，订单号 U0676092993637282）：两联收/寄地址互反，回签单
+  「到付」+「签回单原单号」回链主单，主单明细栏同印回单号（路由 532W-BG-WBD01E-00 / 519WA-HT-000）
+  → 反向回签单（反向+到付）官方模板**签收前即可出纸**，自绘反向面单（sb_label.py 实验）永久不需要；
+  且反向联收方=莱克勒 江苏常州金坛德城路99号（与 SIGN_BACK_ADDR 一致），新单返回段到方地址面单侧已正确。
+  ⚠️ **自查更正（2026-09-29，撤回"Fahuo 打印链路经 optional_no 合并追加该反向联"的未验证断言）**：
+  Fahuo 链路 SF106 号云打印实测（#557，`_sb_pages.py` 归档）=1 页**正向 POD 签收联**（寄=莱克勒/
+  收=客户/寄付月结，与主面单同收件人、单号不同）——追加出纸即用户指出的"**两张面单同收件人
+  不同单号**"重复缺陷 → **已放弃追加**：服务端 `_carrier_label` 仅显式 `with_optional=1` 才合并
+  （供探针逐页核验），前端不再传 `optional_no`，打印=仅官方主面单。目标出纸=速打同款两联
+  （官方主面单 + 官方反向回签单：收寄互反/到付/签回单原单号回链）；反向联的云打印取得路径
+  （单据类型/阶段）待 `carriers/_sb_pages.py <回单号> <主单号>` 逐页核验后接入；自绘永久作废。
+   ✅ **已部署生效（2026-09-30）**：server.py / carriers/sf_express.py / pages/2-order.js / 0_README.md
+   上传 10.86.180.76:/var/www/lnsc-apps/apps/fahuo（原文件备份 /home/sysadmin/fahuo-backup-20260930-081651），
+   `systemctl restart fahuo-api` 成功、MD5 与本地一致。现网冒烟（脚本留存服务器 /home/sysadmin/_smoke_label.sh）：
+   默认打印=**1 页官方主面单**（SF5155141607457，HTTP 200，76,952B）✅ 重复页缺陷消除；
+   `with_optional=1`+`optional_no`=2 页（主面单+POD 签收联合并，153,510B）✅ 探针路径保留可用；
+   nginx no-store 生效，线上 2-order.js 中 `optional_no` 出现 0 次（前端不再传参实锤）。
+  速打可作官方客户端补打/核对入口
+   **回单逻辑终定（2026-09-29 用户指正 + 轨迹实锤；此前"改单终定"结论作废）**：官方逻辑——选择回单后
+   顺丰自动带一张回单返回运单：**运单号=原单回单号（SF106），收件人签收后自动反向、运费到付返回**。
+   轨迹实锤（_sb_routes.py 拉取 4 张历史回单运单全节点）：SF1064982980091（#485 上海→常州）、
+   SF1064982958300（#487 湖州→常州）、SF1064983709198（#494→常州）、SF1064997481417（#543 苏州→常州）
+   全部反向运抵常州龙城转运→金坛万和工业区店派送并"已签收"——返回段确实自动发生。
+   ⚠️ 此前误判复盘：据云打印 PDF 面单"寄=莱克勒/收=客户/寄付月结"断言"顺丰不自动反向、需人工改单
+   （EXP_RECE_UPDATE_ORDER 8252）"——**错误**。那张面单是 **POD 签收联**（"POD标快"抬头，随货给客户签收用），
+   返回段由顺丰系统自动反向发起，与签收联面单内容无关；改单探针方向本身即错。
+   **真正根因 = 回单返回"到方地址"未维护**：历史 4 张回单被派送至错误到方地址签收
+   （轨迹"已派送成功（仓库）"但莱克勒未收到实物）。行动：向 95338/顺丰销售发"回单返回到方地址维护申请"
+   （到方地址=莱克勒 范蓓蓓 15190535163 常州市金坛区德城路99号），并协查历史 4 张误投回单去向、重新派送。
+   平台侧：步骤弹窗回单块改为"回单返回：顺丰自动返回（同 SF106 回单号，反向+到付）——需维护到方地址"
+   + 一键复制维护申请文案（2-order/3-list `signBackInfoEl`）
+   **回单修复状态清单（截至 2026-09-29 更正）**：
+   - ✅ 已修复并实测：`isSignBack=1` 下单 + 回单号存档 `order_resp.sign_back_no`；回单运单追踪
+     （**2026-09-29 用户定夺：对新单生效**）：created_at ≥ 2026-09-29 的订单回单运单终态只写提示
+     `order_resp.sign_back_final` + 审计 SIGNBACK-FINAL，**不自动置 returned**——终态可能是错误地址
+     签收，实物核实到达莱克勒后人工置 returned（PUT）；历史单维持自动置不回溯；已提示过的单停查
+     省接口；步骤弹窗回单块一键复制"到方地址维护申请"（signBackInfoEl）
+   - ❌ 已放弃（2026-09-29 自查）：POD 签收联打印链路（`optional_no` 合并追加出纸）——追加页=正向
+     POD 签收联，与主面单同收件人、单号不同，即用户指出的"两张面单同收件人不同单号"重复缺陷；
+     服务端 `with_optional` 默认关、前端不再传；官方反向回签单待取得路径核验后按速打同款两联接入
+   - ✅ **到方地址已平台统一维护（2026-09-29 用户口径终定）**：唯一权威源 `carriers/sf_express.SIGN_BACK_ADDR`
+     （莱克勒喷嘴系统（常州）有限公司 范蓓蓓 15190535163 / 江苏常州金坛 德城路99号（邮编 213200），
+     与寄件人 `_SENDER` 同源）；`GET /api/signback_addr` 暴露给前端，2-order/3-list 维护申请文案改为
+     引用该配置（离线兜底同文，改地址只改服务端一处）。丰桥下单接口**无**到方地址下发字段
+     （extraInfoList POD 实测 S0003 拒），故顺丰账号侧仍需人工维护（见下待办）
+   - ❌ 待办（外部依赖，顺丰侧）：**回单返回"到方地址"账号侧维护**——把平台生成的维护申请文案（步骤弹窗
+     一键复制）发 95338/顺丰销售，到方地址=上述 SIGN_BACK_ADDR——回单收不到的真正根因；
+     协查历史 4 张误投回单（SF1064982980091/SF1064982958300/SF1064983709198/SF1064997481417）重新派送
+   - ⏳ 待验证：remark（需纸质回单/需拍照回传）在**主单** fm_76130 模板是否打印（**POD 签收联已实证打印**：
+     #557 回单联备注区含"DN：8260034649 SO：12600537 需纸质回单/需拍照回传"）；
+     实物回单到达莱克勒=最终闭环标志
+- 前端 UI：拍照回传仅选顺丰时可勾选（其他承运商禁用+强制取消）
+
+### 顺丰增值服务产品表（serviceList；官方《增值服务产品表-20260924164208.pdf》扫描件转录）
+
+下单报文增值服务统一走 `serviceList:[{"name":<SERVICECODE>,"value":...,"value1":...,"value5":...}]`；
+备注"参考IN67样例"= 照 IN67 报文形态改 name/value。原文扫描件列宽截断处以 … 标记。
+
+| 名称 | SERVICECODE | 说明 | 备注 |
+|---|---|---|---|
+| 基础保 | INSURE | value为基础保的保价，声明价值以原寄地所在区域币种 | 参考入参 `"serviceList":[{"name":"INSURE","value":"5…` |
+| 包装服务 | IN67 | wCode物料编码/联系发件网点获取；createTime取下 | 参考入参：`"serviceList":[{"name":"IN67","value5":"{…` |
+| 定时派送(指定时段) | TDELIVERY | value为派送日期（格式：yyyy-MM-dd）；value1为派 | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 委托取件 | IN10 | value 委托类型：1、保密；2、带函；3、保密+带函 | 参考入参：`"serviceList":[{"name":"IN10","value":"1"]…` |
+| 签单返还(纸质回单) | IN03 | 签单返回下订单时不需要下发IN03，此处说明仅用于费 | 下发按如下字段下发 isSignBack 是否返回签回单（签… |
+| **拍照回传** | **IN91** | **value为图片类型 13：签回单拍照（固定传值）**，valu… | 参考入参：`"serviceList":[{"name":"IN91","value":"13…` |
+| 原产地证代办 | IN61 | Origin Certificate Agency | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 进口报关 | IN07 | Import Declaration | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 稽核服务 | IN57 | Banquet Auditing | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 打印服务 | IN79 | Print Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 代收货款 | COD | value为货款，以原寄地所在区域币种为准，如中国内地 | 参考入参：`"serviceList":[{"name":"COD","value":"3.2…` |
+| 派件地址变更服务 | IN88 | Receiver Address Modification | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 安装服务 | IN103 | value1传值：送装一体传SIGH，送装分离为空 value5… | `value5:"{"serviceItemInfos":[{"count":1,"cusServiceC…` |
+| 大件入户 | IN98 | Large-size To-door | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 送货上楼 | DOORTODOOR | Delivery Upstairs | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 送货服务 | IN74 | Delivery Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 提货服务 | IN73 | Cold Chain Retrieval Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 装卸服务 | IN65 | Loading and Unloading Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 挂号 | IN66 | Registered | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 国际电商专递操作费 | IN96 | E-Commerce Express Handling Fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 顺丰国际小包平邮处理费 | IN94 | E-Parcel Unregistered Handling Fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 密钥认证 | IN59 | Value: 1.口令 2.身份证 3.口令/身份证（李家成 2021-1… | 参考入参：`"serviceList":[{"name":"IN59","value":"3",…` |
+| 验货服务 | IN52 | value 格式样例: [{"optId":1}]optId 只支持1,2,3 且不能… | 参考入参：`"serviceList":[{"name":"IN52","value":"[{…` |
+| 保单配送 | IN87 | Insurance Policy Delivery | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 票据专送 | IN99 | Bill Delivery | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 超长超重附加费 | IN23 | Overweight and Oversize | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 特殊入仓 | IN102 | Special Warehousing | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 特殊出仓 | IN80 | Special Warehouse-out | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 撤展服务 | IN60 | Exhibition-exit Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 集报散派 | IN95 | Break-bulk Direct | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 资源调节 | IN100 | Resource Allocation Fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 燃油附加费 | IN15 | Fuel Surcharge | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 丰巢自寄优惠 | IN113 | Hive Box Shipping Discount | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 定时派送(等通知) | IN04 | Fixed Time Delivery (Upon Notification) | 参考入参：`"serviceList":[{"name":"NOTICE"}] ]` |
+| 散单代收服务 | XCOD | value为货款，以原寄地所在区域币种为准，如中国内地 | 参考入参：`"serviceList":[{"name":"XCOD","value":"1…` |
+| 木质包装 | IN31 | Wooden Packaging | 木质包装 |
+| 国际住宅附加费 | IN38 | Residential Surcharge | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 基础保（高价值） | IN21 | SPP (High-value) | 基础保（高价值） |
+| 国际偏远附加费 | IN16 | International Remote Surcharge | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 快运到付现结优惠 | IN109 | Paid-by-receiver Shipment Discount (Cash) | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 宅配延伸 | IN116 | value 是宅配规则id，value1是宅配名称，value2是每 | 参考入参：`"serviceList":[{"name":"IN116","value":"2103…` |
+| 准时宝 | IN121 | Timely Delivery Guarantee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 参展服务 | IN123 | Exhibition Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 丰巢超重费 | OS04 | Hive Box Overweight Fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 货物保管 | CARGOSAFEKEEPING | Shipment Storage | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 医药温控服务 | IN130 | Temperature Tracing (Offline) | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 温度追溯（实时） | IN131 | Temperature Tracing (Real-time) | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 超额现结费 | OS09 | Overpayment fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 升舱服务 | IN132 | Upgraded Aviation Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 自取件 | IN09 | 自取件 | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 标准化包装服务 | IN14 | Standard Packaging Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 指定时间派送 | IN11 | Fixed Time Delivery | 指定時間派送 |
+| 保价（台湾） | IN25 | SPP (Taiwan) | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 资源调节费 | IN104 | 资源调节费 | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 入仓垫付费 | OS03 | Warehouse-in Advanced Payment Fee | 入仓垫付费 |
+| 税金代垫服务费 | IN110 | Tax Advanced Payment Service Fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 直派服务 | IN139 | Direct Delivery Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 出口报关 | IN137 | Export Declaration | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 收件微派 | OS11 | Micro Pickup | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 派件微派 | OS12 | Micro Delivery | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 产品优惠 | OS06 | Product Discount | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 乡村达 | IN127 | Instant Push of Code Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 加急派送 | URGENT | Urgent Delivery | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 其他服务（新） | IN200 | Other Charges（New） | `value5:"{"exts":[{"vasCodeSub":"IN200-0257","vasC…` |
+| 打包服务 | IN142 | Package Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 溯源服务 | IN141 | Traceability Service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 丰卡速通 | IN143 | Card Activation | 丰卡速通 |
+| 到齐再派 | IN144 | value 传值批次号（多订单统一派送的批次号）定义规… | 分仓场景参考入参：`"serviceList":[{"name":"IN144","v…` |
+| 部分拦截 | IN146 | Partial Interception | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 电子回单 | IN149 | name：服务代码，固定为 IN149；value：2 使用后台… | `"serviceList":[{"name":"IN149","value":"3","value1":…` |
+| 惊喜送达 | IN150 | Surprise express | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 磁检服务 | IN140 | Cargo Magnetic Inspection | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 专人专送 | IN151 | Hand Carry Serivce | 专人专送 |
+| 仓储方案服务 | TMP777728 | Warehouse solution service | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 仓储集收操作费 | TMP777727 | Warehouse collection fee | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 尚派服务 | IN153 | Customized Delivery | 参考增值服务IN67样例，修改name值为对应的SERVICECODE |
+| 木质包装拆除 | IN152 | Wooden support removal service | value值需要拆包装的数量，参数示例：`"serviceList":[{"…` |
+| 检测服务 | IN155 | Testing Service | 检测服务 |
+| 偏远附加费(收方偏远) | IN156 | Remote Surcharge (Recipient) | 偏远附加费(收方偏远) |
+| 偏远附加费(寄方偏远) | IN157 | Remote Surcharge (Sender) | 偏远附加费(寄方偏远) |
+| 按需达 | CP0029 | Delivery On Demand | 按需达 |
+| 定额保 | IN160 | value为定额保的价格等级（500,1000,2000,5000,100… | 参考入参 `"serviceList":[{"name":"IN160","value":"50…` |
+| 足额保 | IN159 | value为足额保的保价 | 参考入参 `"serviceList":[{"name":"IN159","value":"20…` |
+| 惠转退 | IN158 | 惠转退 | 参考入参：`"serviceList":[{"name":"IN158"}] ]` |
+| 换货服务 | IN161 | value1为首次下单的运单号 | `"serviceList": [{ "name": "IN161", "value1": "SF1160…` |
+
+> 原表另有以下名称但**未提供 SERVICECODE/说明**（扫描件空行，暂不可用）：偏远自取附加费、顺丰护卫、
+> 高速费/停车费、国际代收税金、云转、包裹操作费、赔偿款返还、国际处理费、特货服务、大件保价、
+> 夜收服务费、派收一体服务、一对一急收。
+
+> 2026-09-24 清理：一次性历史探针脚本已批量删除（本地+服务器），仅保留本文引用的
+> `_sf_in91_probe.py`（IN91 通道验证）、`_sf_signback_route_probe.py` / `_sf_signback3_probe.py` /
+> `_sf_type12_contrast.py`（09-23 事故证据链）；服务器残留的明文凭据旧脚本 `SF.txt` 一并删除。
+> 2026-09-29 归档：`_sb_update_probe.py`（改单接口边界数据；其"需人工改单"前提已作废，见"回单逻辑终定"）、
+> `_sb_pages.py`（回单面单 PDF 逐页提取——#557 实证 POD 签收联仅 1 页、备注区已打印"需纸质回单/需拍照回传"）、
+> `_sb_routes.py`（4 张历史回单运单轨迹全节点：上海/湖州/苏州→常州金坛"已签收"，反向返回实锤证据链）。
+> ⚠️ **清理事故**：`_` 前缀通配误删包入口 `__init__.py`，现网报"carriers 包缺失"（#551/so 8260034595
+> 下单失败；该单 status 仍 pending、未产生运单，UI 重下即可）。已从 git 恢复并重新部署（19:01）。
+> 教训：批量删除必须显式白名单，`__` 双下划线包文件绝不通配匹配。
+
+
 
 ### 编号体系设计（重要·不可违反）
 
@@ -285,7 +466,10 @@ ssh sysadmin@10.86.180.76 'sudo bash /home/sysadmin/1_install-api.sh'
 - **行内编辑**：点击列表行回填全部字段（含省市区联动、类型/优先级/承运商选中、备注拆解），
   「确定」变「保存」，PUT 写回（离线本地改行）；**已下单（有运单号）的行锁定禁止编辑**（灰显 + 点击提示）
 - **通讯录（地址池）**：粘贴区左下通讯录图标 → 居中弹窗（640px），顶部搜索（姓名/电话/地址模糊过滤），
-  一键回填省市区/街道/姓名/电话；勾选「存到常用地址池」确认入单时按地址去重入池（localStorage）
+  一键回填省市区/街道/姓名/电话；「存到常用地址池」**默认勾选**（2026-09-24，不需要时手动取消），
+  确认入单时按地址去重入池（在线写服务端
+  addr_pool 全用户共享，离线回退本地）；**DN 发货单收件地址建单即自动入池**（2026-09-24：服务端
+  addr_key 去重 OR IGNORE 零副作用；同日一次性回填历史 55 张 DN 单的 49 个去重地址）；列表上限 500→5000
 - **上传附件**：仅发货单（先填 DN），**多文件同时上传**到 `Upload/<DN>/`；虚线框已传态
   「已上传 N个 + 文件名翻滚显示（框高不变）」，文件名后 **× 可删**（DELETE 接口）；
   选中已传文件的行自动显示已上传态；文件名不入备注
@@ -331,7 +515,8 @@ ssh sysadmin@10.86.180.76 'sudo bash /home/sysadmin/1_install-api.sh'
 - **打单列表**：随类型过滤（前两列含义随切：发货单=DN/SO、外协=采购员/PO号、其他=发件人/收件城市）；
   仅显示**近 7 天录单 + 全部已下单**；列：DN SO 优先级 联系人 承运商 单号 下单状态 路由状态 打印 查看
 - **「查看」列**：格式图标（icon/file-type-*.svg）——PDF 点击预览弹窗（可打印）、
-  Excel 用本地 Excel 程序打开（ms-excel 协议）、Word 预览（docx-preview）、其它格式统一 File 图标
+  Excel 用本地 Excel 程序打开（ms-excel 协议）、Word 预览（docx-preview）、
+  图片（PNG/JPG/GIF/BMP/WEBP）预览弹窗直显（统一 file-type-png 图标）、其它格式统一 File 图标
 - **模拟路由时间线**：点选已下单行，面单下方显示节点时间线（已下单→已揽收→运输中→…，
   节点间隔按运单号哈希生成，稳定不跳变；真实轨迹接口就绪后换 `/api/carrier/route` 数据即可）
 - **打印列**：打印机图标（icon/printer.svg）单行补打
@@ -399,7 +584,7 @@ ssh sysadmin@10.86.180.76 'sudo bash /home/sysadmin/1_install-api.sh'
   外协/其他两行 chip（公司+PO+采购员 / 姓名电话+发件员工）
 - [x] **顶部栏五页统一**：API 状态点全页面一致（markApi 统一接口）+ scrollbar-gutter 防位移；
   设置/关于弹窗 topbar.js 统一注入
-- [x] **上传附件体系**：Upload/<DN>/ 归档 + 多文件上传 + 已上传态翻滚显示 + ×删除 + 查看列预览/本地打开
+- [x] **上传附件体系**：Upload/<DN>/ 归档 + 多文件上传 + 已上传态翻滚显示 + ×删除 + 查看列预览/本地打开（图片 PNG 图标 + 弹窗预览）
 - [x] **通讯录地址池**：勾选入池 + 弹窗搜索 + 一键回填
 - [x] **已下单锁定**：录单页有运单号的行禁止行内编辑
 - [x] **清单组合筛选**：类型 × 优先级 × 搜索 三重叠加
