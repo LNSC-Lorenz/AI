@@ -1,0 +1,24 @@
+# ===== Fahuo：运行时数据 / 生成物 / 密钥（不入库；与 apps/SSH/excludes.conf 部署排除清单同源）=====
+# 2026-09-30 新增：此前 __pycache__、已删探针、密钥泄露进版本控制，靠本文件根治。
+
+# 数据库与序列（生产数据，绝不入库）
+fahuo.db
+fahuo.db-shm
+fahuo.db-wal
+oid.seq
+carriers/.db_logistic_seq
+
+# 密钥（曾入库，2026-09-30 移出版本控制；历史提交里仍有旧值，密钥需轮换）
+carriers.env
+
+# 上传附件与发货照片（业务数据/共享盘挂载，不入库）
+Upload/
+ShippingPhotos/
+shipphotos.json
+
+# Python 字节码
+__pycache__/
+*.pyc
+
+# 中文字体（9.7MB 版权字体，随包部署；来源 Windows C:\Windows\Fonts\simhei.ttf，或换 Noto Sans SC）
+shared/fonts/
