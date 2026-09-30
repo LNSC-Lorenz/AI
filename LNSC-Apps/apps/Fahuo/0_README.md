@@ -83,25 +83,34 @@ Fahuo/
 │   ├── stats.js                    右侧统计看板（API 实时，两位占位）
 │   ├── region.js                   全国省市区数据（34省/342市/3056区县, MIT）
 │   ├── icon/                       图标（printer、file-type-* 等）
-│   ├── lib/                        本地组件（OCR tesseract、xlsx、docx-preview、jszip、pdf.js）
+│   ├── lib/                        本地组件（OCR tesseract + chi_sim/eng 训练数据、xlsx、docx-preview、
+│   │                               jszip、JsBarcode/qrcode〈自绘面单条码二维码〉；浏览器直接加载）
+│   ├── fonts/simhei.ttf            中文字体（ot_label 自绘面单用；9.7MB 版权字体，**随包部署不入库**）
 │   └── App.ico                     站点图标
+├── ot_label.py                 自绘面单渲染（PIL：100×150mm PDF + 缓存，server.py import；方案备选未启用）
 ├── server.py                   API 服务（生产，位置不变：Python 标准库零依赖，静态根=Fahuo/）
 ├── server.js                   API 服务（本地开发，Node≥22.5；经子进程调同一 carriers 包）
-├── carriers.env                承运商密钥（chmod 600，systemd EnvironmentFile 注入，不入库）
+├── carriers.env                承运商密钥（chmod 600，systemd EnvironmentFile 注入；2026-09-30 移出版本控制）
 ├── carriers/                   【承运商层：一家一文件】
-│   ├── sf_express.py               顺丰（下单 + 云打印面单，严格按 SF.txt 标准流程）
+│   ├── sf_express.py               顺丰（下单 + 云打印面单，严格按官方流程）
 │   ├── deppon.py                   德邦（签名破解版 + logisticID 逐单自增）
 │   ├── kye.py                      跨越（骨架，待报文样例）
 │   ├── base.py                     HTTP/签名/PDF下载 公共件
 │   ├── __init__.py                 注册表分发 + 面单 PDF 提取
 │   ├── cli.py                      Node 子进程统一入口（order/route/label）
-│   ├── SF.txt                      顺丰云打印官方流程样例（sf_express 的依据）
-│   └── .db_logistic_seq            德邦 logisticID 自增计数（勿删）
+│   ├── .db_logistic_seq            德邦 logisticID 自增计数（勿删）
+│   ├── 增值服务产品表-*.pdf         顺丰官方《增值服务产品表》（serviceList 取值唯一依据）
+│   └── _sb_pages.py / _sb_routes.py / _sb_update_probe.py / _sf_in91_probe.py /
+│       _sf_signback_route_probe.py / _sf_signback3_probe.py / _sf_type12_contrast.py
+│                                  证据探针（仅存档复现，非生产路径；nginx 已拦截
+│                                  /apps/*/carriers/ → 不可下载；清理记录见文末）
 ├── fahuo.db                    SQLite 订单库（备份=复制该文件）
 ├── oid.seq                     承运商客户单号持久序列（勿删，删了撞单）
 ├── Upload/                     发货单附件（按 DN 建子文件夹）
+├── .gitignore                  运行时数据/密钥/字节码/字体不入库（与 apps/SSH/excludes.conf 同源）
 ├── 0_README.md                 本文档
-└── 1_install-api.sh            服务器一键部署（systemd + 每日备份 cron + 自检）
+├── 1_install-api.sh            服务器一键部署（systemd + 每日备份 cron + 自检）
+└── 7_harden_webroot.sh         webroot 加固（幂等）：清字节码 + 密钥 600 + nginx 拦截源码/密钥/库
 ```
 
 ## 承运商 API 对接（carriers/ 包）
@@ -334,6 +343,37 @@ Fahuo/
 > ⚠️ **清理事故**：`_` 前缀通配误删包入口 `__init__.py`，现网报"carriers 包缺失"（#551/so 8260034595
 > 下单失败；该单 status 仍 pending、未产生运单，UI 重下即可）。已从 git 恢复并重新部署（19:01）。
 > 教训：批量删除必须显式白名单，`__` 双下划线包文件绝不通配匹配。
+
+> **2026-09-30 目录清理 + webroot 加固（本次）**
+> - **本地仓库登记删除 35 个**"已从磁盘移除但仍被 git 跟踪"的文件：`carriers/__pycache__/*.pyc`（5）、
+>   `_cancel_out.txt`、`_dp_back_probe{,2,3,4}.py`、`_dp_cancel_probe/test`、`_dp_final_verify`、
+>   `_dp_pay_probe`、`_dp_receipt_verify`、`_dp_trace_probe`、`_dp_verify`、`_probe_cancel{,2}`、
+>   `_qty_label_test`、`_qty_order`、`_sf_exptype_probe`、`_sf_limit_probe`、`_sf_parcels_test`、
+>   `_sf_pod_probe{,2,3,4}`、`_sf_print2`、`_sf_product_verify{,2}`、`_sf_query_order`、
+>   `_sf_reorder_test`、`_sf_signback_test`、`_sf_signback_verify`（共 29 个一次性探针）。
+> - **生产依赖补入库**（此前已部署但从未提交，仓库重建会丢）：`ot_label.py`、
+>   `shared/lib/JsBarcode.all.min.js`、`shared/lib/qrcode.min.js`、`shared/icon/file-type-png.svg`、
+>   5 个证据探针、官方《增值服务产品表》PDF。
+> - **密钥出库**：`carriers.env` 一直被 git 跟踪（含顺丰校验码 / 德邦签名密钥），已 `git rm --cached`
+>   移出版本控制并写入 `.gitignore`；⚠️ **历史提交仍含旧值 → 密钥需在丰桥/德邦后台轮换**。
+> - **新增 `apps/Fahuo/.gitignore`**：`fahuo.db*`、`oid.seq`、`carriers/.db_logistic_seq`、`carriers.env`、
+>   `Upload/`、`ShippingPhotos/`、`shipphotos.json`、`__pycache__/`、`*.pyc`、`shared/fonts/`（版权字体随包部署）。
+> - **现网删除**：`__pycache__/`、`carriers/__pycache__/`（7 个 .pyc，运行时自动重建，无需重启）。
+> - **安全事件（发现并修复）**：nginx `location /apps/ { try_files $uri $uri/ =404; }` 把应用目录当静态根，
+>   实测 `/apps/fahuo/carriers.env` → 200 **真实密钥**，`fahuo.db`、`backup/*.db`、`server.py`、`0_README.md`
+>   同样可下载；其他应用同缺陷（`/apps/po-closing/.env`、`poclose.db`、`/apps/ctms/user_info.txt`、
+>   `toolinventory-server.db`）。修复（`7_harden_webroot.sh`，幂等）：插入
+>   `location ~* ^/apps/.*\.(py|pyc|pyo|sh|env|trc|db|seq|log|md|bak|orig|swp)$ → 404`、
+>   `^/apps/*/(carriers|backup|install)/ → 404`、`server.js → 404`；`carriers.env` 权限收紧 600。
+>   只拦代码/密钥/数据类扩展名，前端实际抓取的 `.js/.css/.json/.xlsx` 一律放行
+>   （`shipphotos.json`、`stock.json`、`catalog.json`、`media.json`、`drawings.json`、信息表.xlsx 均正常）。
+> - **踩坑**：`cp -a` 备份软链会把「备份软链」也落进 `sites-enabled/` → nginx 重复加载同一 vhost
+>   （`conflicting server name` 警告；reload 期间旧 worker 会短暂按旧配置应答，易误判加固"失败"）。
+>   备份必须 `readlink -f` + `cp -aL` 写到 `sites-available/`。
+>   回滚：`cp -aL /etc/nginx/sites-available/lac.lechler.com.cn.bak-20260930-193513 \
+>   /etc/nginx/sites-available/lac.lechler.com.cn && systemctl reload nginx`。
+> - **验证**：`7_harden_webroot.sh` 自检 34/34 全绿（敏感 18 项 → 404、前端 15 项 → 200、接口 200）；
+>   面单冒烟 8 项全绿（默认 1 页 76,952B、探针 2 页 153,510B、线上 JS MD5 与磁盘一致、服务 active）。
 
 
 
