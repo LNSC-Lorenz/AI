@@ -687,7 +687,9 @@ class Handler(SimpleHTTPRequestHandler):
         实测（新单+已签收单一致，_sb_pages.py/_probe_reverse.py 存档）=1 页正向"POD标快"签收联
         （寄=莱克勒/收=客户/寄付月结），**不是**用户要的反向返回运单（收寄互反/到付/签回单原单号
         回链——该联目前仅速打可在签收前出纸，丰桥取法待顺丰官方答复）。默认出纸=仅官方主面单；
-        仅显式 with_optional=1 才合并（探针核验用，失败静默跳过、绝不阻塞主面单）"""
+        仅显式 with_optional=1 才合并（探针核验用，失败静默跳过、绝不阻塞主面单）。
+        2026-09-30 用户决策（最终口径）：维持默认 1 页官方主面单，反向回签单由**速打**补打；
+        自绘方案（ot_label.py 同款链路，见 0_README「反向回签单取得路径评估」）备选保留、不启用"""
         carrier = (qs.get("carrier", [""])[0]).strip()
         waybills = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
                                 for x in qs.get("waybill_no", [""])[0].split(",")) if w]
