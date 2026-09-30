@@ -683,11 +683,11 @@ class Handler(SimpleHTTPRequestHandler):
     def _carrier_label(self, qs):
         """GET /api/carrier/label?carrier=顺丰&waybill_no=xxx → 官方面单 PDF（base64）。
         一票多件：waybill_no 逗号分隔多运单 → 逐件取面单合并为一个多页 PDF（2026-09-17 用户规则）
-        optional_no：附加面单（回单 SF106 等），取到即合并追加、取不到静默跳过，绝不阻塞主面单。
-        **2026-09-30 用户指令终定（覆盖 09-29"放弃追加"）**：恢复两页打印=主面单+回单签收联——
-        #557 实证（_sb_pages.py 归档）SF106 号云打印=1 页官方"POD标快"签收联，即随货走的纸质
-        回单：客户签收后顺丰自动用同一回单号反向、运费到付返回（4 张历史回单轨迹实锤，
-        _sb_routes.py）。with_optional 门控作废（参数被忽略，兼容旧探针调用）"""
+        optional_no：附加面单——**2026-09-30 用户指令撤回追加（二次终定）**：SF106 回单号云打印
+        实测（新单+已签收单一致，_sb_pages.py/_probe_reverse.py 存档）=1 页正向"POD标快"签收联
+        （寄=莱克勒/收=客户/寄付月结），**不是**用户要的反向返回运单（收寄互反/到付/签回单原单号
+        回链——该联目前仅速打可在签收前出纸，丰桥取法待顺丰官方答复）。默认出纸=仅官方主面单；
+        仅显式 with_optional=1 才合并（探针核验用，失败静默跳过、绝不阻塞主面单）"""
         carrier = (qs.get("carrier", [""])[0]).strip()
         waybills = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
                                 for x in qs.get("waybill_no", [""])[0].split(",")) if w]
@@ -705,15 +705,16 @@ class Handler(SimpleHTTPRequestHandler):
                 pdfs.append(pdf)
         except Exception as e:
             return self._json(400, {"error": str(e)})
-        # 2026-09-30 用户指令终定：回单签收联附加页恢复默认合并（见 docstring）——
-        # optional_no 取到即追加出纸，失败跳过、不阻塞主面单（with_optional 门控已作废）
-        for w in optional:          # 回单签收联等附加页：失败跳过，不阻塞主面单
-            try:
-                pdf_opt, _ = self._label_pdf_b64(carrier, w)
-                if pdf_opt:
-                    pdfs.append(pdf_opt)
-            except Exception:
-                pass
+        # 2026-09-30 用户指令撤回：SF106 云打印=正向 POD 签收联，非反向返回运单（见 docstring）——
+        # 默认出纸=仅官方主面单；with_optional=1 仅保留供探针核验
+        if qs.get("with_optional", [""])[0] == "1":
+            for w in optional:      # 探针附加页：失败跳过，不阻塞主面单
+                try:
+                    pdf_opt, _ = self._label_pdf_b64(carrier, w)
+                    if pdf_opt:
+                        pdfs.append(pdf_opt)
+                except Exception:
+                    pass
         pdf = pdfs[0] if len(pdfs) == 1 else _merge_pdfs(pdfs)   # 多件合并为一个文件
         if qs.get("raw", [""])[0] == "1":             # 原始 PDF 输出（iframe 同源直显，避开 blob 拦截）
             body = base64.b64decode(pdf)

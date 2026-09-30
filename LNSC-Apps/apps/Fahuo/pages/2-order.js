@@ -1108,9 +1108,10 @@ function waybillList(o) {
   return o.waybill_no ? [o.waybill_no] : [];
 }
 
-/* 回签单号（顺丰纸质回单 type=3，下单存档 order_resp.sign_back_no）：不计件数；打印链路经
-   optional_no 合并追加出纸（2026-09-30 用户指令终定）：两页=主面单+回单签收联——SF106 云打印=
-   官方"POD标快"签收联，随货走；客户签收后顺丰自动用同一回单号反向、运费到付返回（轨迹实锤） */
+/* 回签单号（顺丰纸质回单 type=3，下单存档 order_resp.sign_back_no）：不计件数；仅用于轨迹/回单信息展示。
+   2026-09-30 二次实锤：SF106 云打印（新单/已签收单一致）=1 页正向"POD标快"签收联（寄=莱克勒/收=客户/
+   寄付月结），**不是**用户要的反向返回运单（收寄互反/到付/签回单原单号回链——该联仅速打可在签收前出纸）→
+   打印链路不传 optional_no（错误第 2 页已按用户指令撤回）；丰桥官方取法确认后再接入 */
 function signBackNo(o) {
   try {
     return ((JSON.parse(o.order_resp || "{}").sign_back_no) || "").trim();
@@ -1238,15 +1239,13 @@ async function printOfficialOrHtml(o, direct) {
       /* 一票多件：逗号拼接全部运单 → 服务端逐件取面单合并为一个多页 PDF，
          一次预览一次打印（减少点击；2026-09-17 用户规则） */
       const wbs = waybillList(o);
-      const sb = signBackNo(o);
       let url = `${apiBase}/carrier/label?carrier=${encodeURIComponent(o.carrier)}` +
                 `&waybill_no=${encodeURIComponent(wbs.join(","))}`;
-      /* 回单签收联附加页（2026-09-30 用户指令终定）：回单号（SF106）下单即有，
-         传参即合并追加出纸；服务端取不到静默跳过，绝不阻塞主面单 */
-      if (sb) url += `&optional_no=${encodeURIComponent(sb)}`;
+      /* 2026-09-30 用户指令撤回：不追加 SF106——其云打印=正向 POD 签收联，不是用户要的反向
+         返回运单（收寄互反/到付/签回单原单号回链），见 signBackNo 注释。打印=仅官方主面单；
+         反向回单联暂用速打补打；丰桥官方取法确认后再接入（服务端 with_optional=1 保留供探针） */
       url += "&raw=1";
       if (direct) await autoPrintPdf(url);
-      /* 2026-09-30 用户指令：移除标题"（打印=仅官方主面单；回单号…）"文案 */
       else await showLabelPdf(url, `${o.so || ("#" + o.id)} · ${o.carrier} · ${o.waybill_no}` +
                   (piecesCount(o) > 1 ? `（共${piecesCount(o)}件）` : ""));
       return true;
