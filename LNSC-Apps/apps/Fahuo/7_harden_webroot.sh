@@ -41,26 +41,35 @@ if [ -f "$APP/carriers.env" ]; then
     ok "carriers.env -> 600  ($(stat -c '%U:%G %a' "$APP/carriers.env"))"
 fi
 
-echo "===== 3) nginx 敏感文件拦截规则（幂等插入） ====="
-if grep -q 'fahuo-webroot-hardening' "$SITE"; then
-    echo "[skip] 保护规则已存在"
-else
-    # ⚠️ $SITE 是软链：必须 readlink -f 解引用后 -L 备份到 sites-available，
-    #    否则备份软链落进 sites-enabled/* 会重复加载同一 vhost
-    #    （conflicting server name 警告 + reload 期间旧 worker 短暂按旧配置应答）。
-    REAL=$(readlink -f "$SITE")
-    cp -aL "$REAL" "${REAL}.bak-$STAMP"
-    ok "已备份 $REAL -> ${REAL}.bak-$STAMP（真实文件）"
-    python3 - "$REAL" <<'PY'
+echo "===== 3) nginx 敏感文件拦截规则（幂等：先剥离旧加固块，再插入当前版本） ====="
+#   本脚本是规则文本的唯一来源：改规则只改这里，重跑即同步现网。
+# ⚠️ $SITE 是软链：必须 readlink -f 解引用后 -L 备份到 sites-available，
+#    否则备份软链落进 sites-enabled/* 会重复加载同一 vhost
+#    （conflicting server name 警告 + reload 期间旧 worker 短暂按旧配置应答）。
+REAL=$(readlink -f "$SITE")
+cp -aL "$REAL" "${REAL}.bak-$STAMP"
+ok "已备份 $REAL -> ${REAL}.bak-$STAMP（真实文件）"
+python3 - "$REAL" <<'PY'
 import sys
 p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
+start = "    # >>> fahuo-webroot-hardening"
+end = "    # <<< fahuo-webroot-hardening\n"
+if start in s:                      # 旧版本先整块剥离
+    i = s.index(start)
+    j = s.index(end) + len(end)
+    if s[j:j + 1] == "\n":
+        j += 1
+    s = s[:i] + s[j:]
+    print("[ok] 已剥离旧加固块，按当前版本重写")
 marker = "    location /apps/ {\n"
 block = '''    # >>> fahuo-webroot-hardening 2026-09-30
-    # 漏洞修复：此前 webroot 内源码/密钥/数据库/备份可被直接下载（实测 carriers.env 200 + 真实密钥）。
+    # 漏洞修复：此前 webroot 内源码/密钥/数据库/备份可被直接下载（实测 carriers.env 200 + 真实密钥，
+    # 以及 /apps/ctms/user_info.txt 扫码登录凭证、po-closing/.env、poclose.db 等）。
     # 只拦代码/密钥/数据类扩展名与敏感目录；前端实际抓取的 .json/.xlsx/.js/.css 不受影响
     # （shipphotos.json、stock.json、catalog.json、media.json、drawings.json、信息表.xlsx 仍可读）。
-    location ~* ^/apps/.*\\.(py|pyc|pyo|sh|env|trc|db(-wal|-shm)?|seq|log|md|bak|orig|swp)$ { return 404; }
+    # .csv 未拦：po-closing 可能把 po_list.csv / result.csv 当导出下载，需产品侧确认后再决定。
+    location ~* ^/apps/.*\\.(py|pyc|pyo|sh|env|trc|db(-wal|-shm)?|seq|log|md|txt|bak|orig|swp)$ { return 404; }
     location ~* ^/apps/[^/]+/(carriers|backup|install)/ { return 404; }
     # Node 后端同名文件（仅本地开发用；全仓库无任何前端 src/script 引用）——同样不可下载
     location ~* ^/apps/([^/]+/)?server\\.js$ { return 404; }
@@ -70,9 +79,8 @@ block = '''    # >>> fahuo-webroot-hardening 2026-09-30
 if marker not in s:
     sys.exit("锚点 `    location /apps/ {` 未找到，未修改配置")
 open(p, 'w', encoding='utf-8', newline='\n').write(s.replace(marker, block + marker, 1))
-print("[ok] 已插入保护规则")
+print("[ok] 已插入当前版本保护规则")
 PY
-fi
 
 echo "===== 4) 配置校验 + 生效 ====="
 if nginx -t; then
@@ -100,7 +108,7 @@ for p in /apps/fahuo/carriers.env /apps/fahuo/fahuo.db /apps/fahuo/fahuo.db-wal 
          /apps/fahuo/0_README.md /apps/fahuo/audit.log /apps/fahuo/backup/fahuo-20260930-0630.db \
          /apps/fahuo/carriers/_sb_pages.py /apps/fahuo/carriers/sf_express.py \
          /apps/po-closing/.env /apps/po-closing/poclose.db /apps/po-closing/server.py \
-         /apps/ctms/toolinventory-server.db /apps/ctms/server.js; do check 404 "$p"; done
+         /apps/ctms/toolinventory-server.db /apps/ctms/server.js /apps/ctms/user_info.txt; do check 404 "$p"; done
 for p in /apps/fahuo/ /apps/fahuo/pages/2-order.html /apps/fahuo/pages/2-order.js \
          /apps/fahuo/shared/style.css /apps/fahuo/shared/region.js /apps/fahuo/shared/lib/JsBarcode.all.min.js \
          /apps/fahuo/shared/lib/qrcode.min.js /apps/fahuo/shipphotos.json /apps.json \

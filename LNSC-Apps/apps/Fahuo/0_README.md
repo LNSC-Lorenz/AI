@@ -363,16 +363,18 @@ Fahuo/
 >   实测 `/apps/fahuo/carriers.env` → 200 **真实密钥**，`fahuo.db`、`backup/*.db`、`server.py`、`0_README.md`
 >   同样可下载；其他应用同缺陷（`/apps/po-closing/.env`、`poclose.db`、`/apps/ctms/user_info.txt`、
 >   `toolinventory-server.db`）。修复（`7_harden_webroot.sh`，幂等）：插入
->   `location ~* ^/apps/.*\.(py|pyc|pyo|sh|env|trc|db|seq|log|md|bak|orig|swp)$ → 404`、
+>   `location ~* ^/apps/.*\.(py|pyc|pyo|sh|env|trc|db|seq|log|md|txt|bak|orig|swp)$ → 404`、
 >   `^/apps/*/(carriers|backup|install)/ → 404`、`server.js → 404`；`carriers.env` 权限收紧 600。
 >   只拦代码/密钥/数据类扩展名，前端实际抓取的 `.js/.css/.json/.xlsx` 一律放行
 >   （`shipphotos.json`、`stock.json`、`catalog.json`、`media.json`、`drawings.json`、信息表.xlsx 均正常）。
+>   `.txt` 也拦是因为 `/apps/ctms/user_info.txt` 是扫码登录凭证（用户ID/姓名）可直接下载；
+>   `.csv` 暂未拦（`po-closing/po_list.csv`、`result.csv` 可能是导出下载入口）——需产品侧确认后再决定。
 > - **踩坑**：`cp -a` 备份软链会把「备份软链」也落进 `sites-enabled/` → nginx 重复加载同一 vhost
 >   （`conflicting server name` 警告；reload 期间旧 worker 会短暂按旧配置应答，易误判加固"失败"）。
 >   备份必须 `readlink -f` + `cp -aL` 写到 `sites-available/`。
 >   回滚：`cp -aL /etc/nginx/sites-available/lac.lechler.com.cn.bak-20260930-193513 \
 >   /etc/nginx/sites-available/lac.lechler.com.cn && systemctl reload nginx`。
-> - **验证**：`7_harden_webroot.sh` 自检 34/34 全绿（敏感 18 项 → 404、前端 15 项 → 200、接口 200）；
+> - **验证**：`7_harden_webroot.sh` 自检 35/35 全绿（敏感 19 项 → 404、前端 15 项 → 200、接口 200）；
 >   面单冒烟 8 项全绿（默认 1 页 76,952B、探针 2 页 153,510B、线上 JS MD5 与磁盘一致、服务 active）。
 
 
