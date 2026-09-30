@@ -1108,10 +1108,9 @@ function waybillList(o) {
   return o.waybill_no ? [o.waybill_no] : [];
 }
 
-/* 回签单号（顺丰纸质回单 type=3，下单存档 order_resp.sign_back_no）：不计件数，仅用于轨迹/回单信息展示。
-   2026-09-29 放弃打印链路追加（自查）：#557 实证 SF106 号云打印=1 页正向 POD 签收联——与主面单
-   同收件人、单号不同，追加出纸即用户指出的"两张面单同收件人不同单号"重复缺陷；速打官方两联=
-   主面单+反向回签单，反向联的云打印取得路径经 _sb_pages.py 逐页核验后再接入 */
+/* 回签单号（顺丰纸质回单 type=3，下单存档 order_resp.sign_back_no）：不计件数；打印链路经
+   optional_no 合并追加出纸（2026-09-30 用户指令终定）：两页=主面单+回单签收联——SF106 云打印=
+   官方"POD标快"签收联，随货走；客户签收后顺丰自动用同一回单号反向、运费到付返回（轨迹实锤） */
 function signBackNo(o) {
   try {
     return ((JSON.parse(o.order_resp || "{}").sign_back_no) || "").trim();
@@ -1242,17 +1241,14 @@ async function printOfficialOrHtml(o, direct) {
       const sb = signBackNo(o);
       let url = `${apiBase}/carrier/label?carrier=${encodeURIComponent(o.carrier)}` +
                 `&waybill_no=${encodeURIComponent(wbs.join(","))}`;
-      /* 2026-09-29 不再追加回单号（自查：SF106 云打印附加页=正向 POD 签收联，与主面单
-         同收件人不同单号=重复缺陷，见 signBackNo 注释）——打印=仅官方主面单；
-         官方反向回签单取得路径核验后按速打同款两联接入（服务端 with_optional=1 供探针） */
+      /* 回单签收联附加页（2026-09-30 用户指令终定）：回单号（SF106）下单即有，
+         传参即合并追加出纸；服务端取不到静默跳过，绝不阻塞主面单 */
+      if (sb) url += `&optional_no=${encodeURIComponent(sb)}`;
       url += "&raw=1";
       if (direct) await autoPrintPdf(url);
+      /* 2026-09-30 用户指令：移除标题"（打印=仅官方主面单；回单号…）"文案 */
       else await showLabelPdf(url, `${o.so || ("#" + o.id)} · ${o.carrier} · ${o.waybill_no}` +
-                  (piecesCount(o) > 1 ? `（共${piecesCount(o)}件）` : "") +
-                  /* 如实标注（2026-09-29 自查）：原"含 POD 签收联"辩护文案作废——该附加页与主面单
-                     同收件人、单号不同（重复缺陷），已放弃追加；打印=仅官方主面单；官方反向
-                     回签单取得路径核验后按速打同款两联接入；回单号每次重下都会变 */
-                  (sb ? `（打印=仅官方主面单；回单号 ${sb}，客户签收后顺丰自动反向到付取回回单）` : ""));
+                  (piecesCount(o) > 1 ? `（共${piecesCount(o)}件）` : ""));
       return true;
     } catch (e) {
       lastErr = e.message;
