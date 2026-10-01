@@ -154,33 +154,59 @@
             </div>
           </div>
 
-          <!-- 专车 / 自提模板（厂内送货单：无快递面单，ZC/ZT 编号） -->
-          <div class="bill-tpl" id="billOT" hidden>
-            <div class="pw-head"><span class="f-ot-title">专车直送单</span><span class="f-product">整车直送</span></div>
-            <div class="pw-no">
-              <div class="pw-barcode"></div>
-              <div class="pw-no-text f-waybill">ZC 0000 0000 0000</div>
+          <!-- 专车 / 自提模板（厂内送货单 100×150mm；2026-09-21 用户指定版式：
+               头部公司+车型 / 条码+专车号+发货日期 / 大号编号 / 时效+目的地 / 收方+二维码 /
+               寄方 / 托寄物+DN/SO+件数数量+备注 / 车牌司机手写栏） -->
+          <div class="bill-tpl ot2" id="billOT" hidden>
+            <div class="ot2-head">
+              <span class="ot2-co">莱克勒喷嘴系统（常州）有限公司</span>
+              <span class="ot2-tag f-ot-title">专车</span>
             </div>
-            <div class="pw-route">
-              <span class="big f-route">---</span>
-              <span class="small">常州金坛 直发<br>→ <span class="f-dest">--</span></span>
+            <div class="ot2-bar">
+              <div class="ot2-bar-l">
+                <svg class="ot-barcode"></svg>
+                <div class="ot2-bar-no f-waybill">ZC 2026 0921 01</div>   <!-- 编号格式：ZC/ZT+年月日+2位流水（2026-09-21） -->
+              </div>
+              <div class="ot2-bar-r">
+                <div><span class="f-ot-no-type">专车号</span>：<span class="f-waybill">ZC 2026 0921 01</span></div>
+                <div>发货日期：<span class="f-ot-ship">----------</span></div>
+              </div>
             </div>
-            <div class="pw-block">
-              <div class="lbl">收货方 / 提货人</div>
-              <div class="addr"><span class="f-name">---</span>&nbsp;&nbsp;<span class="f-phone">-----------</span></div>
-              <div class="f-addr">请选择右侧 DN 加载收件地址</div>
+            <div class="ot2-big f-waybill">ZC 2026 0921 01</div>
+            <div class="ot2-mid">
+              <span class="ot2-time">要求时效：<b class="f-product">整车直送</b></span>
+              <span class="ot2-dest f-ot-dest">--</span>
             </div>
-            <div class="pw-block">
-              <div class="lbl">发货方</div>
-              <div class="addr">莱克勒喷嘴系统（常州）有限公司（范蓓蓓 15190535163）</div>
-              <div>江苏常州金坛 德城路99号（邮编 213200）</div>
+            <div class="ot2-recv">
+              <div class="ot2-recv-l">
+                <div class="ot2-rline"><b>收</b>&nbsp;<b class="f-name">---</b></div>
+                <div class="f-phone">-----------</div>
+                <div class="f-addr">--</div>
+                <div>目的地公司：<b class="f-ot-company">--</b></div>
+                <div>运费：<span class="f-pay">寄付月结</span></div>
+              </div>
+              <div class="ot2-qrbox">
+                <div class="ot-qr"></div>
+                <span>扫码追踪</span>
+              </div>
             </div>
-            <div class="pw-row"><span>托寄物：<span class="f-cargo">--</span></span><span>件数：1</span></div>
-            <div class="pw-row"><span>付款：<span class="f-pay">寄付月结</span></span><span>保价：<span class="f-insure">未保价</span></span></div>
-            <div class="pw-row"><span>DN：<b class="f-dn">--------</b></span></div>
-            <div class="pw-foot">
-              <div class="pw-qr"></div>
-              <div class="pw-sign">签收人：____________<br><span class="f-date">----年--月--日</span></div>
+            <div class="ot2-send">
+              <span class="ot2-badge">寄</span>
+              <div class="ot2-send-t">
+                <!-- 寄件 3 行：物流部 / 公司 / 地址（2026-09-21 用户规则） -->
+                <div><b class="f-ot-sender">物流部</b>&nbsp;<span class="f-ot-stel">0519 6822-8088</span></div>
+                <div>莱克勒喷嘴系统（常州）有限公司</div>
+                <div>江苏省常州市金坛区德城路99号</div>
+              </div>
+            </div>
+            <div class="ot2-rows">
+              <div>托寄物：<span class="f-cargo">--</span></div>
+              <div>DN：<b class="f-dn">--------</b>　SO：<b class="f-ot-so"></b></div>
+              <div>件数 / 数量：<span class="f-ot-parcels">1</span>件 / <span class="f-ot-qty">1</span>pcs</div>
+              <div>备注：<span class="f-ot-note"></span></div>
+            </div>
+            <div class="ot2-foot">
+              <span>车牌号：__________</span><span>司机姓名：______</span><span>司机电话：__________</span>
             </div>
           </div>
 
@@ -231,6 +257,13 @@
                 <label class="grow">托寄物
                   <input id="cfgCargo" type="text" value="喷嘴" placeholder="默认：喷嘴">
                 </label>
+                <!-- 数量挪到托寄物后面（2026-09-18 用户规则）；只留输入框，空=1；
+                     >1 时随托寄物打印到官方面单"喷嘴 300pcs"样式 -->
+                <span class="qty-wrap">
+                  <label>数量</label>
+                  <input type="number" id="cfgQtyN" min="1" max="99999" placeholder="1"
+                         title="数量：直接输入（默认 1）">
+                </span>
                 <!-- 重量/体积选项移除（2026-09-17 用户规则；德邦 totalWeight/totalVolume 用后端默认值） -->
               </div>
               <!-- 回签单（独立一行；2026-09-16 用户规则：只留纸质回单——德邦 backSignBill=1/R1；
@@ -238,9 +271,9 @@
               <div class="pw-r2">
                 <label>回签单</label>
                 <label><input type="checkbox" id="cfgReceiptPaper" class="pool-check" checked> 纸质回单</label>
-                <!-- 拍照回传（2026-09-17 用户规则）：顺丰增值服务，仅选顺丰时可勾选，其他承运商禁用；
-                     可与纸质回单同时勾选（2026-09-18 用户规则）：都勾 → isSignBack=2（含纸质回单流程） -->
-                <label><input type="checkbox" id="cfgReceiptPhoto" class="pool-check" disabled> 拍照回传</label>
+                <!-- 拍照回传（2026-09-17 用户规则）：顺丰增值服务 IN91（serviceList value=13 签回单拍照），仅选顺丰时可勾选；
+                     2026-09-24 官方《增值服务产品表》终定 + _sf_in91_probe 真单验证：IN91 通道网关接受 -->
+                <label title="拍照回传：顺丰增值服务 IN91（下单 serviceList 下发，value=13 签回单拍照；可与纸质回单同勾）"><input type="checkbox" id="cfgReceiptPhoto" class="pool-check"> 拍照回传</label>
                 <!-- 件数（2026-09-16 用户版式）：1-6 方框单选（选中实心白字），≥7 数字框（箭头增减/手输） -->
                 <span class="parcels-wrap">
                   <label>件数</label>
@@ -260,24 +293,6 @@
                     <button type="button" class="btn pc-step-btn" data-d="1" title="加 1 件">▲</button>
                   </span>
                 </span>
-                <!-- 数量（2026-09-17 用户规则：替换重量/体积，形式与件数一致；
-                     >1 时随托寄物打印到官方面单"喷嘴 300pcs"样式；
-                     不要 ▼▲ 步进箭头；聚焦即填充 7 并实心白字（全选高亮，打字直接替换）） -->
-                <span class="qty-wrap">
-                  <label>数量</label>
-                  <span class="parcels-btns">
-                    <button type="button" class="btn qc-num active" data-v="1">1</button>
-                    <button type="button" class="btn qc-num" data-v="2">2</button>
-                    <button type="button" class="btn qc-num" data-v="3">3</button>
-                    <button type="button" class="btn qc-num" data-v="4">4</button>
-                    <button type="button" class="btn qc-num" data-v="5">5</button>
-                    <button type="button" class="btn qc-num" data-v="6">6</button>
-                  </span>
-                  <span class="pc-step">
-                    <input type="number" id="cfgQtyN" min="7" max="99999" placeholder="≥7"
-                           title="≥7：直接手动输入">
-                  </span>
-                </span>
               </div>
               <!-- 选项只留常用项（对齐官方下单必填：产品/付款/保价/托寄物/件数/数量）；
                    签单返还/等通知派送/定时派送等揽收时核实的选项不下发（用户规则 2026-09-15） -->
@@ -291,18 +306,19 @@
           <div class="header-wrap">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
+                <col class="col2-dn"><col class="col2-so"><col class="col2-name"><col class="col2-car">
                 <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <thead>
-                <tr><th>DN</th><th>SO</th><th>优先级</th><th>联系人</th><th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>打印</th><th>查看</th></tr>
+                <!-- 优先级列移除（2026-09-20 用户规则：分类只留在录单页；紧急行整行加粗红字） -->
+                <tr><th>DN</th><th>SO</th><th>联系人</th><th>承运商</th><th>单号</th><th>下单状态</th><th>路由状态</th><th>打印</th><th>查看</th></tr>
               </thead>
             </table>
           </div>
           <div class="table-section">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-prio"><col class="col2-name"><col class="col2-car">
+                <col class="col2-dn"><col class="col2-so"><col class="col2-name"><col class="col2-car">
                 <col class="col2-sf"><col class="col2-st"><col class="col2-st"><col class="col2-pr"><col class="col2-view">
               </colgroup>
               <tbody id="printBody"></tbody>
@@ -405,6 +421,9 @@
 <script src="../shared/lib/jszip.min.js"></script>
 <script src="../shared/lib/docx-preview.min.js"></script>
 <script src="../shared/lib/xlsx.full.min.js"></script>
+<!-- 专车/自提面单：CODE128 条码 + 二维码（2026-09-21 用户指定版式） -->
+<script src="../shared/lib/JsBarcode.all.min.js"></script>
+<script src="../shared/lib/qrcode.min.js"></script>
 <script src="2-order.js"></script>
 </body>
 </html>

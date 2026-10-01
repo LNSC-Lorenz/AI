@@ -81,15 +81,16 @@
               <colgroup>
                 <col class="colS-no"><col class="colS-so"><col class="colS-cust"><col class="colS-name">
                 <col class="colS-date"><col class="colS-st"><col class="colS-sum">
-                <col class="colS-prio"><col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
+                <col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
               </colgroup>
               <thead>
                 <tr class="sap-grp">
                   <th colspan="7">SAP 交货单信息</th>
-                  <th colspan="5">录单 / 下单信息</th>
+                  <th colspan="4">录单 / 下单信息</th>
                 </tr>
+                <!-- 优先级列移除（2026-09-20 用户规则：分类只留在录单页；紧急行整行加粗红字） -->
                 <tr><th>编号</th><th>SO</th><th>客户代码</th><th>客户名称</th><th>过账日期</th>
-                    <th>状态</th><th>总计</th><th>优先级</th><th>类型</th><th>承运商</th><th>运单号</th><th>快递状态</th></tr>
+                    <th>状态</th><th>总计</th><th>类型</th><th>承运商</th><th>运单号</th><th>快递状态</th></tr>
               </thead>
             </table>
           </div>
@@ -98,7 +99,7 @@
               <colgroup>
                 <col class="colS-no"><col class="colS-so"><col class="colS-cust"><col class="colS-name">
                 <col class="colS-date"><col class="colS-st"><col class="colS-sum">
-                <col class="colS-prio"><col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
+                <col class="colS-ot"><col class="colS-carrier"><col class="colS-waybill"><col class="colS-exp">
               </colgroup>
               <tbody id="sapBody"></tbody>
             </table>

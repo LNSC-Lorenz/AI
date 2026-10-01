@@ -137,14 +137,13 @@ if (typeof document !== "undefined") {
   const orderBody   = document.getElementById("orderBody");
 
   let parsed = { name: "", phone: "" }; /* 最近一次识别出的姓名/电话 */
-  let priority = "一般";                 /* 优先级：紧急/重要/一般，默认一般 */
+  let priority = "一般";                 /* 优先级：紧急/一般 两态（2026-09-20 单按钮开关），默认一般 */
 
-  /* 优先级按钮单选 */
+  /* 优先级：单个「紧急」开关（2026-09-20 用户规则）：按下=紧急，弹起=一般 */
   document.querySelectorAll(".prio").forEach(b => {
     b.addEventListener("click", () => {
-      document.querySelectorAll(".prio").forEach(x => x.classList.remove("active"));
-      b.classList.add("active");
-      priority = b.dataset.p;
+      b.classList.toggle("active");
+      priority = b.classList.contains("active") ? "紧急" : "一般";
     });
   });
 
@@ -291,11 +290,9 @@ if (typeof document !== "undefined") {
 
   btnUpload.addEventListener("click", () => {
     if (orderType === "发货单") {
-      const dn = soInput.value.trim();
-      if (!dn) { alert("请先填写 DN，上传文件将存到 Upload/<DN>/ 目录"); soInput.focus(); return; }
-      if (!/^\d{10}$/.test(dn)) {   /* 防半截 DN 上传归错目录（2026-09-15 真实事故：位数不足先传，补全后查无文件） */
-        alert("DN 需补全为 10 位数字后再上传（防止文件归到错误目录）"); soInput.focus(); return;
-      }
+      const dnsUp = soInput.value.match(/82600\d{5}/g) || [];
+      if (!dnsUp.length) { alert("请先填写 DN，上传文件将存到 Upload/<DN>/ 目录"); soInput.focus(); return; }
+      /* 防半截 DN 上传归错目录（2026-09-15 真实事故）；多 DN 时文件归到首个 DN 目录（2026-09-20） */
     }
     upFileInput.click();
   });
@@ -304,7 +301,7 @@ if (typeof document !== "undefined") {
     const files = [...upFileInput.files];
     upFileInput.value = "";                    /* 允许再次选择同一批文件 */
     if (!files.length) { upFileName.textContent = ""; return; }
-    const dn = soInput.value.trim();
+    const dn = (soInput.value.match(/82600\d{5}/g) || [soInput.value.trim()])[0];   /* 多 DN 归首个（2026-09-20） */
     if (dn && apiOnline) {
       let ok = 0; const fail = [];
       for (const f of files) {
@@ -382,7 +379,9 @@ if (typeof document !== "undefined") {
 
   /* ----- DN：仅允许数字，最多 10 位（DN=10 位数字，用户规则 2026-09-15） ----- */
   soInput.addEventListener("input", () => {
-    soInput.value = soInput.value.replace(/\D/g, "").slice(0, 10);
+    /* 多 DN 合并发货（2026-09-20 用户规则）：取消 10 位上限——
+       允许数字+分隔符（空格/逗号/顿号/分号/斜杠），保存时按 82600+5位 逐个拆分 */
+    soInput.value = soInput.value.replace(/[^\d\s,，、;；/]/g, "").slice(0, 200);
   });
 
   /* ----- 识别（文本） ----- */
@@ -572,13 +571,16 @@ if (typeof document !== "undefined") {
   const soHtml = so => preHtml(so, "32600");
   function fillRowCells(tr, v, o) {
     tr.innerHTML = "";
+    tr.classList.toggle("row-urgent", !!o && o.priority === "紧急");   /* 紧急行加粗红字（2026-09-20 用户规则） */
     v.forEach((x, i) => {
       const td = document.createElement("td");
-      if (i === 2 && o) {                            /* 合并列：优先级/类型 两行（紧急加粗，同清单） */
-        const d1 = document.createElement("div");
-        d1.textContent = o.priority || "一般";
-        if (d1.textContent === "紧急") d1.classList.add("prio-hot");
-        td.appendChild(d1);
+      if (i === 2 && o) {                            /* 合并列：紧急标记/类型（2026-09-20 用户规则："一般"不显示，仅紧急标红粗） */
+        if (o.priority === "紧急") {
+          const d1 = document.createElement("div");
+          d1.textContent = "紧急";
+          d1.classList.add("prio-hot");
+          td.appendChild(d1);
+        }
         const d2 = document.createElement("div"); d2.textContent = o.order_type || "发货单";
         td.appendChild(d2);
       }
@@ -650,9 +652,10 @@ if (typeof document !== "undefined") {
     if (o.ship_date) dateInput.value = o.ship_date;
     document.querySelectorAll(".carrier").forEach(b =>
       b.classList.toggle("active", !!o.carrier && b.dataset.carrier === o.carrier));
-    priority = o.priority || "一般";
+    /* 单按钮开关：仅紧急/一般两态；旧数据"重要"归一为一般（2026-09-20 分类移除） */
+    priority = o.priority === "紧急" ? "紧急" : "一般";
     document.querySelectorAll(".prio").forEach(x =>
-      x.classList.toggle("active", x.dataset.p === priority));
+      x.classList.toggle("active", priority === "紧急"));
     setType(o.order_type || "发货单");
   }
 
@@ -732,13 +735,12 @@ if (typeof document !== "undefined") {
     soInput.value = ""; soNoInput.value = "";
     poInput.value = ""; buyerInput.value = ""; empNameInput.value = ""; empPhoneInput.value = "";
     upFileInput.value = ""; setUploadState("");
-    poolCheck.checked = false;
+    poolCheck.checked = true;   /* 默认勾选（2026-09-24）：保存/重置后仍保持入池勾选 */
     selProvince.value = ""; fillCity("", ""); fillDistrict("", "", "");
     document.querySelectorAll(".carrier").forEach(b => b.classList.remove("active"));
-    /* 优先级复位为「一般」 */
+    /* 优先级复位（单按钮开关：弹起=一般；2026-09-20） */
     priority = "一般";
-    document.querySelectorAll(".prio").forEach(x =>
-      x.classList.toggle("active", x.dataset.p === "一般"));
+    document.querySelectorAll(".prio").forEach(x => x.classList.remove("active"));
     /* 下单类型复位为「发货单」（含右盒内容切换） */
     setType("发货单");
     parsed = { name: "", phone: "" };
@@ -756,12 +758,18 @@ if (typeof document !== "undefined") {
     if (!addr) { alert("地址为空：请先粘贴地址并点击「识别」"); return; }
     if (!phoneInput.value.trim()) { alert("联系方式为必填项"); phoneInput.focus(); return; }
     const dn = soInput.value.trim(), soNo = soNoInput.value.trim();
-    if (dn && !/^\d{10}$/.test(dn)) {
-      alert("DN 必须为 10 位数字"); soInput.focus(); return;
+    /* 多 DN 合并发货（2026-09-20 用户规则）：按 82600 开头+后 5 位（共 10 位）逐个识别 DN，
+       生成多行、下单时同一运单；行内修改仍限单 DN */
+    const dns = dn.match(/82600\d{5}/g) || [];
+    if (dn && !dns.length) {
+      alert("未识别到 DN：需为 82600 开头的 10 位数字（多个可连输或逗号分隔）"); soInput.focus(); return;
+    }
+    if (editingRow && dns.length > 1) {
+      alert("行内修改仅支持单个 DN；多 DN 合并发货请退出修改后重新录入"); soInput.focus(); return;
     }
     /* 发货单：DN 必填、SO 选填（用户规则 2026-09-15）；外协单：采购员必填；其他（员工快递）：员工姓名+电话必填 */
     if (orderType === "发货单") {
-      if (!dn) { alert("发货单必须填写 DN"); soInput.focus(); return; }
+      if (!dns.length) { alert("发货单必须填写 DN"); soInput.focus(); return; }
     }
     if (orderType === "外协单") {
       if (!poInput.value.trim()) { alert("外协单必须填写 PO"); poInput.focus(); return; }
@@ -798,7 +806,7 @@ if (typeof document !== "undefined") {
 
     const activeCarrier = document.querySelector(".carrier.active");
     const payload = {
-      so: orderType === "发货单" ? dn : "",        /* 外协单/其他 没有 DN 和 SO 号 */
+      so: orderType === "发货单" ? (dns[0] || "") : "",   /* 外协单/其他 没有 DN 和 SO 号；多 DN 时首号（创建循环逐条覆盖） */
       so_no: orderType === "发货单" ? soNo : "",
       order_type: orderType,
       province: prov, city: city, district: dist, street: street, company: company,
@@ -834,19 +842,32 @@ if (typeof document !== "undefined") {
       return;
     }
 
+    /* 多 DN（2026-09-20 用户规则）：逐条入库并打同一 merge_group ——
+       下单页同组只下一次承运商单、组内各行共享同一运单号 */
+    const mergeGroup = dns.length > 1 ? ("MG" + Date.now()) : "";
+    const soList = orderType === "发货单" ? dns : [""];
     if (apiOnline) {
       try {
-        const saved = await api("/orders", { method: "POST", body: JSON.stringify(payload) });
-        addRow(rowValues(saved), saved);
+        for (const one of soList) {
+          const saved = await api("/orders", { method: "POST",
+            body: JSON.stringify({ ...payload, so: one, merge_group: one ? mergeGroup : "" }) });
+          addRow(rowValues(saved), saved);
+        }
         refreshStats();
       } catch (e) {
         apiOnline = false;
         alert("服务器连接失败，本单仅本地暂存，刷新后丢失！");
-        addRow(rowValues({ ...payload, address: addr }), { ...payload, address: addr });
+        for (const one of soList) {
+          const local = { ...payload, so: one, merge_group: one ? mergeGroup : "", address: addr };
+          addRow(rowValues(local), local);
+        }
         bumpLocalStat();
       }
     } else {
-      addRow(rowValues({ ...payload, address: addr }), { ...payload, address: addr });
+      for (const one of soList) {
+        const local = { ...payload, so: one, merge_group: one ? mergeGroup : "", address: addr };
+        addRow(rowValues(local), local);
+      }
       bumpLocalStat();
     }
     resetForm();

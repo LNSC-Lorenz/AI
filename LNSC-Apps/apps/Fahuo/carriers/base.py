@@ -17,11 +17,14 @@ class CarrierError(Exception):
 
 
 def get_cfg(prefix):
-    """读取某承运商配置（前缀 SF/DB/KY，均为生产环境）；缺省时各值为空串"""
+    """读取某承运商配置（前缀 SF/DB/KY，均为生产环境）；缺省时各值为空串。
+    ⚠️ 值一律 strip：carriers.env 为 CRLF 时经 bash `source` 注入会把 \r 带进密钥，
+    partnerID/签名被污染 → 顺丰网关报 A1004"无对应服务权限"（2026-09-24 定位；
+    systemd EnvironmentFile 注入不受影响，此防御专治 CLI/探针场景）"""
     return {
-        "app_key": os.environ.get(prefix + "_APP_KEY", ""),
-        "app_secret": os.environ.get(prefix + "_APP_SECRET", ""),
-        "cust_code": os.environ.get(prefix + "_CUST_CODE", ""),
+        "app_key": os.environ.get(prefix + "_APP_KEY", "").strip(),
+        "app_secret": os.environ.get(prefix + "_APP_SECRET", "").strip(),
+        "cust_code": os.environ.get(prefix + "_CUST_CODE", "").strip(),
     }
 
 

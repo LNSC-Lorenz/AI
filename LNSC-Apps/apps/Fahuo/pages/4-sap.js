@@ -60,8 +60,9 @@ function render(list) {
   body.innerHTML = "";
   list.forEach(r => {
     const tr = document.createElement("tr");
+    if (r.prio === "紧急") tr.classList.add("row-urgent");   /* 紧急行加粗红字（2026-09-20 用户规则；优先级列已移除） */
     [r.dn, r.soNo, r.cust, r.custName, r.date,
-     r.open ? "未清" : "已清", r.total, r.prio, r.otype, r.carrier, r.waybill, r.exp
+     r.open ? "未清" : "已清", r.total, r.otype, r.carrier, r.waybill, r.exp
     ].forEach((v, i) => {
       const td = document.createElement("td");
       if (i === 0) td.innerHTML = dnHtml(v);        /* DN 列：82600 前缀上标 */
@@ -69,7 +70,6 @@ function render(list) {
       else td.textContent = v;
       if (i === 6) td.className = "num";
       if (i === 5 && r.open) td.className = "sap-open-td";
-      if (v === "紧急") td.classList.add("prio-hot"); /* 紧急加粗 */
       tr.appendChild(td);
     });
     body.appendChild(tr);

@@ -49,12 +49,10 @@
       </div>
     </header>
     <div class="viz">
-      <!-- 左 1/3：上=优先级占比 / 中=在途完成度 / 下=专车情况（点击切换右侧明细） -->
+      <!-- 左 1/3：上=在途完成度 / 下=专车情况（点击切换右侧明细）；
+           优先级占比面板移除（2026-09-20 用户规则：优先级分类只留在录单页，紧急行红粗） -->
       <div class="viz-left">
-        <section class="viz-panel sel" data-viz="prio">
-          <div class="vp-body" id="vizDonut"></div>
-        </section>
-        <section class="viz-panel" data-viz="route">
+        <section class="viz-panel sel" data-viz="route">
           <div class="vp-body" id="vizRings"></div>
         </section>
         <section class="viz-panel" data-viz="truck">

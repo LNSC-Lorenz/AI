@@ -693,8 +693,9 @@ html { scrollbar-gutter: stable; }
   height: 100%;
   min-height: 0;
 }
-/* 专车/自提：预览也按 76×130 比例（76:130 锁定、面板内居中，不再满版拉伸；2026-09-16 用户规则） */
-#pwBill.ot76130 { flex: none; width: 100%; aspect-ratio: 76 / 130; height: auto; max-height: 100%; align-self: center; }
+/* 专车/自提：预览与打印同比例 100:150（2026-09-21 用户反馈：76:130 预览 ≠ 100×150 打印致头重脚轻+
+   打印裁底；统一比例后所见即所得，287×430px = 76×114mm） */
+#pwBill.ot76130 { flex: none; width: 100%; aspect-ratio: 100 / 150; height: auto; max-height: 100%; align-self: center; }
 .bill-tpl[hidden] { display: none; }
 .pw-head {
   display: flex;
@@ -846,7 +847,7 @@ html { scrollbar-gutter: stable; }
   cursor: pointer;
 }
 .dn-ft.active { background: var(--black); color: var(--white); }
-/* 打单列表「查看」列：格式图标（icon/file-type-*.svg；PDF=预览 / XLS=本地 Excel 打开） */
+/* 打单列表「查看」列：格式图标（icon/file-type-*.svg；PDF/图片=预览 / XLS=本地 Excel 打开） */
 .col2-view { width: 110px; }
 .f-ico {
   display: inline-block;
@@ -859,7 +860,7 @@ html { scrollbar-gutter: stable; }
 .f-ico img { display: block; width: 24px; height: 24px; }
 .f-ico:hover img { opacity: .55; }  /* 全透明，hover 仅降透明度 */
 
-/* 文件预览弹窗（PDF iframe / Excel 表格 / Word 渲染） */
+/* 文件预览弹窗（PDF iframe / Excel 表格 / Word 渲染 / 图片直显） */
 .pv-mask {
   position: fixed;
   inset: 0;
@@ -895,6 +896,8 @@ html { scrollbar-gutter: stable; }
 .pv-frame { width: 100%; height: 100%; border: none; }
 .pv-doc table { border-collapse: collapse; font-size: 13px; }
 .pv-doc td, .pv-doc th { border: 1px solid var(--line-inner); padding: 3px 8px; }
+/* 图片预览（PNG/JPG 等）：等比缩放居中，不超出弹窗可视高度（82vh 弹窗 - 头部/内边距） */
+.pv-img { display: block; margin: 0 auto; max-width: 100%; max-height: calc(82vh - 100px); object-fit: contain; }
 .pv-err { padding: 20px; font-size: 14px; color: var(--gray); }
 /* 打印弹窗内容：只留预览正文（Excel/Word） */
 @media print {
@@ -1084,6 +1087,11 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
    HTML 模板（130×230 设计稿，仅跨越/专车/自提兜底）按 0.565 等比适配（宽 73.45mm ≤ 76mm）并水平居中 */
 @media print {
   @page { size: 76mm 130mm; margin: 0; }
+  /* 专车/自提 10×15cm 命名页（2026-09-21）：单张=JS printBillPage() 给 <html> 加 .otpage；
+     批量=qp:has(.qp-bill.ot76130) 逐页命名。
+     ⚠️ 无命名页时 OT 内容(≈95×142.5mm)超出 76×130 默认页 → 右/下被裁+乱分页（"打印是乱的"根因之一） */
+  @page ot1015 { size: 100mm 150mm; margin: 0; }
+  html.otpage, html.otpage body { page: ot1015; }
   body { height: 0; overflow: hidden; }   /* 隐藏内容不占版面：防多余空白页（A4 下也不跨页） */
   body * { visibility: hidden; }
   .pw-bill, .pw-bill * { visibility: visible; }
@@ -1110,11 +1118,15 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
     page-break-after: always;         /* 每单一页 */
   }
   .print-queue .qp:last-child { page-break-after: auto; }
-  /* 专车/自提 厂内送货单：原生 76×130 出纸 ×93% 四边居中（2026-09-17 用户规则：
-     左右各让 ~2.66mm、上下各让 ~4.55mm 安全边，防热敏机边缘不可打印区裁切） */
-  #pwBill.ot76130 { left: 1.66mm; top: 4.55mm; width: 76mm; height: 130mm; transform: scale(0.93); transform-origin: top left; padding: 3mm; }
-  .print-queue .qp:has(.qp-bill.ot76130) { width: 76mm; }
-  .print-queue .qp-bill.ot76130 { left: 1.66mm; top: 4.55mm; width: 76mm; height: 130mm; transform: scale(0.93); transform-origin: top left; padding: 3mm; }
+  /* 专车/自提 厂内送货单：100×150mm 命名页 ot1015；布局按 76mm 宽 + 屏幕同款 padding 10px 12px 渲染
+     （=预览 263px 内容宽逐像素一致），scale 1.25 放大上纸，足迹 ≈95×142.5mm 居中。
+     ⚠️ 必须显式 padding: 10px 12px 覆盖基础 .pw-bill/.qp-bill 的 4mm——否则内容被挤窄、
+     大号编号 nowrap 右溢出被裁（2026-09-21 "打印乱的"根因之二）；尺寸只许用 scale 调整 */
+  #pwBill.ot76130 { left: 2.5mm; top: 3.5mm; width: 76mm; height: 114mm; padding: 10px 12px;
+    transform: scale(1.25); transform-origin: top left; }
+  .print-queue .qp:has(.qp-bill.ot76130) { page: ot1015; width: 100mm; height: 150mm; }
+  .print-queue .qp-bill.ot76130 { left: 2.5mm; top: 3.5mm; width: 76mm; height: 114mm; padding: 10px 12px;
+    transform: scale(1.25); transform-origin: top left; }
   .print-queue .qp-bill {
     position: absolute;
     left: 0; top: 0;
@@ -1222,6 +1234,41 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .lb-nav { border: none; border-radius: 8px; background: rgba(255,255,255,.15); color: #fff; font-size: 15px; padding: 10px 12px; cursor: pointer; white-space: nowrap; }
 .lb-nav:hover { background: rgba(255,255,255,.3); }
 .lb-count { position: absolute; top: 18px; left: 20px; color: #fff; font-size: 14px; opacity: .8; }
+/* ===== 专车/自提面单（2026-09-21 用户指定版式：条码+二维码+手写栏；
+   ⚠️ 颜色全部用主题变量 var(--black)/var(--gray)，不得硬编码 #000——
+   「蓝色模式」下 --black=#1D459F，其它 3 家面单随之变蓝，OT 硬编码黑会显得"不一致"（2026-09-21 用户规则）；
+   条码与各家一致保持纯黑（.pw-barcode 渐变同样硬编码 #000）。预览 76:130，仅打印调整为 100×150mm 纸 ===== */
+#billOT.ot2 { font-size: 13px; line-height: 1.3; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+/* ⚠️ ID 级 display:flex 会压过 hidden 属性的 UA 默认 display:none（曾致 OT 面单常驻叠在其它 3 家面单上）——显式补回 */
+#billOT.ot2[hidden] { display: none; }
+#billOT .ot2-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--black); padding: 2px 5px; }
+#billOT .ot2-co { font-weight: 800; font-size: 14px; padding-top: 3px; }
+#billOT .ot2-tag { font-size: 34px; font-weight: 900; line-height: 1; }
+#billOT .ot2-bar { display: flex; border-bottom: 1px solid var(--black); padding: 3px 5px; gap: 8px; }
+#billOT .ot2-bar-l { flex: 1; min-width: 0; }
+#billOT .ot-barcode { width: 100%; height: 38px; display: block; }
+#billOT .ot2-bar-no { text-align: center; font-size: 12px; letter-spacing: 2px; margin-top: 1px; }
+#billOT .ot2-bar-r { flex: none; font-size: 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px; white-space: nowrap; }
+#billOT .ot2-big { font-size: 26px; font-weight: 900; letter-spacing: 0; padding: 3px 5px; border-bottom: 1px solid var(--black); white-space: nowrap; }
+#billOT .ot2-mid { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--black); padding: 3px 5px; }
+#billOT .ot2-time { font-size: 13px; }
+#billOT .ot2-time b { font-size: 17px; }
+#billOT .ot2-dest { font-size: 26px; font-weight: 900; }
+/* 收方区弹性填充（与明细区共同吸收多余高度，防"头重脚轻"；2026-09-21 用户反馈） */
+#billOT .ot2-recv { display: flex; border-bottom: 1px solid var(--black); padding: 3px 5px; gap: 6px; flex: 1; min-height: 0; align-items: center; }
+#billOT .ot2-recv-l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#billOT .ot2-rline b { font-size: 17px; }
+#billOT .f-ot-sender { font-size: 14px; }
+#billOT .ot2-qrbox { flex: none; width: 70px; text-align: center; font-size: 9px; color: var(--gray); }
+#billOT .ot-qr { width: 64px; height: 64px; margin: 0 auto; }
+#billOT .ot-qr svg { width: 64px; height: 64px; display: block; }
+#billOT .ot2-send { display: flex; gap: 6px; border-bottom: 1px solid var(--black); padding: 3px 5px; align-items: flex-start; }
+#billOT .ot2-badge { background: var(--black); color: var(--white); font-weight: 800; padding: 2px 5px; border-radius: 3px; flex: none; }
+#billOT .ot2-send-t { flex: 1; min-width: 0; font-size: 12px; }
+/* 明细区：溢出宁可裁自己（备注行），绝不可顶掉底部手写栏（2026-09-21 字体放大后防溢出） */
+#billOT .ot2-rows { padding: 3px 5px; display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--black); flex: 1; min-height: 0; overflow: hidden; }
+#billOT .ot2-foot { display: flex; justify-content: space-between; padding: 3px 5px; font-size: 12px; flex: none; }
+
 /* 清单最新路由：单号格内第二行（与号码同一高度块）；宽度 capped 到备注列右缘，
    超出缓慢跑马灯（JS 复制文本无缝循环，40px/s；2026-09-16 用户版式） */
 .rt-line { display: inline-block; font-size: 13px; font-weight: 400; color: var(--black); white-space: nowrap; overflow: hidden; vertical-align: bottom; }  /* 2026-09-17 用户规则：路由信息不加粗 */
@@ -1693,7 +1740,11 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .prio-btns { display: flex; gap: 8px; }
 .prio { min-width: 72px; min-height: 36px; padding: 6px 12px; }
 .prio.active { background: var(--black); color: var(--white); }
-.prio-hot { font-weight: 800; }  /* 列表中「紧急」加粗 */
+.prio-hot { font-weight: 800; color: #d40000; }  /* 列表中「紧急」加粗红字（2026-09-20 用户规则加红） */
+/* 紧急行：所有列表整行加粗红字（2026-09-20 用户规则）；链接/路由行等子元素一并继承 */
+tr.row-urgent td, .vd-path.row-urgent { color: #d40000; font-weight: 700; }
+tr.row-urgent .wb-link, tr.row-urgent .rt-line, tr.row-urgent .dn-pre,
+tr.row-urgent b, .vd-path.row-urgent b, .vd-path.row-urgent .dn-pre { color: #d40000; }
 /* 录单列表：行可选中（点击回填收件信息修改；仅录单页 #orderBody） */
 #orderBody tr { cursor: pointer; }
 #orderBody tr:hover td { background: #f7f7f7; }
@@ -1747,7 +1798,7 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
   grid-template-columns: 1fr 3fr;  /* 左 1/4 : 右 3/4 */
   gap: 20px;
 }
-.viz-left { display: grid; grid-template-rows: repeat(3, 1fr); gap: 16px; min-height: 0; }
+.viz-left { display: grid; grid-template-rows: repeat(2, 1fr); gap: 16px; min-height: 0; }  /* 优先级面板移除后 2 行（2026-09-20） */
 .viz-panel {
   display: flex;
   flex-direction: column;

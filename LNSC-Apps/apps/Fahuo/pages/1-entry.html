@@ -93,7 +93,8 @@
         </div>
         <div class="pool-row">
           <label class="pool-label" for="poolCheck">勾选表示将地址信息存到常用地址池里</label>
-          <input type="checkbox" id="poolCheck" class="pool-check">
+          <!-- 默认勾选（2026-09-24 用户规则）：录单地址默认入池，地址簿越用越全；不需要时手动取消 -->
+          <input type="checkbox" id="poolCheck" class="pool-check" checked>
         </div>
       </div>
 
@@ -108,7 +109,10 @@
           <!-- 发货单：DN 必填（上一行）+ SO 选填（下一行）（用户规则 2026-09-15） -->
           <div class="type-mode" id="modeShip">
             <div class="type-dn-row">
-              <label class="fld"><span>DN *</span><input id="soInput" class="line-input" type="text" inputmode="numeric" maxlength="10"></label>
+              <!-- DN 取消 10 位限制（2026-09-20 用户规则：多 DN 合并发货同一运单）：
+                   多个 DN 连输或逗号分隔，按 82600+5位 自动拆分多行 -->
+              <label class="fld"><span>DN *</span><input id="soInput" class="line-input" type="text" inputmode="numeric"
+                     title="多个 DN 可连输或逗号分隔：按 82600+5位 自动拆分多行，下单合并同一运单"></label>
               <label class="fld"><span>SO</span><input id="soNoInput" class="line-input" type="text" inputmode="numeric" maxlength="10"></label>
             </div>
           </div>
@@ -127,10 +131,10 @@
           <button id="btnUpload" class="btn upload-btn" type="button">上传文件</button>
           <span id="upFileName" class="up-file"></span>
         </div>
+        <!-- 优先级：单个「紧急」开关（2026-09-20 用户规则：紧急/重要/一般合并为一行按钮；
+             按下=紧急，弹起=一般；其它页面优先级分类全移除，各列表紧急行加粗红字） -->
         <div class="prio-btns type-prio">
           <button class="btn prio" type="button" data-p="紧急">紧急</button>
-          <button class="btn prio" type="button" data-p="重要">重要</button>
-          <button class="btn prio active" type="button" data-p="一般">一般</button>
         </div>
       </div>
 

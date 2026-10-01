@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS addr_pool (
   if (!cols.includes("route_checked_at")) db.exec("ALTER TABLE orders ADD COLUMN route_checked_at TEXT DEFAULT ''");  /* 轨迹检查时间（与 server.py 对齐） */
   if (!cols.includes("route_latest")) db.exec("ALTER TABLE orders ADD COLUMN route_latest TEXT DEFAULT ''");  /* 最新路由节点文本（与 server.py 对齐） */
   /* PO/采购员/发件人：独立列（原塞在 note 标签里；备注列只存手写备注） */
-  for (const col of ["po", "buyer", "emp_name", "emp_phone", "company"]) {
+  for (const col of ["po", "buyer", "emp_name", "emp_phone", "company", "merge_group"]) {
     if (!cols.includes(col)) db.exec(`ALTER TABLE orders ADD COLUMN ${col} TEXT DEFAULT ''`);
   }
   const pcols = db.prepare("PRAGMA table_info(addr_pool)").all().map(c => c.name);
@@ -129,7 +129,7 @@ function serveStatic(p, res) {
 /* 共享地址池：GET 列表（最新在前） / POST 入池（addr_key 去重） */
 function addrpoolList(res) {
   const rows = db.prepare(
-    "SELECT province,city,district,company,street,name,phone FROM addr_pool ORDER BY id DESC LIMIT 500").all();
+    "SELECT province,city,district,company,street,name,phone FROM addr_pool ORDER BY id DESC LIMIT 5000").all();  /* 500→5000（2026-09-24） */
   json(res, 200, rows);
 }
 function addrpoolAdd(d, res) {
@@ -149,8 +149,17 @@ function carrierOrder(d, res) {
   const carrier = (d.carrier || "").trim();
   const dn = String(d.so || "").replace(/[^\w-]/g, "").slice(0, 32);
   if (carrier === "专车" || carrier === "自提") {
+    /* 厂内自编号：ZC/ZT + 年月日 + 2位当日流水（2026-09-21 用户规则；原 ZC+DN+01/02 弃用）
+       持久计数器表 ot_seq：取消/删单也不复用流水号（与 nextOid 同一"永不复用"原则） */
+    const prefix = carrier === "专车" ? "ZC" : "ZT";
+    const day = new Date().toLocaleDateString("sv-SE").replace(/-/g, "");   /* YYYYMMDD 本地时区 */
+    db.exec("CREATE TABLE IF NOT EXISTS ot_seq (day TEXT NOT NULL, prefix TEXT NOT NULL,"
+            + " n INTEGER NOT NULL, PRIMARY KEY (day, prefix))");
+    db.prepare("INSERT INTO ot_seq(day, prefix, n) VALUES(?,?,1)"
+               + " ON CONFLICT(day, prefix) DO UPDATE SET n = n + 1").run(day, prefix);
+    const n = db.prepare("SELECT n FROM ot_seq WHERE day=? AND prefix=?").get(day, prefix).n;
     return json(res, 200, {
-      waybill_no: (carrier === "专车" ? "ZC" : "ZT") + dn + (carrier === "专车" ? "01" : "02"),
+      waybill_no: `${prefix}${day}${String(n).padStart(2, "0")}`,
       route_status: carrier === "专车" ? "专车直送" : "待自提", mock: true
     });
   }
@@ -358,12 +367,21 @@ function listOrders(u, res) {
 
 function createOrder(d, res) {
   const r = db.prepare(
-    "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone)" +
-    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone,merge_group)" +
+    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
   ).run(d.so || "", d.province || "", d.city || "", d.district || "", d.street || "", d.company || "",
         d.name || "", d.phone || "", d.carrier || "", d.note || "", d.ship_date || "",
         d.priority || "一般", d.order_type || "发货单", d.so_no || "",
-        d.po || "", d.buyer || "", d.emp_name || "", d.emp_phone || "");
+        d.po || "", d.buyer || "", d.emp_name || "", d.emp_phone || "", d.merge_group || "");
+  /* DN 发货单收件地址自动入池（2026-09-24）：addr_key 去重 OR IGNORE，与 server.py 同规则 */
+  if ((d.order_type || "发货单") === "发货单") {
+    const key = [d.province, d.city, d.district, d.company, d.street].filter(Boolean).join(" ");
+    if (key) db.prepare(
+      "INSERT OR IGNORE INTO addr_pool (province,city,district,company,street,name,phone,addr_key)" +
+      " VALUES (?,?,?,?,?,?,?,?)"
+    ).run(d.province || "", d.city || "", d.district || "", d.company || "", d.street || "",
+          d.name || "", d.phone || "", key);
+  }
   json(res, 201, rowToJson(db.prepare("SELECT * FROM orders WHERE id=?").get(r.lastInsertRowid)));
 }
 
@@ -371,7 +389,7 @@ function updateOrder(id, d, res) {
   const cols = ["so", "province", "city", "district", "street", "company", "name",
                 "phone", "carrier", "note", "ship_date", "status",
                 "waybill_no", "route_status", "priority", "order_type", "so_no",
-                "order_resp", "po", "buyer", "emp_name", "emp_phone"];
+                "order_resp", "po", "buyer", "emp_name", "emp_phone", "merge_group"];
   const fields = [], vals = [];
   for (const k of cols) if (k in d) { fields.push(`${k}=?`); vals.push(String(d[k])); }
   if (!fields.length) return json(res, 400, { error: "no fields" });

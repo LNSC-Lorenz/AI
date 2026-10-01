@@ -12,7 +12,6 @@ const pad2 = n => String(n).padStart(2, "0");
 
 /* 语义色（与全局口径一致：超时红 / 运输绿 / 已下单蓝 / 待下单灰） */
 const C_RED = "#d32f2f", C_AMBER = "#f0a13a", C_GREEN = "#2e7d32", C_BLUE = "#1D459F", C_GRAY = "#999999";
-const PRIO_COLOR = { "紧急": C_RED, "重要": C_AMBER, "一般": "var(--black)" };
 const ROUTE_TARGET_H = 48;                 /* 在途目标时效：48 小时 */
 
 /* ----- 数据加载：API 在线优先，离线显示空（正式模式无模拟数据） ----- */
@@ -84,49 +83,8 @@ function growSvg(wrap) {
   }));
 }
 
-/* ----- 左上：优先级占比（图1：每个优先级一条独立圆环，弧长=占总量比例） ----- */
-function renderDonut(list) {
-  const box = $("vizDonut");
-  const counts = { "紧急": 0, "重要": 0, "一般": 0 };
-  list.forEach(o => counts[o.priority || "一般"]++);
-  const total = list.length;
-  if (!total) { box.innerHTML = `<div class="viz-empty">暂无在办任务</div>`; return; }
-  const W = 12, RADII = { "紧急": 60, "重要": 45, "一般": 30 };  /* 外→内：紧急/重要/一般 */
-  let rings = "", i = 0;
-  Object.keys(counts).forEach(k => {
-    const r = RADII[k], C = 2 * Math.PI * r;
-    const frac = counts[k] / total;
-    const pct = Math.round(frac * 100);
-    rings += `<circle r="${r}" cx="80" cy="80" fill="none" style="stroke:var(--line-light)" stroke-width="${W}" opacity=".4"/>`;
-    if (frac > 0) {
-      const dim = selPrio && selPrio !== k;   /* 筛选中：非选中环压暗 */
-      rings += `<circle class="grow seg${dim ? "" : " pulse"}" data-prio="${k}" r="${r}" cx="80" cy="80" fill="none"` +
-        ` stroke-width="${selPrio === k ? W + 3 : W}" stroke-linecap="round"` +
-        ` style="stroke:${PRIO_COLOR[k]};${dim ? "opacity:.25" : `animation-delay:${(i * 0.5).toFixed(2)}s`}"` +
-        ` stroke-dasharray="0 ${C.toFixed(1)}" data-grow="${(frac * C).toFixed(1)} ${C.toFixed(1)}"` +
-        ` transform="rotate(-90 80 80)">` +
-        `<title>${k} ${counts[k]} 单 · ${pct}%（点击筛选右侧运单）</title></circle>`;
-      /* 弧中点标注：文字沿色环弧度旋转（左侧翻转防倒置），白字压弧 */
-      const aDeg = -90 + frac * 180, a = aDeg * Math.PI / 180;
-      let rot = aDeg + 90;                            /* 切线方向 */
-      if (rot > 90 && rot < 270) rot += 180;          /* 左半圈翻转，避免倒字 */
-      const tx = 80 + r * Math.cos(a), ty = 80 + r * Math.sin(a);
-      rings += `<text class="seg-label" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}"` +
-        ` transform="rotate(${rot.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)})"` +
-        ` style="${dim ? "opacity:.25" : ""}" text-anchor="middle" dominant-baseline="central">${k}</text>`;
-    }
-    i++;
-  });
-  box.innerHTML =
-    `<div class="donut-wrap anim">` +
-    `<svg viewBox="0 0 160 160">` +
-    `<circle class="spin" r="68" cx="80" cy="80" fill="none" style="stroke:var(--line-light)" stroke-width="1" stroke-dasharray="2 5"/>` +
-    rings + `</svg>` +
-    `<div class="donut-c"><b>${pad2(total)}</b></div></div>`;
-  growSvg(box);
-}
-
-/* ----- 左中：在途完成度同心环（图2：很多细环，每环一单，弧呼吸+扫掠弧旋转，动态） ----- */
+/* ----- 左上：在途完成度同心环（图2：很多细环，每环一单，弧呼吸+扫掠弧旋转，动态） -----
+   （优先级占比圆环面板移除：2026-09-20 用户规则，优先级分类只留在录单页） ----- */
 function renderRings(list) {
   const box = $("vizRings");
   if (!list.length) {
@@ -190,7 +148,7 @@ function pathRow(o) {
       ? `<i class="on${col === onCols - 1 && p < 1 ? " cur" : ""}" style="--c:${s.c};transition-delay:${col * 12}ms"></i>`
       : `<i style="transition-delay:${col * 12}ms"></i>`;
   }
-  return `<div class="vd-path">` +
+  return `<div class="vd-path${o.priority === "紧急" ? " row-urgent" : ""}">` +   /* 紧急行加粗红字（2026-09-20 用户规则） */
     `<div class="vd-phead">${dnHtml(o.so)}` +
     `<span>${o.order_type && o.order_type !== "发货单" ? o.order_type + " · " : ""}` +
     `${o.so_no ? "SO " + soHtml(o.so_no) + " · " : ""}${o.carrier || "—"} · ${o.name || "--"} · ${o.waybill_no || "未下单"}</span>` +
@@ -202,14 +160,11 @@ function pathRow(o) {
 
 function renderDetail(kind) {
   const box = $("vizDetail");
-  const base = kind === "prio"
-    ? (selPrio ? DATA.active.filter(o => (o.priority || "一般") === selPrio) : DATA.active)
-    : kind === "route" ? DATA.shipped
-    : DATA.special;
+  const base = kind === "route" ? DATA.shipped : DATA.special;   /* prio 维度移除（2026-09-20） */
   const list = base.slice().sort(byState);   /* 有状态的排前 */
   box.classList.remove("play");
   box.innerHTML =
-    `<div class="vd-head"><span>${kind === "prio" && selPrio ? selPrio + " · " : ""}共 ${pad2(list.length)} 单</span></div>` +
+    `<div class="vd-head"><span>共 ${pad2(list.length)} 单</span></div>` +
     `<div class="vd-rows">` +
     (list.map(pathRow).join("") || `<div class="vd-hint">当前无相关运单</div>`) +
     `</div>`;
@@ -217,8 +172,7 @@ function renderDetail(kind) {
 }
 
 /* ----- 主流程：加载 → 分区渲染 → 60s 自动刷新 ----- */
-let selViz = "prio";
-let selPrio = "";        /* 图1 色环点选优先级（""=全部） */
+let selViz = "route";    /* 默认在途完成度（优先级面板移除；2026-09-20） */
 const DATA = { active: [], shipped: [], special: [] };
 
 async function refresh() {
@@ -226,7 +180,6 @@ async function refresh() {
   DATA.active  = orders.filter(o => o.status !== "returned");              /* 在办 */
   DATA.shipped = orders.filter(o => o.status === "shipped");               /* 在途 */
   DATA.special = DATA.active.filter(o => o.carrier === "专车" || o.carrier === "自提"); /* 专车/自提 */
-  renderDonut(DATA.active);
   renderRings(DATA.shipped);
   renderTrucks(DATA.special);
   renderDetail(selViz);
@@ -238,18 +191,6 @@ document.querySelectorAll(".viz-panel").forEach(p => {
     document.querySelectorAll(".viz-panel").forEach(x => x.classList.toggle("sel", x === p));
     renderDetail(selViz);
   });
-});
-
-/* 图1 色环点击：按该优先级筛选右侧运单；再点同一色环取消筛选 */
-$("vizDonut").addEventListener("click", e => {
-  const seg = e.target.closest("[data-prio]");
-  if (!seg) return;
-  e.stopPropagation();
-  selPrio = selPrio === seg.dataset.prio ? "" : seg.dataset.prio;
-  selViz = "prio";
-  document.querySelectorAll(".viz-panel").forEach(x => x.classList.toggle("sel", x.dataset.viz === "prio"));
-  renderDonut(DATA.active);
-  renderDetail("prio");
 });
 
 refresh();

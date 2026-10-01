@@ -208,7 +208,8 @@ function renderRows(list) {
   body.innerHTML = "";
   list.forEach(o => {
     const tr = document.createElement("tr");
-    /* 优先级+类型合并一列（第3列，无列标题；2026-09-15 用户规则）：行1优先级（紧急加粗）、行2类型 */
+    if (o.priority === "紧急") tr.classList.add("row-urgent");   /* 紧急行加粗红字（2026-09-20 用户规则） */
+    /* 类型列（第3列，无列标题）：优先级分类移除（2026-09-20 用户规则），紧急看整行红粗 */
     [o.so || "", o.so_no || "—", null, o.address || "", o.name || "",
      o.waybill_no || "—",
      o.waybill_no ? "已下单" : "待下单", o.route_status || "—",
@@ -217,13 +218,8 @@ function renderRows(list) {
      cleanNote(o.note)                       /* 备注列（最后列；2026-09-16 用户规则） */
     ].forEach((v, i) => {
       const td = document.createElement("td");
-      if (i === 2) {                                   /* 合并列：优先级/类型 两行 */
-        const d1 = document.createElement("div");
-        d1.textContent = o.priority || "一般";
-        if (d1.textContent === "紧急") d1.classList.add("prio-hot");
-        td.appendChild(d1);
-        const d2 = document.createElement("div"); d2.textContent = o.order_type || "发货单";
-        td.appendChild(d2);
+      if (i === 2) {                                   /* 类型列（优先级分类移除；2026-09-20 用户规则） */
+        td.textContent = o.order_type || "发货单";
       }
       else if (i === 3) fillAddrCell(td, o);   /* 地址列（第4列）：两行 */
       else if (i === 0) td.innerHTML = dnHtml(o.so);   /* DN 列：前缀上标 */
@@ -354,17 +350,14 @@ setInterval(() => {
   });
 }, 3000);
 
-/* ----- 视图过滤：类型/优先级按钮组（单选，可组合） + 搜索（在统计口径基础集合内） ----- */
-let activePrio = "";
+/* ----- 视图过滤：类型按钮组（单选） + 搜索（在统计口径基础集合内）；
+   优先级筛选组移除（2026-09-20 用户规则：分类只留在录单页，紧急行整行加粗红字） ----- */
 let activeType = "";
 
 function applyView() {
   let list = baseList;
   if (activeType) {
     list = list.filter(o => (o.order_type || "发货单") === activeType);
-  }
-  if (activePrio) {
-    list = list.filter(o => (o.priority || "一般") === activePrio);
   }
   const q = $("lmSearch").value.trim().toLowerCase();
   if (q) {
@@ -378,15 +371,6 @@ function applyView() {
   renderRows(list);
 }
 
-document.querySelectorAll(".lm-prio .prio").forEach(b => {
-  b.addEventListener("click", () => {
-    const was = b.classList.contains("active");
-    document.querySelectorAll(".lm-prio .prio").forEach(x => x.classList.remove("active"));
-    activePrio = was ? "" : b.dataset.p;   /* 单选互斥；再点取消=全部 */
-    if (activePrio) b.classList.add("active");
-    applyView();
-  });
-});
 document.querySelectorAll(".lm-type .otype").forEach(b => {
   b.addEventListener("click", () => {
     const was = b.classList.contains("active");
@@ -444,15 +428,81 @@ function fmtOrderResp(o) {   /* 下单返回值：只保留 运单号+路由状�
   try {
     const d = JSON.parse(o.order_resp);
     /* route_status 取当前值（订单表由路由定时器保持新鲜；快照不同步问题 2026-09-16 用户反馈修复） */
-    return JSON.stringify({ waybill_no: d.waybill_no || o.waybill_no || "",
-                            route_status: o.route_status || d.route_status || "" }, null, 2);
+    const out = { waybill_no: d.waybill_no || o.waybill_no || "",
+                  route_status: o.route_status || d.route_status || "" };
+    if (d.sign_back_final) out.sign_back_final = d.sign_back_final;   /* 回单运单终态提示（2026-09-29 起新单不自动置回单，人工核实后手动置） */
+    return JSON.stringify(out, null, 2);
   } catch (e) { return o.order_resp; }
+}
+
+function signBackNo(o) {   /* 回签单号（顺丰纸质回单 type=3，下单存档 order_resp.sign_back_no） */
+  try {
+    return ((JSON.parse(o.order_resp || "{}").sign_back_no) || "").trim();
+  } catch (e) { return ""; }
+}
+
+/* 回单返回"到方地址"（2026-09-29 用户口径终定，平台统一维护；与 2-order.js 同款）：
+   唯一权威源=服务端 carriers/sf_express.SIGN_BACK_ADDR，页面加载即拉取 GET /api/signback_addr；
+   离线/file:// 打开时用下方兜底同文（与服务端一致，改地址只需改服务端） */
+let SB_ADDR_TEXT = "莱克勒喷嘴系统（常州）有限公司 范蓓蓓 15190535163\n" +
+                   "江苏常州金坛 德城路99号（邮编 213200）";
+(async () => {
+  for (const base of API_CANDIDATES) {
+    try {
+      const r = await fetch(base + "/signback_addr", { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d && d.text) SB_ADDR_TEXT = d.text;
+      return;
+    } catch (e) { /* 尝试下一个候选基址 */ }
+  }
+})();
+
+/* 回单返回信息（2026-09-29 用户指正 + 回单运单轨迹实锤，官方逻辑终定；与 2-order.js 同款）：
+   回单运单号=原单回单号（SF106 开头），签收后自动反向、到付返回（历史 4 单轨迹已验证）；
+   云打印那张"正向+寄付月结"面单是 POD 签收联，不是返回段运单——无需人工改单（此前结论错误）。
+   回单收不到的真正根因 = 回单返回"到方地址"未维护，被派送至错误地址签收。
+   → 向 95338/顺丰销售申请维护到方地址=莱克勒德城路99号；此处一键复制维护申请文案 */
+function signBackInfoEl(o) {
+  const sb = signBackNo(o);
+  if (o.carrier !== "顺丰" || !sb) return null;
+  const txt = "【顺丰回单返回到方地址维护申请】\n" +
+    "莱克勒喷嘴系统（常州）有限公司（月结客户）\n" +
+    "请将签单返还服务的“回单返回到方地址”维护/确认为：\n" +
+    SB_ADDR_TEXT + "\n" +
+    "本单回单号：" + sb + "（原运单 " + (o.waybill_no || "") +
+      (o.so ? "，DN " + o.so : "") + "）\n" +
+    "说明：收件人签收后回单运单自动反向到付返回；到方地址未维护会派送错误。\n" +
+    "另请协查历史误投回单去向并重新派送：SF1064982980091、SF1064982958300、" +
+    "SF1064983709198、SF1064997481417";
+  const el = stepEl("回单返回：顺丰自动返回（同 SF106 回单号，反向 + 到付）——需维护到方地址", "", txt);
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "btn";
+  b.style.margin = "6px 0 2px";
+  b.textContent = "复制到方地址维护申请";
+  b.addEventListener("click", () => {
+    /* http 非安全上下文无 navigator.clipboard → textarea + execCommand 复制 */
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { /* 忽略 */ }
+    ta.remove();
+    b.textContent = ok ? "已复制 ✓（发给 95338/顺丰销售）" : "复制失败，请手动选中文本复制";
+    setTimeout(() => { b.textContent = "复制到方地址维护申请"; }, 3000);
+  });
+  el.querySelector(".step-main").appendChild(b);
+  return el;
 }
 
 async function openSteps(o) {
   stepsTitle.textContent = `${o.so || "#" + o.id} · ${o.carrier || "—"} · ${o.waybill_no}`;
   stepsBody.innerHTML = "";
   stepsBody.appendChild(stepEl("第一步：下单返回值", o.created_at || "", fmtOrderResp(o)));
+  const sbe = signBackInfoEl(o);   /* 顺丰回单返回：自动反向+到付；到方地址维护申请（2026-09-29 更正） */
+  if (sbe) stepsBody.appendChild(sbe);
   stepsMask.hidden = false;
   /* 后续：承运商轨迹（未开通/失败只追加提示步，不影响第一步） */
   if (!API_BASE || !o.carrier || !o.waybill_no) return;
