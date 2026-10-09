@@ -1,0 +1,246 @@
+/* ==========================================================================
+   SAP 标签管理平台 · 标签设计器样式 (designer.css)
+   --------------------------------------------------------------------------
+   作用域：除 .ld-*（弹窗 / 提示，前缀唯一）外，全部选择器限定在 .label-designer
+           根容器内 → 可与 style.css 同页加载且互不影响。
+   令牌：与 style.css 对齐命名为 --ld-brand / --ld-brand-dark / --ld-brand-soft。
+   基准字号：设计器正文 13.5px（原 12px，2026-10-08 整体放大约 12%）。
+           独立页 designer.html 不加载 style.css，故此处以 html{} 兜底基准字号，
+           否则 body 会退化为浏览器默认 16px（style.css 的 body 字号优先级更高）。
+   注意：下列规则被 check-ui.js / measure-ui.js / check-embed.js 逐行断言，
+         请勿把单行规则合并或换行改写（如 .ld-grid 分栏竖线、.ld-preview 横线）。
+   ========================================================================== */
+
+/* ---------- 1. 设计令牌 ---------- */
+:root {
+  --ld-brand: #006878;         /* 品牌色 rgb(0,104,120)，单色工业风 */
+  --ld-brand-dark: #004f5c;    /* 悬停 / 深底 */
+  --ld-brand-soft: #e6f1f2;    /* 浅底 / 标尺底 */
+  --ld-rule: #a9c9ce;          /* 分栏 / 分节细线 */
+  --ld-line: #d5dfe1;          /* 输入框等线条 */
+  --ld-ink: #16232a;
+  --ld-muted: #63767c;
+  --ld-paper: #ffffff;
+  --ld-stage: #f2f5f6;
+  --ld-guide: #e6501e;
+  --ld-ok: #2e7d32;
+  --ld-err: #c62828;
+}
+
+/* ---------- 2. 基础 ---------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+html { font-size: 13.5px; }
+[hidden] { display: none !important; }
+.spacer { flex: 1; }
+
+/* ---------- 3. 根容器 ---------- */
+.label-designer {
+  /* --font 只定义在根容器（不上提到 :root）：弹窗位于 .label-designer 之外，
+     .ld-modal-body .el-text 取不到该变量时回落宿主字体 —— 与还原前保持一致 */
+  --font: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--font);
+  font-size: 13.5px;            /* 正文基准（原 12px，整体放大约 12%） */
+  line-height: 1.45;
+  color: var(--ld-ink);
+  background: #fff;
+}
+
+/* ---------- 4. 工具栏 ---------- */
+.label-designer .ld-toolbar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 9px; background: #fff; border-bottom: 1px solid var(--ld-rule);
+}
+.label-designer .ld-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ld-muted); }
+.label-designer .ld-company {
+  font-family: Consolas, monospace; font-weight: 700; font-size: 13px;
+  border: 1px solid var(--ld-brand); border-radius: 1px; padding: 3px 8px;
+  background: var(--ld-brand-soft); color: var(--ld-brand);
+}
+.label-designer .ld-ctl { width: auto; min-width: 160px; }
+.label-designer .ld-snap { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ld-muted); user-select: none; }
+.label-designer .ld-snap input { width: auto; }
+
+/* 嵌入主应用时（script.js 把 4 个操作按钮移到外壳顶栏并加 .ld-embedded）：
+   工具栏其余控件（模板下拉 / 新建 / 对齐 / 徽标）在嵌入页隐藏——
+   模板切换与新建走「模板管理」页签，对齐保持默认开启；独立页不受影响。 */
+.label-designer.ld-embedded .ld-toolbar { display: none; }
+
+/* ---------- 5. 右栏顶部：公司代码字段（新 UI：三栏各自为圆角描边盒） ---------- */
+.label-designer .ld-cofield { margin-bottom: 10px; }
+.label-designer .ld-cofield label { color: var(--ld-brand); }
+
+/* ---------- 6. 三栏栅格 ----------
+   新 UI（2026-10-08）：三栏各自为独立的 1px 主题色圆角盒（圆角 6px，见 .panel / .ld-mid），
+   栏间以 24px 空隙分隔（不再用 1px 竖线）；宽度比 1 : 3 : 1（左 20% / 中 60% / 右 20%）。 */
+.label-designer .ld-grid {
+  display: grid; grid-template-columns: minmax(150px, 1fr) minmax(260px, 3fr) minmax(150px, 1fr);
+  gap: 24px; align-items: stretch; padding: 0;
+}
+.label-designer .ld-grid > * { min-width: 0; }
+
+/* ---------- 7. 表单控件 ---------- */
+.label-designer .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.label-designer .field label { font-size: 12px; letter-spacing: .04em; color: var(--ld-muted); font-weight: 600; }
+.label-designer .field .req { color: var(--ld-err); }
+.label-designer input, .label-designer select, .label-designer textarea {
+  width: 100%; padding: 5px 8px; border: 1px solid var(--ld-line); border-radius: 1px;
+  font-size: 13.5px; font-family: inherit; color: var(--ld-ink); background: #fff;
+}
+.label-designer input:focus, .label-designer select:focus, .label-designer textarea:focus {
+  outline: none; border-color: var(--ld-brand); box-shadow: 0 0 0 2px rgba(0, 104, 120, .15);
+}
+.label-designer input[readonly] { background: var(--ld-stage); color: #5a6775; }
+
+/* ---------- 8. 按钮 ---------- */
+.label-designer .btn {
+  display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--ld-line);
+  background: #fff; color: var(--ld-ink); border-radius: 1px; padding: 5px 10px;
+  font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.label-designer .btn:hover { background: var(--ld-brand-soft); border-color: var(--ld-brand); color: var(--ld-brand); }
+.label-designer .btn-sm { padding: 4px 8px; font-size: 12.5px; }
+.label-designer .btn-primary { background: var(--ld-brand); border-color: var(--ld-brand); color: #fff; }
+.label-designer .btn-primary:hover { background: var(--ld-brand-dark); border-color: var(--ld-brand-dark); color: #fff; }
+.label-designer .btn-danger { color: var(--ld-err); border-color: #e2b7b7; }
+.label-designer .btn-danger:hover { background: #fdf2f2; border-color: var(--ld-err); color: var(--ld-err); }
+
+/* ---------- 9. 面板（新 UI：左右栏 = 1px 主题色圆角盒） ---------- */
+.label-designer .panel { background: #fff; border: 1px solid var(--ld-brand); border-radius: 6px; }
+.label-designer .panel-body { padding: 14px 12px; }
+
+/* ---------- 10. 组件面板（新设计稿：无节标题，按钮为品牌色描边小方块） ---------- */
+.label-designer .pal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.label-designer .pal-row button {
+  border: 1px solid var(--ld-brand); background: #fff; border-radius: 1px; padding: 10px 5px;
+  font-size: 13px; font-family: inherit; color: var(--ld-brand); cursor: pointer;
+}
+.label-designer .pal-row button:hover { background: var(--ld-brand-soft); }
+.label-designer .pal-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+/* ---------- 11. 画布舞台（标尺 20px + 画布区，顶部标尺 17px，1mm≈3.4px） ----------
+   刻度尺满边：轨道铺满画布区整条边，0 刻度与标签边缘对齐（刻度由 JS 按画布实际位置生成） */
+.label-designer .ld-stage { display: grid; grid-template-columns: 20px auto; grid-template-rows: 17px auto; flex: 1 1 auto; }
+.label-designer .ld-ruler-corner { background: var(--ld-brand-soft); border: 1px solid var(--ld-rule); border-right: 0; border-bottom: 0; }
+.label-designer .ld-ruler-h, .label-designer .ld-ruler-v { position: relative; background: var(--ld-brand-soft); overflow: hidden; }
+.label-designer .ld-ruler-h { border: 1px solid var(--ld-rule); border-bottom: 0; }
+.label-designer .ld-ruler-v { border: 1px solid var(--ld-rule); border-top: 0; border-right: 0; }
+.label-designer .ld-ruler-h .tk, .label-designer .ld-ruler-v .tk { position: absolute; font-size: 9.5px; color: var(--ld-brand-dark); }
+.label-designer .ld-ruler-h .tk { top: 0; bottom: 0; border-left: 1px solid #9fc4c9; padding-left: 2px; }
+.label-designer .ld-ruler-h .tk.maj { border-left-color: var(--ld-brand); font-weight: 700; }
+.label-designer .ld-ruler-v .tk { left: 0; right: 0; border-top: 1px solid #9fc4c9; padding: 1px 0 0 2px; }
+.label-designer .ld-ruler-v .tk.maj { border-top-color: var(--ld-brand); font-weight: 700; }
+
+/* ---------- 12. 画布 ---------- */
+.label-designer .canvas-wrap {
+  background: var(--ld-stage); border: 0; border-radius: 0;
+  padding: 14px; overflow: auto; display: flex; justify-content: center; align-items: flex-start;
+  min-height: 340px;   /* 中栏上下等高：舞台 = 340 + 标尺 17 = 357px，与预览区同高 */
+}
+.label-designer .canvas {
+  position: relative; background: var(--ld-paper); flex: 0 0 auto;
+  border: 1px solid var(--ld-brand); box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+  background-image:
+    linear-gradient(to right, #e3eaeb 1px, transparent 1px),
+    linear-gradient(to bottom, #e3eaeb 1px, transparent 1px);
+  background-size: 17px 17px;  /* 5mm 主网格（1mm≈3.4px） */
+}
+
+/* ---------- 13. 中栏：上 = 设计界面，下 = 打印预览 ----------
+   新 UI：中栏整体为一个 1px 主题色圆角盒，两个标签上下排列、以留白分隔（无横线、无标题行） */
+.label-designer .ld-mid { display: flex; flex-direction: column; min-width: 0; background: #fff; border: 1px solid var(--ld-brand); border-radius: 6px; padding: 18px; gap: 28px; }
+.label-designer .ld-preview { flex: 0 0 auto; background: #fff; }
+.label-designer .ld-preview-stage {
+  /* 与舞台等高（中栏上下 50 : 50：舞台 340+17=357px） */
+  height: 357px; padding: 8px; display: flex; align-items: center; justify-content: center;
+  background: var(--ld-stage); overflow: hidden;
+}
+/* 预览只读：无设计网格、无阴影、不响应鼠标 */
+.label-designer .ld-preview-stage .canvas { pointer-events: none; box-shadow: none; background-image: none; }
+
+/* ---------- 14. 画布内元素 / 对齐参考线 ---------- */
+.label-designer .el { position: absolute; overflow: hidden; cursor: move; }
+.label-designer .el.sel { outline: 1px solid var(--ld-brand); outline-offset: 0; overflow: visible; }
+.label-designer .el .rz {
+  position: absolute; right: -4px; bottom: -4px; width: 8px; height: 8px;
+  background: #fff; border: 1px solid var(--ld-brand); cursor: nwse-resize; display: none;
+}
+.label-designer .el.sel .rz { display: block; }
+.label-designer .el-text { font-family: var(--font); color: #111; white-space: pre-wrap; word-break: break-word; }
+.label-designer .el-barcode { background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px); }
+.label-designer .el-qr {
+  background:
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 0 0/50% 50%,
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 8px 8px/16px 16px;
+  border: 2px solid #111;
+}
+/* Logo 占位（画布内容，非界面字号） */
+.label-designer .el-image { background: var(--ld-stage); border: 1px dashed var(--ld-rule); display: flex; align-items: center; justify-content: center; color: var(--ld-muted); font-size: 10px; }
+/* 真实图片元素（el.src，如标签右侧竖排 Lechler 组合标志；el.rotate 旋转） */
+.label-designer .el-img img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.label-designer .el-rect { border: 1px solid #111; }
+.label-designer .el-line { background: #111; height: 2px !important; }
+.label-designer .guides { position: absolute; inset: 0; pointer-events: none; z-index: 9; }
+.label-designer .guides .gline { position: absolute; background: var(--ld-guide); }
+.label-designer .guides .gline.v { top: 0; bottom: 0; width: 1px; }
+.label-designer .guides .gline.h { left: 0; right: 0; height: 1px; }
+
+/* ---------- 15. 属性面板 ---------- */
+.label-designer .props-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.label-designer .props-head .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #fff; background: var(--ld-brand); border-radius: 1px; padding: 3px 8px; font-weight: 700; }
+.label-designer .props-acts { display: flex; gap: 4px; }
+.label-designer .props-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.label-designer .props-grid .field { margin-bottom: 0; }
+.label-designer .chk { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ld-muted); grid-column: 1 / -1; }
+.label-designer .chk input { width: auto; }
+.label-designer .prop-empty { padding: 6px 2px; font-size: 13px; color: var(--ld-muted); line-height: 1.7; }
+
+/* ---------- 16. 弹窗（.ld-* 前缀唯一，全局安全） ---------- */
+.ld-modal { position: fixed; inset: 0; background: rgba(15, 20, 26, .5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.ld-modal-box { background: #fff; border-radius: 0; width: min(780px, 94vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ld-brand); }
+.ld-modal-head { background: var(--ld-brand); color: #fff; font-size: 13.5px; font-weight: 600; padding: 7px 13px; display: flex; align-items: center; justify-content: space-between; }
+.ld-modal-head-actions { display: flex; gap: 6px; align-items: center; }
+.ld-modal-head-actions .btn-sm { background: rgba(255, 255, 255, .14); color: #fff; border: 1px solid rgba(255, 255, 255, .4); border-radius: 1px; padding: 4px 9px; font-size: 12.5px; cursor: pointer; font-family: inherit; }
+.ld-modal-head-actions .btn-sm:hover { background: rgba(255, 255, 255, .26); }
+.ld-close { background: transparent; border: none; color: #fff; font-size: 15.5px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.ld-modal-body { padding: 12px; overflow: auto; }
+.ld-modal-body .modal-stage { display: flex; justify-content: center; padding: 10px; background: var(--ld-stage); border-radius: 0; }
+.ld-modal-body .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.ld-modal-body .field label { font-size: 12.5px; color: var(--ld-muted); font-weight: 600; }
+.ld-modal-body input, .ld-modal-body select, .ld-modal-body textarea { width: 100%; padding: 6px 9px; border: 1px solid var(--ld-line); border-radius: 1px; font-size: 13.5px; font-family: inherit; }
+.ld-modal-body input:focus, .ld-modal-body textarea:focus { outline: none; border-color: var(--ld-brand); }
+/* 弹窗预览画布：#ld-prev-stage 在 #ld-modal 内，不在 .label-designer 内 */
+.ld-modal-body .canvas {
+  position: relative; background: var(--ld-paper); flex: 0 0 auto;
+  border: 1px solid var(--ld-brand); box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+  background-image:
+    linear-gradient(to right, #e3eaeb 1px, transparent 1px),
+    linear-gradient(to bottom, #e3eaeb 1px, transparent 1px);
+  background-size: 17px 17px;
+}
+.ld-modal-body .el { position: absolute; overflow: hidden; }
+.ld-modal-body .el-text { font-family: var(--font); color: #111; white-space: pre-wrap; word-break: break-word; }
+.ld-modal-body .el-barcode { background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px); }
+.ld-modal-body .el-qr {
+  background:
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 0 0/50% 50%,
+    conic-gradient(#111 25%, #fff 0 50%, #111 0 75%, #fff 0) 8px 8px/16px 16px;
+  border: 2px solid #111;
+}
+.ld-modal-body .el-image { background: var(--ld-stage); border: 1px dashed var(--ld-rule); display: flex; align-items: center; justify-content: center; color: var(--ld-muted); font-size: 10px; }
+.ld-modal-body .el-img img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.ld-modal-body .el-rect { border: 1px solid #111; }
+.ld-modal-body .el-line { background: #111; height: 2px !important; }
+
+/* ---------- 17. 提示 Toast ---------- */
+.ld-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ld-brand-dark); color: #fff; padding: 8px 15px; border-radius: 0; font-size: 13.5px; z-index: 200; box-shadow: 0 4px 16px rgba(0, 0, 0, .2); }
+.ld-toast.ok { background: var(--ld-ok); }
+.ld-toast.err { background: var(--ld-err); }
+
+/* ---------- 18. 窄窗口（≤820px）：三栏退化为上下堆叠 ----------
+   宽窗口下栏数与比例恒定（不做两栏降级，属性面板永不会掉到画布下方）；
+   仅极窄窗口改排为上下三段，段间用 1px 主题色横线分隔。 */
+@media (max-width: 820px) {
+  .label-designer .ld-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .label-designer .ld-preview-stage { height: 176px; }
+}

@@ -30,17 +30,22 @@ SERVICE_PRINT = "COM_RECE_CLOUD_PRINT_WAYBILLS"   # 云打印面单 2.0
 #   （4 张历史回单运单轨迹实锤：上海/湖州/苏州→常州金坛"已签收"，_sb_routes.py）；云打印那张
 #   "正向+寄付月结"面单是 POD 签收联（"POD标快"抬头，随货给客户签收用），不是返回段运单——
 #   此前"需顺丰人工改单"判断错误。回单收不到的根因=回单返回"到方地址"未维护（历史回单被误投他址
-#   签收）；行动：95338/顺丰销售维护到方地址=莱克勒德城路99号；前端步骤弹窗一键复制维护申请文案。
+#   签收）；行动：95338/顺丰销售维护到方地址=莱克勒德城路99号——✅ 2026-10-08 用户确认：该地址为**固定值**、
+#   顺丰账号侧已设定完成 ⇒ 平台侧无任何维护动作/提示（原维护申请文案与 GET /api/signback_addr 已于同日撤除）。
 #   2026-09-29 速打实测：反向回签单面单官方模板可出纸——主运单+回签单（SF106）两联同一任务出纸、
-#   收寄地址互反、回签单到付+「签回单原单号」回链 → 该路仅**速打**可用（丰桥云打印取不到，2026-09-30 更正）。
-#   ⚠️ 2026-09-30 二次实锤终定（用户指正第 2 页必须=反向返回运单，错误 POD 联追加已撤回）：本链路 SF106 号
-#   云打印恒=1 页正向"POD标快"签收联（寄=莱克勒/收=客户/寄付月结；新单+已签收单一致，_sb_pages.py/
-#   _probe_reverse.py 存档），不是反向返回运单（收寄互反/到付/签回单原单号回链）——该联仅速打可在签收前
-#   出纸；速打实测那组单不属本丰桥客户编码（API 拒取"单号与顾客编码不匹配"）无法对照；丰桥取法
-#   （serviceCode/templateCode/documents 参数）待顺丰官方答复。
-#   ✅ 2026-09-30 用户决策（最终口径）：维持默认 1 页官方主面单出纸，反向回签单由**速打**补打；
-#   自绘方案（ot_label.py 同款 PIL + 浏览器 JsBarcode 链路，页尺寸 76×130mm、数据齐备）评估保留、
-#   **不启用**（见 0_README「反向回签单取得路径评估」）；顺丰给出官方参数则优先改走官方。
+#   收寄地址互反、回签单到付+「签回单原单号」回链。
+#   ⚠️ 2026-09-30 中间结论（**已被 10-08 终定推翻，保留作复盘**）：当时只在 masterWaybillNo 处试过 SF106，
+#   故恒得 1 页正向"POD标快"签收联（寄=莱克勒/收=客户/寄付月结；_sb_pages.py 存档），据此误判"丰桥取不到、
+#   仅速打可出纸、待顺丰答复"（速打那组单不属本丰桥客户编码，API 拒取"单号与顾客编码不匹配"无法对照）。
+#   ✅ 2026-10-08 终定（官方文档 + 顺丰客服核实 + 真单实锤——上一版"待顺丰答复"已有答案）：
+#   `documents[]` 的单号字段按单据类型**择一**——masterWaybillNo(母) / branchWaybillNo(子) /
+#   **backWaybillNo(签回单)**；文档原话「打印签回单时，masterWaybillNo 和 branchWaybillNo 为空」。
+#   此前把 SF106 回单号塞进 masterWaybillNo → 恒得 1 页正向"POD标快"签收联（寄=莱克勒/收=客户/
+#   寄付月结），正是 09-30 被撤回的那张错误第 2 页；改传 backWaybillNo 即得**反向回签单**：实测
+#   （探针 carriers/_sb_back_probe.py，order#557 主单 SF5148042784954 / 回单 SF1065010577207）
+#   =1 页「1/1  回: SF1065010577207」+「关联主运单: SF5148042784954」+ 收=范蓓蓓/莱克勒 德城路99号
+#   + **到付** + 寄=客户地址 —— 收寄互反、票面回链原主单号，与速打出纸两联一致 → 见 cloud_print_back()。
+#   （2026-09-30 用户决策"默认主面单 + 速打补打反向回签单"已被本官方参数取代；自绘方案仍不启用）
 SERVICE_CANCEL = "EXP_RECE_UPDATE_ORDER"
 _TEMPLATE = "fm_76130_standard_LKLPZA6VYES4"      # 76×130mm 标准模板（丰桥控制台绑定；2026-09-15 用户指定，原 150mm 弃用）
 
@@ -63,20 +68,12 @@ _SENDER = {
 # 寄件联系人随下单类型（用户规则 2026-09-15）：发货单=范蓓蓓；其他类型暂用公司电话
 _SENDER_CONTACT = {"发货单": ("范蓓蓓", "15190535163")}
 
-# ---------- 签单返还"回单返回到方地址"（2026-09-29 用户口径终定，平台唯一权威源） ----------
-# 回单返回段（SF106 反向+到付）的派送到方地址 = 莱克勒本部（与 _SENDER 同源）。
-# ⚠️ 丰桥下单接口无到方地址下发字段（extraInfoList POD 已实测 S0003 拒，见文件头），
-#    顺丰账号侧只能由 95338/销售经理人工维护 → 平台职责：维护标准口径 + 生成维护申请文案。
-# GET /api/signback_addr 返回本配置；前端 2-order/3-list 步骤弹窗文案引用（离线兜底同文）。
-SIGN_BACK_ADDR = {
-    "company": "莱克勒喷嘴系统（常州）有限公司",
-    "name": "范蓓蓓",
-    "phone": "15190535163",
-    "addr": "江苏常州金坛 德城路99号",
-    "postcode": "213200",
-}
-SIGN_BACK_ADDR["text"] = (
-    "%(company)s %(name)s %(phone)s\n%(addr)s（邮编 %(postcode)s）" % SIGN_BACK_ADDR)
+# ---------- 签单返还"回单返回到方地址"（**固定值**；2026-10-08 用户口径终定） ----------
+# 回单返回段（SF106 反向+到付）派送到方地址恒为莱克勒本部（与寄件人 _SENDER 同源：金坛区德城路99号），
+# **顺丰账号侧已设定完成、地址固定不变、无需任何维护**；平台侧因此不保留任何机制：
+#   ① 丰桥下单接口本无到方地址下发字段（extraInfoList POD 实测 S0003 拒，见文件头）；
+#   ② 前端自 2026-10-08 起不再显示"需维护到方地址"提示（2-order/3-list 回单块只留回单返回信息）；
+#   ③ 原 SIGN_BACK_ADDR 常量与 GET /api/signback_addr 接口同日撤除（全盘 grep 无调用方，属死代码）。
 
 
 def _call(cfg, service_code, msg_dict, timeout=30):
@@ -144,6 +141,10 @@ def _real_place_order(order, cfg):
         "contact": order.get("name", ""), "mobile": order.get("phone", ""),
         "company": order.get("company", ""),
     }
+    # 托寄物原样传递、不加回单后缀（2026-10-08 用户原话「移除备注加的 的回单 3个字」：
+    # 同日撤销「勾了回单则托寄物末尾加『的回单』」；回单渠道仍走增值服务 isSignBack=1 / IN91
+    # + remark「需拍照回传」，见下）
+    _rc = order.get("receipt") or []
     cargo = order.get("cargo") or ""   # 托寄物原样传递，为空不自动填充（顺丰校验会原样报错）
     # 数量（2026-09-17 用户规则）：>1 时随托寄物打印到官方面单（"喷嘴 300pcs"样式，与用户手工习惯一致）
     qty = int(float(order.get("qty") or 1))
@@ -178,13 +179,12 @@ def _real_place_order(order, cfg):
     insured = str(order.get("insured") or "").strip()    # 保价：填写才传（声明价值/元）
     if insured:
         body["declaredValue"] = float(insured)
-    # 运单备注（DN+SO / PO）+ 方案A 回单标识（2026-09-24）：勾了回单/拍照时 remark 追加
-    # 「需纸质回单/需拍照回传」，供派送端目视识别；增值服务本身不受影响（仍走 isSignBack=1 /
-    # serviceList IN91）；顺丰标准模板 fm_76130 备注区是否实际打印以真实面单实证为准
-    _rc = order.get("receipt") or []
+    # 运单备注（DN+SO / PO）+ 回单标识（2026-09-24 方案A → 2026-10-08 用户改口径）：
+    #   仅「拍照回传」追加「需拍照回传」；**「需纸质回单」不再打印**，托寄物亦不加
+    #   「的回单」后缀（2026-10-08 同日用户撤销），增值服务本身不受影响
+    #   （仍走 isSignBack=1 / serviceList IN91）；顺丰标准模板 fm_76130 备注区是否实际打印以真实面单实证为准
     remark = str(order.get("remark") or "").strip()
-    _marks = "/".join(m for m, on in (("需纸质回单", "纸质回单" in _rc),
-                                      ("需拍照回传", "拍照回传" in _rc)) if on)
+    _marks = "需拍照回传" if "拍照回传" in _rc else ""
     if _marks:
         remark = (remark + " " + _marks).strip()
     if remark:
@@ -198,7 +198,7 @@ def _real_place_order(order, cfg):
     # 修复（2026-09-24 官方《增值服务产品表》终定）：纸质回单 → isSignBack=1（签单返还唯一有效字段值）；
     #   拍照回传 → 增值服务 IN91（serviceList，value 固定 13=签回单拍照），不再借用 isSignBack=2/3。
     #   ⚠️ =3"组合值"同样静默无效（_sf_signback3_probe：接受但不返 type=3 运单）→ 勿用
-    if "纸质回单" in _rc:   # _rc 已于 remark 处取（方案A 标识与服务下发同源）
+    if "纸质回单" in _rc:   # _rc 已于 cargo_print 处取（回单标识与服务下发同源）
         body["isSignBack"] = 1    # 签单返还（纸质回单）；增值服务 IN03 下单时无需下发，纸质回单仅认此字段
     if "拍照回传" in _rc:
         body["serviceList"] = [{"name": "IN91", "value": "13"}]   # 拍照回传增值服务：13=签回单拍照（固定传值）
@@ -233,8 +233,25 @@ def _real_place_order(order, cfg):
     return res
 
 
+def _cloud_print_docs(documents, cfg=None, timeout=30):
+    """云打印 2.0 公共体（COM_RECE_CLOUD_PRINT_WAYBILLS）：documents 数组由调用方给。
+    documents[] 的单号字段按单据类型**择一**（2026-10-08 官方文档 + 客服确认）：
+      masterWaybillNo=母运单面单 / branchWaybillNo=子运单面单 / backWaybillNo=签回单
+    —— 打印签回单时 master/branch 必须为空（见 cloud_print_back）。"""
+    cfg = cfg or base.get_cfg(_PREFIX)
+    if not base.configured(cfg):
+        raise base.CarrierError("顺丰未配置密钥，无法云打印面单")
+    return _call(cfg, SERVICE_PRINT, {
+        "templateCode": _TEMPLATE,          # SF.txt: TEMPLATE_CODE = fm_76130_standard_LKLPZA6VYES4
+        "version": "2.0",                   # SF.txt: version = "2.0"
+        "fileType": "pdf",                  # SF.txt: fileType = "pdf"
+        "sync": True,                       # SF.txt: sync = True
+        "documents": documents,
+    }, timeout=timeout)
+
+
 def cloud_print(waybill_no, cfg=None):
-    """顺丰云打印面单 2.0（严格按 SF.txt 标准流程，COM_RECE_CLOUD_PRINT_WAYBILLS）
+    """顺丰云打印**母运单面单** 2.0（一票多件由 server 逐件调用后合并为一个多页 PDF）
 
     流程（与 SF.txt 逐步对应）：
       1. 组装 msgData = {templateCode, version:"2.0", fileType:"pdf", sync:True,
@@ -249,16 +266,22 @@ def cloud_print(waybill_no, cfg=None):
     返回：apiResultData.msgData（v2.0 实测为 {obj:{files:[{url, token, waybillNo}]}}；
     PDF 需凭 url + 请求头 X-Auth-Token: token 另行下载，见 base.fetch_url_pdf_b64）
     """
-    cfg = cfg or base.get_cfg(_PREFIX)
-    if not base.configured(cfg):
-        raise base.CarrierError("顺丰未配置密钥，无法云打印面单")
-    return _call(cfg, SERVICE_PRINT, {
-        "templateCode": _TEMPLATE,          # SF.txt: TEMPLATE_CODE = fm_76130_standard_LKLPZA6VYES4
-        "version": "2.0",                   # SF.txt: version = "2.0"
-        "fileType": "pdf",                  # SF.txt: fileType = "pdf"
-        "sync": True,                       # SF.txt: sync = True
-        "documents": [{"masterWaybillNo": waybill_no}],   # SF.txt: documents[0].masterWaybillNo
-    }, timeout=30)
+    return _cloud_print_docs([{"masterWaybillNo": waybill_no}], cfg)
+
+
+def cloud_print_back(back_waybill_no, cfg=None):
+    """顺丰云打印**签回单（回单联）** 2.0 —— 2026-10-08 官方文档 + 客服核实 + 真单实锤。
+
+    文档口径（《打印》backWaybillNo 条）：打印签回单时 **masterWaybillNo 和 branchWaybillNo
+    为空**，回单号只传 `backWaybillNo`。此前把回单号塞进 masterWaybillNo → 恒得 1 页**正向**
+    "POD标快"签收联（寄=莱克勒/收=客户/寄付月结），即 2026-09-30 被撤回的错误第 2 页；
+    改传 backWaybillNo 后同单实锤（探针 carriers/_sb_back_probe.py，order#557 主单
+    SF5148042784954 / 回单 SF1065010577207）得到**反向回签单**：
+        「1/1  回: SF1065010577207」+「关联主运单: SF5148042784954」
+        + 收=范蓓蓓/莱克勒喷嘴系统（常州）德城路99号 + **到付** + 寄=客户地址
+    —— 收寄互反、票面回链原主单号，与速打（SF Suba）同一任务出纸的两联一致。
+    """
+    return _cloud_print_docs([{"backWaybillNo": back_waybill_no}], cfg)
 
 
 def _real_query_route(waybill_no, cfg):

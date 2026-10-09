@@ -1,0 +1,225 @@
+ MarketUP 与 Salesforce 对接通过 Salesforce 标准 REST API 查询、新增和更新联系人，以及新增、更新拜访报告。
+
+请协助在沙箱配置以下内容：
+
+1. 配置支持 Client Credentials Flow 的 OAuth 应用，指定专用集成用户，开启 API 访问范围（api）。
+2. 为集成用户开启 API Enabled 权限，并授权同步范围内的数据：
+
+   * 联系人（Contact）：读取、新增、编辑权限。
+   * 拜访报告实际对应的对象：读取、新增、编辑权限。
+   * 关联客户（Account）等对象：按关联需要提供读取权限。
+   * 同步字段的读取、可编辑字段的写入权限。
+3. 提供沙箱 My Domain 地址、Client ID（Consumer Key）、Client Secret（Consumer Secret）。
+4. 提供拜访报告的对象及字段 API 名称、必填项、选项值、记录类型和关联关系。若拜访报告涉及主表和明细表，请一并提供。
+
+下方为 Java 联调请求示例：
+1. 需要使用的接口
+
+以下业务路径均以 /services/data/{version} 开头，{version} 使用沙箱支持的版本。
+
+用途    方法    接口路径
+获取访问令牌      POST  /services/oauth2/token，使用沙箱 My Domain
+按更新时间查询联系人  GET   /services/data/{version}/query?q=...
+查询联系人详情及更新时间      GET   /services/data/{version}/sobjects/Contact/{Id}
+新增联系人 POST  /services/data/{version}/sobjects/Contact
+更新联系人 PATCH /services/data/{version}/sobjects/Contact/{Id}
+新增拜访报告      POST  /services/data/{version}/sobjects/{报告对象API名称}
+更新拜访报告      PATCH /services/data/{version}/sobjects/{报告对象API名称}/{Id}
+查询对象字段定义    GET   /services/data/{version}/sobjects/{对象API名称}/describe
+
+2. Spring Boot Java 请求示例
+
+配置示例：
+
+salesforce:
+  domain: ${SF_DOMAIN}
+  client-id: ${SF_CLIENT_ID}
+  client-secret: ${SF_CLIENT_SECRET}
+  # 示例，以沙箱支持的版本为准
+  api-version: v60.0
+
+请求代码：
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+
+@Service
+public class SalesforceClient {
+
+    @Value("${salesforce.domain}")
+    private String domain;
+
+    @Value("${salesforce.client-id}")
+    private String clientId;
+
+    @Value("${salesforce.client-secret}")
+    private String clientSecret;
+
+    @Value("${salesforce.api-version}")
+    private String apiVersion;
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    private final HttpClient http = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    // 1. 使用 Client ID + Client Secret 获取 Token
+    public JsonNode getToken() throws IOException, InterruptedException {
+        String form = "grant_type=client_credentials"
+                + "&client_id=" + encode(clientId)
+                + "&client_secret=" + encode(clientSecret);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(domain.replaceAll("/+$", "")
+                        + "/services/oauth2/token"))
+                .timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+
+        return execute(request);
+    }
+
+    // 2. 按更新时间查询联系人：返回第一页
+    public JsonNode queryContacts(JsonNode token, Instant since)
+            throws IOException, InterruptedException {
+
+        String soql = "SELECT Id, FirstName, LastName, MobilePhone, "
+                + "Email, AccountId, LastModifiedDate "
+                + "FROM Contact "
+                + "WHERE LastModifiedDate >= " + since.toString()
+                + " ORDER BY LastModifiedDate, Id";
+
+        return call(token, "GET", apiPath() + "/query?q=" + encode(soql), null);
+    }
+
+    // 3. 查询单个联系人：写入后可读取 SF 实际更新时间
+    public JsonNode getContact(JsonNode token, String contactId)
+            throws IOException, InterruptedException {
+
+        return call(token, "GET",
+                apiPath() + "/sobjects/Contact/" + contactId, null);
+    }
+
+    // 4. 新增联系人或拜访报告，成功返回包含 id 的 JSON
+    public JsonNode createRecord(
+            JsonNode token, String objectApiName, Map<String, Object> fields)
+            throws IOException, InterruptedException {
+
+        return call(token, "POST",
+                apiPath() + "/sobjects/" + objectApiName, fields);
+    }
+
+    // 5. 更新联系人或拜访报告，成功通常返回 HTTP 204
+    public void updateRecord(
+            JsonNode token, String objectApiName, String recordId,
+            Map<String, Object> fields)
+            throws IOException, InterruptedException {
+
+        call(token, "PATCH",
+                apiPath() + "/sobjects/" + objectApiName + "/" + recordId,
+                fields);
+    }
+
+    private JsonNode call(
+            JsonNode token, String method, String path, Object body)
+            throws IOException, InterruptedException {
+
+        // 业务接口使用 Token 响应中的 instance_url
+        String baseUrl = token.get("instance_url").asText();
+        String accessToken = token.get("access_token").asText();
+
+        HttpRequest.BodyPublisher publisher = body == null
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(
+                        mapper.writeValueAsString(body));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/json")
+                .method(method, publisher)
+                .build();
+
+        return execute(request);
+    }
+
+    private JsonNode execute(HttpRequest request)
+            throws IOException, InterruptedException {
+
+        HttpResponse<String> response = http.send(
+                request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            // 不在异常日志中输出 Secret、Token 或联系人数据
+            throw new IOException(
+                    "Salesforce 请求失败，HTTP " + response.statusCode());
+        }
+
+        return response.body().isBlank()
+                ? mapper.createObjectNode()
+                : mapper.readTree(response.body());
+    }
+
+    private String apiPath() {
+        return "/services/data/" + apiVersion;
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}
+3. 几段实际调用示例
+
+以下在注入 SalesforceClient sf 的业务方法中调用，示例修改操作仅针对沙箱测试数据。
+
+// 获取 Token：同一轮请求复用，不需要每个请求都重新获取
+JsonNode token = sf.getToken();
+
+// 查询指定时间之后更新的联系人
+JsonNode contacts = sf.queryContacts(
+        token, Instant.parse("2026-09-20T00:00:00Z"));
+// 更新联系人：替换成沙箱测试联系人的真实 ID
+String contactId = "替换为沙箱ContactId";
+
+sf.updateRecord(token, "Contact", contactId, Map.of(
+        "LastName", "张三",
+        "MobilePhone", "13800000000"
+));
+
+// 更新成功后，再查询 SF 服务器实际生成的更新时间
+JsonNode contact = sf.getContact(token, contactId);
+String sfModifiedTime = contact.get("LastModifiedDate").asText();
+
+// 由 MarketUP 保存 sfModifiedTime，作为该联系人下次同步判断的基准
+// 新增拜访报告
+// 以下对象及字段名仅为占位，不代表客户现有 Salesforce 配置
+JsonNode report = sf.createRecord(token, "Visit_Report__c", Map.of(
+        "Subject__c", "客户拜访",
+        "Content__c", "沟通产品需求及后续跟进安排",
+        "Contact__c", contactId
+));
+
+// MarketUP 保存返回的报告 ID，后续修改时更新同一条记录
+String reportId = report.get("id").asText();
+
+sf.updateRecord(token, "Visit_Report__c", reportId, Map.of(
+        "Content__c", "已补充客户反馈，下周继续跟进"
+));
+
+注：上面是请求的示例，不是完整同步程序。

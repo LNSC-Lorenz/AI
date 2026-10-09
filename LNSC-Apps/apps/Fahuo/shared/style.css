@@ -5,12 +5,13 @@
   --line-light: #d9d9d9;
   --line-inner: #999999;   /* 面板内部横线：浅色 */
 }
-/* 主题：蓝色模式（RGB 29,69,159） */
+/* 主题：蓝色模式（2026-10-08 用户指定 RGB 0,104,120 = #006878；原 29,69,159 = #1D459F）
+   派生色与旧版同法推得 = 主色与白按 22% / 52% / 85% 混合（同色系，对比关系不变） */
 :root[data-theme="blue"] {
-  --black: #1D459F;
-  --gray: #4a6db5;
-  --line-light: #d5e0f5;
-  --line-inner: #8aa5d6;
+  --black: #006878;
+  --gray: #388996;
+  --line-light: #d9e8eb;
+  --line-inner: #85b7be;
 }
 /* 主题色条（标题栏右段平铺：竖条标识，当前主题带外框） */
 .theme-sw {
@@ -99,31 +100,50 @@ body {
   border: none;
   height: 48px;
 }
+/* 左段：LECHLER 组合标志（白底 → 按源文件品牌色 #006878 原样显示，不反白；2026-10-08 用户指定） */
+.tb-logo-box {
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 8px;
+  margin-right: 8px;
+}
+.tb-logo {
+  height: 28px;            /* 48px 栏内留 10px 上下留白；比例 634.96:85.04 ≈ 7.5 → 宽约 209px */
+  width: auto;
+  display: block;
+}
+/* 黑白模式：标志随主题转纯黑（蓝色模式即品牌原色 #006878，与源文件一致，不做处理） */
+:root[data-theme="bw"] .tb-logo { filter: brightness(0); }
+/* 中段：中文名 + 英文名同处一段（主题色斜切段，白色字，同一行并排 → 「显示在一起」） */
+.tb-mid {
+  background: var(--black);  /* 主题色斜切段（原英文段位置，斜切造型保持） */
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  gap: 14px;                 /* 中文名与英文全称间距 */
+  padding: 0 40px 0 36px;
+  margin-right: 8px;       /* 与右段间距 */
+  white-space: nowrap;
+  flex: 1;                 /* 填充左段，配合右段实现 2/3 : 1/3 */
+  clip-path: polygon(24px 0, 100% 0, calc(100% - 24px) 100%, 0 100%); /* 两端斜切，无垂直边 */
+}
 .title-bar h1 {
   font-size: 19px;
   font-weight: 800;
   letter-spacing: 1px;
-  color: var(--black);       /* 白底主题色字（蓝色模式=蓝字） */
+  line-height: 1;
+  color: var(--white);       /* 段内白字（黑/蓝两种主题下一致） */
   background: transparent;   /* 不要背景 */
-  display: flex;
-  align-items: center;
-  padding: 0 12px 0 8px;
-  margin-right: 0;         /* 与英文段相接 */
+  margin: 0;
 }
-/* 左段第 2 部分：英文（与标题连成一段，右端斜切） */
-.tb-mid {
-  color: var(--white);
-  background: var(--black);
-  display: flex;
-  align-items: center;
-  padding: 0 40px 0 36px;
-  margin-right: 8px;       /* 两段间距 */
-  font-size: 13px;
+/* 副名（英文全称）：与中文名同段并列 */
+.tb-sub {
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 2px;
-  white-space: nowrap;
-  flex: 1;                 /* 填充左段，配合右段实现 2/3 : 1/3 */
-  clip-path: polygon(24px 0, 100% 0, calc(100% - 24px) 100%, 0 100%); /* 两端斜切，无垂直边 */
+  line-height: 1;
+  color: var(--white);
+  opacity: .92;              /* 略降，突出中文名 */
 }
 /* 右段第 2 段：Logistics（主题色斜切段，仅此段带背景） */
 .tb-brand {
@@ -1236,7 +1256,8 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .lb-count { position: absolute; top: 18px; left: 20px; color: #fff; font-size: 14px; opacity: .8; }
 /* ===== 专车/自提面单（2026-09-21 用户指定版式：条码+二维码+手写栏；
    ⚠️ 颜色全部用主题变量 var(--black)/var(--gray)，不得硬编码 #000——
-   「蓝色模式」下 --black=#1D459F，其它 3 家面单随之变蓝，OT 硬编码黑会显得"不一致"（2026-09-21 用户规则）；
+   「蓝色模式」下 --black=#006878（2026-10-08 用户指定 RGB 0,104,120；原 29,69,159），
+   其它 3 家面单随之同色，OT 硬编码黑会显得"不一致"（2026-09-21 用户规则）；
    条码与各家一致保持纯黑（.pw-barcode 渐变同样硬编码 #000）。预览 76:130，仅打印调整为 100×150mm 纸 ===== */
 #billOT.ot2 { font-size: 13px; line-height: 1.3; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 /* ⚠️ ID 级 display:flex 会压过 hidden 属性的 UA 默认 display:none（曾致 OT 面单常驻叠在其它 3 家面单上）——显式补回 */

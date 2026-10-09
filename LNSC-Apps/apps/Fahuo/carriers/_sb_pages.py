@@ -23,8 +23,10 @@ from carriers import base, sf_express  # noqa: E402
 cfg = base.get_cfg("SF")
 
 
-def pages_text(wb):
-    d = sf_express.cloud_print(wb, cfg)
+def pages_text(wb, back=False):
+    """back=True → 签回单口径（documents[].backWaybillNo，2026-10-08 官方文档实锤）；
+    默认 = 母运单口径（documents[].masterWaybillNo）"""
+    d = sf_express.cloud_print_back(wb, cfg) if back else sf_express.cloud_print(wb, cfg)
     files = (d.get("obj") or {}).get("files") or []
     out = ["files=%d" % len(files)]
     from pypdf import PdfReader
@@ -51,10 +53,12 @@ def route_full(wb):
 
 sb = sys.argv[1]
 main = sys.argv[2] if len(sys.argv) > 2 else ""
-print("######## 回单面单逐页全文:", sb)
-print(pages_text(sb))
+print("######## 回单面单逐页全文（backWaybillNo 口径，2026-10-08）:", sb)
+print(pages_text(sb, back=True))
 print("\n######## 回单运单轨迹（流向核查）:", sb)
 print(route_full(sb))
 if main:
+    print("\n######## 主面单逐页全文（masterWaybillNo 口径，对照）:", main)
+    print(pages_text(main))
     print("\n######## 主单轨迹对照:", main)
     print(route_full(main))

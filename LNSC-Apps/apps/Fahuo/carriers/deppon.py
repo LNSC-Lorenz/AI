@@ -187,6 +187,9 @@ def _next_logistic_id(cfg):
 
 
 def _real_place_order(order, cfg):
+    # 托寄物原样传递、不加回单后缀（2026-10-08 用户原话「移除备注加的 的回单 3个字」，与顺丰同规则；
+    # 回单渠道仍走 addServices 纸质回单三字段，见下）
+    _rc = order.get("receipt") or []
     cargo = order.get("cargo") or ""   # 托寄物原样传递，为空不自动填充
     # 数量（2026-09-17 用户规则）：>1 时随托寄物打印到官方面单（"喷嘴 300pcs"样式，与用户手工习惯一致）
     qty = int(float(order.get("qty") or 1))
@@ -238,7 +241,7 @@ def _real_place_order(order, cfg):
     # 回签单（2026-09-17 官方文档《【新】下单服务接口 德邦.doc》终定）：三个字段是
     # addServices 对象的【子字段】——此前放顶层被静默忽略（12 种形态实测面单均"无需返单"）；
     # backSignBill=1(签收单原件返回) 时 returnRequirement(R1:签名)+returnBillQty(返单张数) 必填
-    if "纸质回单" in (order.get("receipt") or []):
+    if "纸质回单" in _rc:   # _rc 已于 cargo_print 处取
         body["addServices"] = {"backSignBill": "1", "returnRequirement": "R1", "returnBillQty": 1}
     params = json.dumps(body, ensure_ascii=False)
     resp = _signed_post(_ENDPOINT, cfg, params, timeout=30)

@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketUP and Salesforce Data Request Plan</title>
+  <style>
+    :root{--ink:#172033;--muted:#66748a;--line:#dce4ee;--bg:#f5f8fc;--white:#fff;--brand:lab(42.0445% 69.9888 48.0381);--brand-deep:color-mix(in srgb,var(--brand) 78%,#261c35 22%);--brand-light:color-mix(in srgb,var(--brand) 14%,#fff 86%);--blue:var(--brand);--blue-soft:var(--brand-light);--green:#159879;--green-soft:#ecfaf5;--orange:#d58a18;--orange-soft:#fff7e8;--shadow:0 18px 42px rgba(32,58,93,.09)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    .page{max-width:980px;margin:0 auto;padding:34px 26px 56px}
+    .hero{background:linear-gradient(135deg,var(--brand-deep),var(--brand));border-radius:23px;padding:38px 40px;color:#fff;box-shadow:var(--shadow)}
+    .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:700;margin-bottom:11px}
+    h1{font-size:31px;line-height:1.2;letter-spacing:-.04em;margin:0 0 11px;font-weight:760}
+    .hero p{margin:0;max-width:720px;color:rgba(255,255,255,.84);font-size:14px;line-height:1.7}
+    .hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:21px}.tag{font-size:12px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25)}
+    .section{margin-top:25px}.section-kicker{font-size:11px;color:var(--blue);letter-spacing:.15em;text-transform:uppercase;font-weight:800;margin-bottom:6px}h2{font-size:20px;letter-spacing:-.02em;margin:0 0 7px;font-weight:740}.intro{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 14px}
+    .panel{background:var(--white);border:1px solid var(--line);border-radius:17px;padding:22px;box-shadow:0 10px 24px rgba(32,58,93,.04)}
+    .rule-box{margin-top:18px;background:var(--blue-soft);border:1px solid #cbdfff;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.6;color:#365a91}.rule-box b{color:var(--blue)}
+.table-wrap{border:1px solid var(--line);border-radius:13px;overflow:auto;margin-top:14px}table{border-collapse:collapse;width:100%;min-width:620px;font-size:13px}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);background:var(--bg);font-weight:750}tr:last-child td{border-bottom:0}td code{font-size:12px;color:#2b4a7d;white-space:nowrap}
+    .callout{margin-top:14px;padding:13px 14px;border-radius:11px;background:var(--green-soft);border:1px solid #bfe7d9;color:#306956;font-size:12px;line-height:1.6}.callout b{color:var(--green)}
+    .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:19px;padding-top:15px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+    .req-list{display:grid;gap:12px;margin-top:14px}
+    .req{display:grid;grid-template-columns:30px 1fr;gap:13px;border:1px solid var(--line);border-radius:13px;padding:15px 16px;background:var(--white)}
+    .req-no{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);font-size:12px;font-weight:800;border:1px solid #cbdfff}
+    .req h3{font-size:14px;margin:0 0 6px;font-weight:730}
+    .req p{font-size:12px;color:var(--muted);line-height:1.65;margin:0}
+    .req ul{margin:9px 0 0;padding-left:17px;display:grid;gap:5px}
+    .req li{font-size:12px;color:var(--muted);line-height:1.6}
+    .req li b{color:var(--ink)}
+    code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace}
+    p code,li code,.note code{font-size:11.5px;background:#eef3fb;border:1px solid #dae3f2;border-radius:5px;padding:1px 5px;color:#2b4a7d}
+    .m{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 7px;border-radius:6px}
+    .m.get{background:#e6f5ef;color:#15805f}.m.post{background:#e8f0ff;color:#2b5db8}.m.patch{background:#fff3e0;color:#b06d0d}
+    .code-block{margin-top:14px;border:1px solid #1f3350;border-radius:12px;background:#101c2e;overflow:hidden}
+    .code-bar{display:flex;align-items:center;gap:9px;padding:9px 14px;background:#16253b;border-bottom:1px solid #1f3350;font-size:11px;font-weight:700;color:#9fb4d1;letter-spacing:.05em}
+    .code-bar .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#2f4463}
+    .code-block pre{margin:0;padding:15px 16px;overflow:auto;font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:12px;line-height:1.62;color:#d7e3f4}
+    .code-block pre .cm{color:#7f97b8}
+    .note{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6}
+    @media(max-width:760px){.table-wrap table{min-width:520px}}
+    @media(max-width:520px){.page{padding:17px 13px 38px}.hero{padding:28px 23px;border-radius:18px}h1{font-size:27px}.panel{padding:17px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Salesforce Data Request</div>
+      <h1>MarketUP and Salesforce Data Request Plan</h1>
+      <p>MarketUP works with Salesforce through the standard Salesforce REST API to query, create and update contacts, and to create and update visit reports. The sections below list the sandbox configuration MarketUP needs from the Salesforce team, followed by the Java request examples used for joint testing.</p>
+      <div class="hero-tags"><span class="tag">Client Credentials Flow</span><span class="tag">REST API</span><span class="tag">Spring Boot (Java)</span><span class="tag">Sandbox first</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">01 · Configuration Requested</div>
+      <h2>Please help configure the following in the sandbox</h2>
+      <p class="intro">These four items cover the OAuth application, the integration user's permissions, the credentials MarketUP needs, and the object metadata required for the visit report.</p>
+
+      <div class="req-list">
+        <div class="req"><div class="req-no">1</div><div>
+          <h3>OAuth application</h3>
+          <p>Configure an OAuth application that supports the Client Credentials Flow, assign a dedicated integration user, and enable the API access scope (<code>api</code>).</p>
+        </div></div>
+
+        <div class="req"><div class="req-no">2</div><div>
+          <h3>Integration user permissions</h3>
+          <p>Enable the API Enabled permission for the integration user, and authorize the data within the sync scope:</p>
+          <ul>
+            <li><b>Contact:</b> read, create and edit permissions.</li>
+            <li><b>The object that actually backs the visit report:</b> read, create and edit permissions.</li>
+            <li><b>Related objects such as Account:</b> read permission as required by the relationships.</li>
+            <li><b>Synced fields:</b> read permission; write permission for fields that are editable.</li>
+          </ul>
+        </div></div>
+
+        <div class="req"><div class="req-no">3</div><div>
+          <h3>Connection credentials</h3>
+          <p>Provide the sandbox My Domain URL, the Client ID (Consumer Key) and the Client Secret (Consumer Secret).</p>
+        </div></div>
+
+        <div class="req"><div class="req-no">4</div><div>
+          <h3>Visit report object metadata</h3>
+          <p>Provide the object and field API names, required fields, picklist values, record types and relationships for the visit report. If the visit report uses a main object plus a detail object, please provide both.</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">02 · Endpoints to Use</div>
+      <h2>Salesforce REST API endpoints</h2>
+      <p class="intro">All of the business paths below start with <code>/services/data/{version}</code>; use a <code>{version}</code> that the sandbox supports.</p>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Purpose</th><th>Method</th><th>Path</th></tr></thead>
+            <tbody>
+              <tr><td>Get an access token</td><td><span class="m post">POST</span></td><td><code>/services/oauth2/token</code>, using the sandbox My Domain</td></tr>
+              <tr><td>Query contacts by update time</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/query?q=...</code></td></tr>
+              <tr><td>Query contact details and update time</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/sobjects/Contact/{Id}</code></td></tr>
+              <tr><td>Create a contact</td><td><span class="m post">POST</span></td><td><code>/services/data/{version}/sobjects/Contact</code></td></tr>
+              <tr><td>Update a contact</td><td><span class="m patch">PATCH</span></td><td><code>/services/data/{version}/sobjects/Contact/{Id}</code></td></tr>
+              <tr><td>Create a visit report</td><td><span class="m post">POST</span></td><td><code>/services/data/{version}/sobjects/{report object API name}</code></td></tr>
+              <tr><td>Update a visit report</td><td><span class="m patch">PATCH</span></td><td><code>/services/data/{version}/sobjects/{report object API name}/{Id}</code></td></tr>
+              <tr><td>Query object field definitions</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/sobjects/{object API name}/describe</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rule-box"><b>Version note:</b> <code>{version}</code> is a placeholder - use the API version supported by the sandbox, for example <code>v60.0</code>.</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">03 · Spring Boot Request Example</div>
+      <h2>Spring Boot (Java) request example</h2>
+      <p class="intro">The sample below uses the JDK HTTP client and Jackson, so no extra Salesforce SDK is required.</p>
+      <div class="panel">
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>application.yml</div>
+<pre>salesforce:
+  domain: ${SF_DOMAIN}
+  client-id: ${SF_CLIENT_ID}
+  client-secret: ${SF_CLIENT_SECRET}
+  <span class="cm"># Example only; use the version supported by the sandbox</span>
+  api-version: v60.0</pre>
+        </div>
+
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>SalesforceClient.java</div>
+<pre>import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+
+@Service
+public class SalesforceClient {
+
+    @Value("${salesforce.domain}")
+    private String domain;
+
+    @Value("${salesforce.client-id}")
+    private String clientId;
+
+    @Value("${salesforce.client-secret}")
+    private String clientSecret;
+
+    @Value("${salesforce.api-version}")
+    private String apiVersion;
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    private final HttpClient http = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    <span class="cm">// 1. Get a token with the Client ID and Client Secret</span>
+    public JsonNode getToken() throws IOException, InterruptedException {
+        String form = "grant_type=client_credentials"
+                + "&amp;client_id=" + encode(clientId)
+                + "&amp;client_secret=" + encode(clientSecret);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(domain.replaceAll("/+$", "")
+                        + "/services/oauth2/token"))
+                .timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+
+        return execute(request);
+    }
+
+    <span class="cm">// 2. Query contacts by update time: returns the first page</span>
+    public JsonNode queryContacts(JsonNode token, Instant since)
+            throws IOException, InterruptedException {
+
+        String soql = "SELECT Id, FirstName, LastName, MobilePhone, "
+                + "Email, AccountId, LastModifiedDate "
+                + "FROM Contact "
+                + "WHERE LastModifiedDate &gt;= " + since.toString()
+                + " ORDER BY LastModifiedDate, Id";
+
+        return call(token, "GET", apiPath() + "/query?q=" + encode(soql), null);
+    }
+
+    <span class="cm">// 3. Query a single contact: after a write, read the update time Salesforce actually stored</span>
+    public JsonNode getContact(JsonNode token, String contactId)
+            throws IOException, InterruptedException {
+
+        return call(token, "GET",
+                apiPath() + "/sobjects/Contact/" + contactId, null);
+    }
+
+    <span class="cm">// 4. Create a contact or visit report; on success returns JSON containing the id</span>
+    public JsonNode createRecord(
+            JsonNode token, String objectApiName, Map&lt;String, Object&gt; fields)
+            throws IOException, InterruptedException {
+
+        return call(token, "POST",
+                apiPath() + "/sobjects/" + objectApiName, fields);
+    }
+
+    <span class="cm">// 5. Update a contact or visit report; a successful call usually returns HTTP 204</span>
+    public void updateRecord(
+            JsonNode token, String objectApiName, String recordId,
+            Map&lt;String, Object&gt; fields)
+            throws IOException, InterruptedException {
+
+        call(token, "PATCH",
+                apiPath() + "/sobjects/" + objectApiName + "/" + recordId,
+                fields);
+    }
+
+    private JsonNode call(
+            JsonNode token, String method, String path, Object body)
+            throws IOException, InterruptedException {
+
+        <span class="cm">// Business endpoints use the instance_url from the token response</span>
+        String baseUrl = token.get("instance_url").asText();
+        String accessToken = token.get("access_token").asText();
+
+        HttpRequest.BodyPublisher publisher = body == null
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(
+                        mapper.writeValueAsString(body));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/json")
+                .method(method, publisher)
+                .build();
+
+        return execute(request);
+    }
+
+    private JsonNode execute(HttpRequest request)
+            throws IOException, InterruptedException {
+
+        HttpResponse&lt;String&gt; response = http.send(
+                request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() &lt; 200 || response.statusCode() &gt;= 300) {
+            <span class="cm">// Do not log the secret, the token or contact data in the error message</span>
+            throw new IOException(
+                    "Salesforce request failed, HTTP " + response.statusCode());
+        }
+
+        return response.body().isBlank()
+                ? mapper.createObjectNode()
+                : mapper.readTree(response.body());
+    }
+
+    private String apiPath() {
+        return "/services/data/" + apiVersion;
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">04 · Sample Calls</div>
+      <h2>How the client is used</h2>
+      <p class="intro">The calls below are made from a business method that has <code>SalesforceClient sf</code> injected. The sample update operations only touch sandbox test data.</p>
+      <div class="panel">
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>SalesforceClient usage</div>
+<pre><span class="cm">// Get a token: reuse it for the whole round; there is no need to fetch one per request</span>
+JsonNode token = sf.getToken();
+
+<span class="cm">// Query the contacts updated after the given time</span>
+JsonNode contacts = sf.queryContacts(
+        token, Instant.parse("2026-09-20T00:00:00Z"));
+<span class="cm">// Update a contact: replace this with the real ID of the sandbox test contact</span>
+String contactId = "replace-with-sandbox-ContactId";
+
+sf.updateRecord(token, "Contact", contactId, Map.of(
+        "LastName", "Zhang San",
+        "MobilePhone", "13800000000"
+));
+
+<span class="cm">// After a successful update, query the update time that the Salesforce server actually generated</span>
+JsonNode contact = sf.getContact(token, contactId);
+String sfModifiedTime = contact.get("LastModifiedDate").asText();
+
+<span class="cm">// MarketUP stores sfModifiedTime as the baseline for the next sync decision on this contact</span>
+<span class="cm">// Create a visit report</span>
+<span class="cm">// The object and field names below are placeholders only and do not represent the customer's current Salesforce configuration</span>
+JsonNode report = sf.createRecord(token, "Visit_Report__c", Map.of(
+        "Subject__c", "Customer visit",
+        "Content__c", "Discussed product requirements and the follow-up plan",
+        "Contact__c", contactId
+));
+
+<span class="cm">// MarketUP stores the returned report ID and updates the same record on later edits</span>
+String reportId = report.get("id").asText();
+
+sf.updateRecord(token, "Visit_Report__c", reportId, Map.of(
+        "Content__c", "Added the customer's feedback; follow up again next week"
+));</pre>
+        </div>
+        <div class="callout"><b>Note:</b> the code above is a request example, not a complete sync program.</div>
+      </div>
+    </section>
+
+    <footer class="footer"><span>MarketUP × Salesforce Data Request Plan</span><span>Salesforce REST API · Client Credentials Flow</span></footer>
+  </main>
+</body>
+</html>

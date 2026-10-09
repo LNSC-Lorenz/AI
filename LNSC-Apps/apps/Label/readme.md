@@ -1,0 +1,1539 @@
+# SAP Label Management Platform
+
+## 1. 项目目标
+
+建设一个完全自托管、以开源组件为基础的企业级 SAP 标签管理与打印平台。
+
+核心场景：
+
+1. 仓库人员输入 SAP Delivery Number（DN）
+2. 系统查询 SAP
+3. 自动识别 Customer
+4. 自动选择客户对应的 Label Template
+5. 自动填充 SAP 数据
+6. 根据配置规则计算标签数量
+7. 预览
+8. 打印
+9. 保存打印历史，可追溯、可重打
+
+正常操作人员不需要手工选择客户或模板。
+
+**重要补充场景（打印时即时输入）：**
+
+并不是每次打印都能从 SAP 取得完整的标签数据。
+
+1. 某些情况下 DN / SAP 数据中**没有客户编码（Customer Code）**。
+2. 或者标签上需要打印 SAP 里**根本不存在**的字段，
+   例如客户料号 / 客户物料编码（Customer Part Number）。
+3. 这类字段必须在**打印前由操作人员立即手工录入**，然后才能打印。
+4. 手工录入的值必须写入打印历史，保证可追溯、可重打。
+
+因此系统除了「全自动」路径外，必须支持「**打印时即时输入（Ad-hoc）**」路径：
+
+```text
+DN → 查 SAP → 缺客户编码 / 字段
+   → 操作员立即手工输入
+   → 匹配 / 选择模板
+   → 预览 → 打印
+```
+
+---
+
+## 2. 当前技术路线
+
+最终方向：
+
+> **LabelPrint + 自建 Vue 3 Designer + FastAPI + PostgreSQL**
+
+LabelPrint 作为打印能力组件，而不是整个系统的核心业务数据库。
+
+核心原则：
+
+> **Label JSON 是系统自己的标准模板格式，LabelPrint 是可替换的打印引擎。**
+
+架构：
+
+```text
+                         SAP S/4HANA
+                              │
+                         RFC / OData
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────┐
+│              SAP Label Management                  │
+│                                                     │
+│  Vue 3 + Element Plus                              │
+│  ┌───────────────────────────────────────────────┐  │
+│  │                Label Designer                │  │
+│  │                                               │  │
+│  │ Components │      Canvas       │ Properties  │  │
+│  │ Text        │                  │ X / Y       │  │
+│  │ Image       │   label canvas   │ Width       │  │
+│  │ Barcode     │                  │ Height      │  │
+│  │ QR Code     │                  │ Font        │  │
+│  │ Line        │                  │ Field       │  │
+│  │ Rectangle   │                  │             │  │
+│  │ SAP Field   │                  │             │  │
+│  │ Company     │                  │             │  │
+│  └───────────────────────────────────────────────┘  │
+│                                                     │
+│  Template / Customer / Field Mapping / Print Rule  │
+│                                                     │
+│                 FastAPI                            │
+│                 PostgreSQL                         │
+└────────────────────────┬────────────────────────────┘
+                         │
+                    Label JSON
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │  LabelPrint │
+                  │ Print Engine│
+                  └──────┬──────┘
+                         │
+                  Print Adapter
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+             PDF        TSPL       RAW
+              │          │          │
+              ▼          ▼          ▼
+          Windows      Printer    Network
+           Driver
+```
+
+---
+
+## 3. 为什么选择 LabelPrint + 自建 Designer
+
+之前考虑过：
+
+- OpenLabelMaker
+- LabelPrint
+- Vue Print Designer
+- PrintDesignPro
+- ZPLab
+- QR Layout Tool
+- SVGDraw
+- BarcodeLabelGen
+- yu-print-designer
+
+当前选择：
+
+### LabelPrint
+
+优点：
+
+- 开源
+- MIT License
+- 自托管
+- Web 化
+- 有模板、变量、预览、打印能力
+- 有 REST API
+- 可以作为打印后端
+- 可以支持多种输出/打印方式
+
+项目地址：
+
+```text
+https://github.com/xingrz/labelprint
+```
+
+但 LabelPrint 不应该成为整个业务系统的核心。
+
+### 自建 Vue Designer
+
+原因：
+
+- 完全控制 UI
+- 完全控制 Label JSON
+- SAP 字段可以直接做成拖拽组件
+- 客户 Logo 可以作为一等资源
+- 可以实现客户/模板/版本/打印规则
+- 不被第三方模板数据结构锁定
+- 后续可以替换 LabelPrint
+
+---
+
+# 4. Label JSON
+
+Label JSON 是整个系统的核心标准。
+
+示例：
+
+```json
+{
+  "templateCode": "ABC_PRODUCT",
+  "version": 3,
+  "size": {
+    "width": 100,
+    "height": 60,
+    "unit": "mm"
+  },
+  "elements": [
+    {
+      "id": "logo",
+      "type": "image",
+      "x": 5,
+      "y": 5,
+      "width": 25,
+      "height": 10,
+      "source": "customer_logo"
+    },
+    {
+      "id": "material",
+      "type": "field",
+      "field": "MATNR",
+      "x": 5,
+      "y": 20,
+      "width": 50,
+      "height": 6,
+      "fontSize": 12
+    },
+    {
+      "id": "description",
+      "type": "field",
+      "field": "MAKTX",
+      "x": 5,
+      "y": 28,
+      "width": 80,
+      "height": 6,
+      "fontSize": 10
+    },
+    {
+      "id": "batch",
+      "type": "field",
+      "field": "CHARG",
+      "x": 5,
+      "y": 36,
+      "width": 50,
+      "height": 6
+    },
+    {
+      "id": "qr",
+      "type": "qrcode",
+      "x": 70,
+      "y": 20,
+      "width": 25,
+      "height": 25,
+      "value": "{{MATNR}}|{{CHARG}}"
+    }
+  ]
+}
+```
+
+建议支持的 element：
+
+```text
+text
+field
+image
+customer_logo
+barcode
+qrcode
+datamatrix
+line
+rectangle
+rounded_rectangle
+table
+conditional
+group
+```
+
+### 字段数据来源（binding / source）
+
+每个元素 / 字段都应声明数据来源，这是支持「打印时即时输入」的关键：
+
+```text
+source: "sap"        —— 来自 SAP 字段（如 MATNR / CHARG）
+source: "static"     —— 设计时固定的常量文本
+source: "customer"   —— 客户主数据（客户编码、客户名称、客户 Logo）
+source: "manual"     —— 运行时由操作员在打印页面即时录入
+source: "expression" —— 由其它字段计算（如 Copies = CEILING(...)）
+```
+
+示例：SAP 中不存在、需要打印时录入的客户料号：
+
+```json
+{
+  "id": "cust_material",
+  "type": "field",
+  "source": "manual",
+  "label": "客户料号",
+  "field": "CUST_MATNR",
+  "required": true,
+  "x": 5,
+  "y": 44,
+  "width": 60,
+  "height": 6,
+  "fontSize": 10
+}
+```
+
+> 当 `source = "manual"` 时，系统在打印页面自动生成对应录入项，
+> 操作员输入后即可预览和打印。
+
+单位统一使用：
+
+```text
+mm
+```
+
+这样可以避免不同打印机 DPI 导致的版面偏差。
+
+---
+
+# 5. Designer
+
+## 左侧组件
+
+```text
+【基础组件】
+
+文本
+图片
+公司 Logo
+线条
+矩形
+圆角矩形
+
+
+【条码】
+
+CODE128
+CODE39
+EAN13
+EAN8
+ITF
+
+
+【二维码】
+
+QR Code
+DataMatrix
+
+
+【SAP】
+
+Delivery Number
+Customer
+Material
+Material Description
+Batch
+Quantity
+Plant
+Storage Location
+Customer PO
+Delivery Item
+
+
+【运行时录入】
+
+手工输入字段
+客户编码（Customer Code）
+客户料号（Customer Part Number）
+备注 / 自定义录入项
+
+
+【公司】
+
+Company Logo
+Customer Logo
+Company Name
+Address
+```
+
+---
+
+## Designer 功能
+
+必须支持：
+
+- Drag & Drop
+- Move
+- Resize
+- Rotate
+- Multi-select
+- Copy/Paste
+- Delete
+- Undo/Redo
+- Align
+- Grid
+- Ruler
+- Snap
+- Layer ordering
+- Lock
+- Hide
+- Properties panel
+- Preview
+- mm 尺寸
+- JSON Save / Load
+- 字段数据来源绑定（sap / static / customer / manual）
+- 运行时录入字段定义（required / 默认值 / 校验）
+
+界面建议：
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ SAP Label Designer                              Save Preview│
+├──────────────┬──────────────────────────────┬───────────────┤
+│ Components   │                              │ Properties    │
+│              │                              │               │
+│ Basic        │       100 × 60 mm            │ X             │
+│ ├ Text       │                              │ Y             │
+│ ├ Image      │      ┌────────────────┐      │ Width         │
+│ ├ Logo       │      │    ABC GmbH    │      │ Height        │
+│ ├ Line       │      │                │      │ Font          │
+│ └ Rectangle  │      │ Material:      │      │ Font Size     │
+│              │      │ 10001234       │      │ Alignment     │
+│ Barcode      │      │                │      │ Field         │
+│ ├ CODE128    │      │ Batch:         │      │               │
+│ └ CODE39     │      │ 26093001       │      │               │
+│              │      │                │      │               │
+│ QR Code      │      │     [ QR ]     │      │               │
+│              │      └────────────────┘      │               │
+│ SAP Fields   │                              │               │
+│ ├ MATNR      │                              │               │
+│ ├ MAKTX      │                              │               │
+│ ├ CHARG      │                              │               │
+│ └ LFIMG      │                              │               │
+└──────────────┴──────────────────────────────┴───────────────┘
+```
+
+---
+
+# 6. SAP 字段绑定
+
+Designer 不应该要求设计人员手工输入：
+
+```text
+{{MATNR}}
+{{MAKTX}}
+{{CHARG}}
+```
+
+而应该直接拖拽 SAP 字段。
+
+例如：
+
+```text
+Material       → MATNR
+Description    → MAKTX
+Batch          → CHARG
+Quantity       → LFIMG
+Customer PO    → BSTKD
+```
+
+Designer：
+
+```text
+Designer
+   ↓
+FastAPI
+   ↓
+SAP
+```
+
+Designer 本身不直接连接 SAP。
+
+---
+
+# 7. Customer Logo
+
+客户 Logo 应该作为独立资源管理。
+
+```text
+Customer
+│
+├── ABC GmbH
+│   └── logo.png
+├── XYZ AG
+│   └── logo.png
+└── DEF GmbH
+    └── logo.png
+```
+
+模板中可以：
+
+```json
+{
+  "type": "customer_logo"
+}
+```
+
+打印时：
+
+```text
+Customer
+   ↓
+Customer Logo
+   ↓
+Render
+```
+
+这样同一个模板可以根据客户自动显示不同 Logo。
+
+---
+
+# 8. Customer / Template 自动匹配
+
+不要写死：
+
+```python
+if customer == "ABC":
+    template = "ABC_V3"
+```
+
+应该使用配置：
+
+```text
+Customer
+   ↓
+Label Profile / Print Rule
+   ↓
+Template
+   ↓
+Template Version
+```
+
+以后可以进一步支持：
+
+```text
+Customer
+Material
+Material Group
+Plant
+Warehouse
+Delivery
+Quantity
+Packaging
+Label Type
+```
+
+作为匹配条件。
+
+## 8.1 客户编码缺失时的处理
+
+如果 SAP 数据里没有客户编码，就不能直接走自动匹配。系统必须提供回退策略：
+
+```text
+SAP 无 Customer
+   ↓
+① 操作员立即手工输入客户编码
+   ↓
+   匹配 Print Rule → 模板
+   （若仍无法匹配，转 ②）
+   ↓
+② 操作员从模板列表手工选择
+   ↓
+③ 或使用系统默认模板（Default Template）
+```
+
+无论走哪条路径，最终选用的 Template / Version，
+以及「人工选择 / 人工输入」这一动作，都必须记录到 Print Job，
+保证完全可追溯。
+
+---
+
+# 9. 打印数量规则
+
+标签数量不能写死。
+
+例如：
+
+```text
+Delivery Quantity = 500 KG
+Label Quantity    = 50 KG
+```
+
+系统计算：
+
+```text
+Copies = CEILING(500 / 50)
+       = 10
+```
+
+规则应该配置化。
+
+例如：
+
+```text
+Customer → Template
+Material → Template
+Quantity → Copies
+Plant → Printer
+Warehouse → Printer
+```
+
+---
+
+# 10. Operator 页面
+
+普通仓库人员看到的页面应该尽量简单：
+
+```text
+┌─────────────────────────────────────────┐
+│              Label Printing             │
+├─────────────────────────────────────────┤
+│ Delivery Number                         │
+│ [ 8000123456                    ]       │
+│ Customer       ABC GmbH                 │
+│ Material       10001234                 │
+│ Description    PVC RESIN                │
+│ Batch          26093001                │
+│ Quantity       500 KG                   │
+│ Template       ABC_PRODUCT_V3           │
+│ Printer        WH-A-01                  │
+│ Copies         10                       │
+│       [ Preview ]       [ Print ]       │
+└─────────────────────────────────────────┘
+```
+
+流程：
+
+```text
+Input DN
+ ↓
+Enter
+ ↓
+Query SAP
+ ↓
+Identify Customer
+ ↓
+Auto-select Template
+ ↓
+Fill data
+ ↓
+Calculate Copies
+ ↓
+Preview
+ ↓
+Print
+```
+
+操作人员不需要选择客户或模板。
+
+## 10.1 打印时即时输入（Ad-hoc）
+
+当 SAP 数据缺失（例如没有客户编码）或标签含运行时字段时，
+Operator 页面在查询 DN 之后自动展示「**待补录**」表单：
+
+```text
+┌──────────────────────────────────────────────────────┐
+│           Label Printing — 待补录信息                 │
+├──────────────────────────────────────────────────────┤
+│ Delivery Number  8000123456                            │
+│ Customer Code    [ ABC-001           ]  ← 手工输入    │
+│ Customer Part No [ PX-7788           ]  ← 手工输入    │
+│ Batch            [ 26093001          ]  ← 可覆盖 SAP  │
+│ Template         ABC_PRODUCT_V3（自动匹配）           │
+│ Printer          WH-A-01                               │
+│ Copies           10                                    │
+│            [ 预览 ]       [ 打印 ]                     │
+└──────────────────────────────────────────────────────┘
+```
+
+规则：
+
+- 只显示**缺失**或**需要人工确认**的字段，SAP 已有的字段默认只读。
+- `source = "manual"` 的字段始终出现，`required = true` 时必须填写。
+- 允许对 SAP 字段做**手工覆盖（override）**，覆盖值标记为 manual。
+- 提交后先预览，确认无误再打印。
+- 所有手工值随本次 Print Job 保存，并记录录入人与时间。
+
+---
+
+# 11. Admin 页面
+
+```text
+System Management
+│
+├── Customers
+│   ├── Customer Master（含客户编码）
+│   └── Customer Logos
+├── Label Templates        ← 设计 / 管理
+│   ├── Designer
+│   ├── Import / Export（JSON 导入导出）
+│   ├── Duplicate / Clone
+│   └── Archive / Restore
+├── Template Versions      ← 版本维护
+│   ├── Publish
+│   ├── Rollback
+│   └── Compare
+├── SAP Field Mapping
+├── Runtime Fields         ← 运行时录入字段定义
+├── Print Rules
+├── Printers
+├── Print Jobs
+├── Print History
+├── Maintenance            ← 运维
+│   ├── Data Cleanup
+│   ├── Backup / Restore
+│   └── Health Check
+└── Users & Permissions
+```
+
+---
+
+# 12. 数据库设计
+
+核心表：
+
+```text
+customers
+customer_logos
+label_templates
+label_template_versions
+label_fields
+field_mappings
+print_rules
+printers
+print_jobs
+print_logs
+print_job_inputs      ← 每次打印的手工录入 / 覆盖值
+runtime_fields        ← 运行时录入字段定义
+users
+roles
+```
+
+关系：
+
+```text
+Customer
+  ↓
+Label Template
+  ↓
+Template Version
+  ↓
+Field Mapping
+  ↓
+Print Rule
+  ↓
+Printer
+```
+
+---
+
+# 13. Template Version
+
+生产模板绝对不能直接覆盖。
+
+例如：
+
+```text
+ABC_PRODUCT
+├── V1
+├── V2
+└── V3 ← Current
+```
+
+每次发布产生新的版本。
+
+打印记录必须记录：
+
+```text
+Template
+Template Version
+Customer
+DN
+Material
+Batch
+Printer
+Copies
+User
+Time
+Status
+手工录入字段（Manual Inputs）
+```
+
+这样即使未来模板已经修改，也可以追溯历史打印到底使用的是哪个版本。
+
+---
+
+# 14. Print Job
+
+每次打印产生独立 Print Job。
+
+字段：
+
+```text
+Print Job ID
+Delivery Number
+Customer
+Material
+Batch
+Template
+Template Version
+Printer
+Copies
+User
+Created Time
+Started Time
+Completed Time
+Status
+Error Message
+```
+
+来自 SAP 的字段与操作员手工录入 / 覆盖的字段必须分开标记
+（例如 `origin: sap | manual`），并记录录入人与时间。
+
+状态：
+
+```text
+PENDING
+PRINTING
+SUCCESS
+FAILED
+CANCELLED
+REPRINTED
+```
+
+重打不能修改原记录。
+
+正确方式：
+
+```text
+Original Job
+      ↓
+Reprint
+      ↓
+New Print Job
+```
+
+---
+
+# 15. 用户权限
+
+建议四类角色：
+
+### ADMIN
+
+- 客户
+- Logo
+- 模板
+- 规则
+- 打印机
+- 用户
+- 日志
+
+### DESIGNER
+
+- 创建模板
+- 修改模板
+- 发布版本
+- 预览
+
+### OPERATOR
+
+- 查询 DN
+- 预览
+- 打印
+- 授权重打
+
+### AUDITOR
+
+- 查看模板版本
+- 查看打印历史
+- 查看审计日志
+
+---
+
+# 16. 打印架构
+
+因为实际打印机不是 Zebra，所以不能把系统设计成只支持 ZPL。
+
+推荐：
+
+```text
+Label JSON
+   ↓
+Renderer
+   ├── PDF
+   ├── TSPL
+   ├── ESC/POS
+   ├── RAW TCP
+   ├── CUPS
+   └── Vendor Protocol
+```
+
+实际采用哪种协议，需要根据最终打印机品牌和型号确定。
+
+浏览器不应该直接负责任意 RAW 打印。
+
+建议：
+
+```text
+Warehouse PC
+      │
+      │ HTTPS
+      ▼
+Application Server
+      │
+      ▼
+LabelPrint
+      │
+      ▼
+Print Adapter
+      │
+      ▼
+Printer
+```
+
+如果打印机只能通过 Windows 驱动访问，则可以增加：
+
+```text
+Windows Print Agent
+```
+
+---
+
+# 17. 部署架构
+
+服务器：
+
+```text
+Ubuntu Linux
+│
+├── Nginx
+├── Vue Frontend
+├── FastAPI
+├── PostgreSQL
+└── LabelPrint
+```
+
+仓库 PC：
+
+```text
+Windows
+│
+├── Browser
+└── Printer Driver / Print Agent
+```
+
+生产环境建议 Docker：
+
+```text
+docker-compose.yml
+```
+
+服务：
+
+```text
+frontend
+backend
+postgres
+labelprint
+nginx
+```
+
+常用命令：
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f backend
+```
+
+---
+
+# 18. 项目结构
+
+```text
+sap-label-management/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── designer/
+│   │   ├── pages/
+│   │   ├── stores/
+│   │   ├── api/
+│   │   └── types/
+│   └── package.json
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── sap/
+│   │   ├── printing/
+│   │   └── main.py
+│   └── requirements.txt
+│
+├── database/
+│   ├── migrations/
+│   └── seed/
+│
+├── label-schema/
+│   └── label.schema.json
+│
+├── print-adapter/
+│
+├── deploy/
+│   ├── docker-compose.yml
+│   └── nginx/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── designer.md
+│   ├── label-json.md
+│   ├── sap-integration.md
+│   └── printing.md
+│
+└── README.md
+```
+
+---
+
+# 19. 技术栈
+
+## Frontend
+
+```text
+Vue 3
+TypeScript
+Vite
+Element Plus
+Vue Router
+Pinia
+```
+
+Designer：
+
+```text
+SVG / Canvas based editor
+```
+
+建议选择成熟的开源 Canvas/SVG 编辑库作为 Designer 基础，不建议从零开始实现图形编辑引擎。
+
+## Backend
+
+```text
+Python
+FastAPI
+Pydantic
+SQLAlchemy
+```
+
+## Database
+
+```text
+PostgreSQL
+```
+
+## SAP
+
+根据现有 S/4HANA 环境选择：
+
+```text
+SAP RFC
+SAP OData
+SAP REST API
+```
+
+## Printing
+
+```text
+LabelPrint
+Print Adapter
+Windows Printer
+Network Printer
+```
+
+---
+
+# 20. SAP 数据流程
+
+核心流程：
+
+```text
+DN
+ ↓
+SAP
+ ↓
+Delivery
+ ↓
+Customer
+ ↓
+Delivery Items
+ ↓
+Material
+ ↓
+Description
+ ↓
+Batch
+ ↓
+Quantity
+ ↓
+Plant
+ ↓
+Storage Location
+ ↓
+Customer PO
+```
+
+典型字段：
+
+```text
+Delivery Number
+Customer
+MATNR
+MAKTX
+CHARG
+LFIMG
+WERKS
+LGORT
+BSTKD
+```
+
+---
+
+# 21. 开发阶段
+
+## Phase 1 — Designer MVP
+
+首先完成：
+
+- Canvas
+- Text
+- Image
+- Logo
+- Barcode
+- QR
+- Line
+- Rectangle
+- SAP Field
+- Drag & Drop
+- Resize
+- Move
+- Rotate
+- Alignment
+- Undo / Redo
+- JSON Save / Load
+- Preview
+
+第一阶段先不要急着接 SAP。
+
+验证：
+
+```text
+Vue 3
+  ↓
+Label Designer
+  ↓
+Label JSON
+  ↓
+Save / Load
+  ↓
+Preview
+```
+
+---
+
+## Phase 2 — Template Management
+
+实现：
+
+- Template CRUD
+- Template Version
+- Customer
+- Customer Logo
+- Field Mapping
+- Template Preview
+- Publish
+
+---
+
+## Phase 3 — SAP Integration
+
+实现：
+
+```text
+DN
+ ↓
+SAP
+ ↓
+Delivery
+ ↓
+Customer
+ ↓
+Material
+ ↓
+Batch
+ ↓
+Quantity
+```
+
+---
+
+## Phase 4 — Printing
+
+集成：
+
+```text
+LabelPrint
+```
+
+实现：
+
+- Printer
+- Print Target
+- Print Job
+- Preview
+- Print
+- Print History
+- Reprint
+
+---
+
+## Phase 5 — Print Rules
+
+实现：
+
+```text
+Customer → Template
+Material → Template
+Quantity → Copies
+Plant → Printer
+Warehouse → Printer
+```
+
+---
+
+## Phase 6 — Production
+
+增加：
+
+- Authentication
+- RBAC
+- Audit Log
+- Monitoring
+- Backup
+- Error Handling
+- Health Check
+- Printer Status
+- Retry
+- Reprint
+- Version Rollback
+
+---
+
+# 22. 核心设计原则
+
+## 1. SAP 与 Designer 解耦
+
+```text
+Designer
+   ↓
+FastAPI
+   ↓
+SAP
+```
+
+## 2. Template 与 Printer 解耦
+
+不要把 ZPL/TSPL 作为唯一模板格式。
+
+```text
+Label JSON
+   ↓
+Renderer
+   ↓
+Printer
+```
+
+## 3. Customer Rule 配置化
+
+不要在代码中硬编码：
+
+```python
+if customer == "ABC":
+```
+
+而是存入数据库。
+
+## 4. Template Version 化
+
+生产模板永远不直接覆盖。
+
+## 5. Printing 可追溯
+
+每次打印都必须知道：
+
+```text
+Who
+When
+What
+Which Template
+Which Version
+Which Printer
+How Many
+Result
+```
+
+---
+
+## 6. 打印时数据可补录
+
+系统不能假设 SAP 一定能提供全部数据。
+Designer 声明的运行时字段 + 缺失字段补录，保证任何情况下都能打出正确标签。
+手工录入的值必须进入 Print History，并注明操作员与时间。
+
+---
+
+# 23. MVP 成功标准
+
+第一版完成后，应可以完整实现：
+
+1. 打开 Designer
+2. 创建 100 × 60 mm 标签
+3. 拖入 Logo
+4. 拖入 Material
+5. 拖入 Batch
+6. 拖入 QR Code
+7. QR 绑定 MATNR + CHARG
+8. 保存模板
+9. 发布 V1
+10. 操作员输入 DN
+11. 系统查询 SAP
+12. 自动识别 Customer
+13. 自动选择 Template
+14. 自动填充数据
+15. Preview
+16. Print
+17. 保存 Print History
+18. Reprint
+19. 无客户编码时，手工输入客户编码后成功打印
+20. 打印历史中可查到本次手工录入的字段与值
+
+---
+
+# 24. 最终目标
+
+最终建设的不是一个简单的标签打印网页，而是：
+
+> **SAP Label Management Platform**
+
+整体：
+
+```text
+SAP
+ │
+ ├── Production
+ ├── Warehouse
+ ├── Logistics
+ └── Shipping
+       │
+       ▼
+   Label Platform
+       │
+       ├── Template Designer
+       ├── Customer Management
+       ├── SAP Mapping
+       ├── Print Rules
+       ├── Printer Management
+       ├── Print History
+       └── Reprint
+```
+
+目标：
+
+> **Configurable, version-controlled, auditable, extensible enterprise label platform decoupled from SAP and printer vendors.**
+
+---
+
+# 25. 下一步
+
+建议第一步直接开始：
+
+```text
+Vue 3
+   ↓
+Label Designer
+   ↓
+100 × 60 mm Canvas
+   ↓
+Text / Image / Logo / Barcode / QR / SAP Field
+   ↓
+Drag & Drop
+   ↓
+Properties Panel
+   ↓
+Label JSON
+   ↓
+Save / Load
+   ↓
+Preview
+```
+
+Designer 验证通过后，再接：
+
+```text
+FastAPI
+   ↓
+PostgreSQL
+   ↓
+SAP
+   ↓
+LabelPrint
+   ↓
+Printer
+```
+
+这种模块化架构可以保证：
+
+- SAP 可替换
+- Printer 可替换
+- LabelPrint 可替换
+- Designer 可持续扩展
+- 模板数据完全由企业自己掌控
+- 支持打印时即时输入，适配 SAP 数据不完整的情况
+- 后续可以扩展到生产、仓储、物流等更多标签场景
+
+---
+
+## 开源与许可证
+
+目标：
+
+- Self-hosted
+- Enterprise internal deployment
+- Source-code control
+- No SaaS dependency
+- No commercial closed label designer
+- Enterprise-controlled template data
+
+第三方组件正式生产前需要逐项核查许可证。
+
+当前方案中的 LabelPrint 采用 MIT License。
+
+---
+
+## 嵌入到其它页面（Embedding）
+
+本应用已去除页眉、侧边栏与页脚，只对外提供一个可嵌入的根节点 `<div id="label-app">`，可直接嵌入宿主页面的任意容器。
+
+方式一：直接使用 `index.html` 的根节点（脚本检测到 `#label-app` 会自动初始化）
+
+```html
+<link rel="stylesheet" href="/apps/label/style.css">
+<link rel="stylesheet" href="/apps/label/designer.css">
+<div id="label-app">
+  <div id="tabs" class="tabs" role="tablist"></div>
+  <main id="main"></main>
+</div>
+<script src="/apps/label/label-core.js"></script>
+<script src="/apps/label/designer.js"></script>
+<script src="/apps/label/script.js"></script>
+```
+
+> 说明：应用内「标签设计」视图直接挂载 `window.LabelDesigner`，因此除 `style.css` 外还需引入 `designer.css` 与 `designer.js`。
+
+方式二：由宿主页面挂载到自定义容器（容器内的 `#tabs` / `#main` 会自动创建）
+
+```html
+<link rel="stylesheet" href="/apps/label/style.css">
+<link rel="stylesheet" href="/apps/label/designer.css">
+<div id="my-slot"></div>
+<script src="/apps/label/label-core.js"></script>
+<script src="/apps/label/designer.js"></script>
+<script src="/apps/label/script.js"></script>
+<script>
+  LabelApp.mount('#my-slot');   // 挂载整块标签功能
+  // LabelApp.go('designer');   // 切换到“标签设计”
+  // LabelApp.go('templates');  // 切换到“模板管理”
+  // LabelApp.refresh();        // 重新渲染当前视图
+</script>
+```
+
+说明：
+
+- 组件为**单实例**（一个页面内一个 `#tabs` / `#main`），适合一页嵌入一个标签应用。
+- 顶部为功能标签栏（标签设计 / 模板管理），属于组件内部区域，非页面页眉。设计视图使用与独立设计器**同一套**三栏设计器（`window.LabelDesigner`）。
+- 查询/打印/设计与弹窗提示均为组件内部交互，覆盖层样式独立，不影响宿主布局。
+- 对外接口：`window.LabelApp = { mount(root), go(view), refresh(), views, DB }`。
+
+---
+
+## 独立标签设计器（Standalone / Embeddable Designer）
+
+除主应用内的「标签设计」页签外，另提供一套**独立、可单独打开、可用 iframe 嵌入**的设计器：
+
+| 文件 | 作用 |
+| --- | --- |
+| `designer.html` | 独立页面外壳（无页眉/侧边栏/页脚），仅含根节点 `#label-designer` |
+| `designer.js` | 设计器逻辑，暴露 `window.LabelDesigner` |
+| `designer.css` | 设计器独立样式（自带 `:root` 变量，不依赖主应用 `style.css`） |
+| `label-core.js` | 主应用与设计器**共享内核**：常量、工具、`SEED`/`DB`、渲染引擎 `buildLabel` |
+
+### 共享数据与内核
+
+- 主应用 `index.html` 与独立设计器 `designer.html` 都先加载 `label-core.js`，因此二者：
+  - 读取**同一份** `localStorage` 数据（键 `label_db_v1`）；
+  - 使用**同一套**标签渲染引擎（`buildLabel` / `createEl`）。
+- 结论：在设计器里保存的模板，主应用「模板管理」**立即可见可用**；反之亦然。
+- 单位统一为 **mm**，画布按 `1mm → 3.4px`（`D_SCALE`）缩放显示。
+
+### 方式一：直接用 iframe 嵌入
+
+```html
+<iframe src="/apps/label/designer.html" style="width:100%;height:720px;border:0"></iframe>
+```
+
+### 方式二：作为组件挂载到宿主容器
+
+```html
+<link rel="stylesheet" href="/apps/label/designer.css">
+<div id="designer-slot"></div>
+<script src="/apps/label/label-core.js"></script>
+<script src="/apps/label/designer.js"></script>
+<script>
+  LabelDesigner.mount('#designer-slot'); // 注入三栏设计器（工具栏/组件/画布/属性）
+  LabelDesigner.open('ABC_PRODUCT');     // 载入某模板
+</script>
+```
+
+### 对外接口 `window.LabelDesigner`
+
+```text
+mount(root?) 挂载（省略参数则挂到 #label-designer）；返回 api 自身
+open(code) / load(code)  载入指定模板进行编辑
+get()                    返回当前正在编辑的模板对象
+save()                   保存当前模板到 localStorage（已存在则更新，否则追加）
+refresh()                重新渲染（模板/组件/画布/属性）
+newTemplate()            新建空白模板（自动生成临时 code；填写「公司编码」并保存后即以其为唯一索引）
+exportJSON()             弹出可复制的 Label JSON
+importJSON()             粘贴 JSON 导入并载入
+db                      当前 DB 引用
+```
+
+### 设计器能力
+
+- **公司代码索引**：以「公司代码」为模板唯一标识。画布上方的居中输入框、模板下拉、右栏「模板」属性、模板管理表均以公司代码展示；保存时由公司代码派生模板 `code`（`A-Z0-9_-`），冲突则拒绝。
+- **组件面板（精简）**：元素（文本 / 条码 / 二维码 / 线条；2026-10-08 移除 Logo 元素入口，已有模板中的 logo 元素仍按原样渲染兼容）、SAP 字段下拉（由「SAP 字段」主数据动态生成）、运行时录入（手工输入字段）。
+- **画布**：点击选中、拖动移动、右下角手柄缩放；1mm 网格吸附 + 元素/画布边缘与中心对齐参考线（容差 1.2mm）；`Delete`/`Backspace` 删除选中元素；点击空白处取消选中；**刻度尺满边**（轨道铺满画布区整条边，0 刻度与标签边缘对齐，缩放/滚动时自动重排）。
+- **属性面板**：X/Y/W/H(mm)、字号、文本内容、字段名 / 显示标签、数据来源（`sap`/`manual`/`static`）、必填（运行时录入）、条码/二维码内容（支持 `{{字段}}` 占位）。
+- **模板属性**：公司代码（画布上方居中输入框）、名称 / 宽 / 高（右栏「模板」属性组，未选中元素时显示）。
+- **基本模板格式（2026-10-08）**：默认模板（`ABC_PRODUCT` / `DEFAULT`）自带基础版式——黑色边框（rectangle，内缩 1.5mm、2px 线宽）+ 右侧竖排 Lechler 组合标志（`lechler-c-logo-combination-mark-black-00.png`，45×6mm 盒体 `rotate: -90`，符号在下、文字自下而上）；渲染引擎（`createEl`）新增 `el.src`（真实图片 `.el-img`）/ `el.rotate`（绕中心旋转）/ `el.borderWidth`（rectangle 线宽）三个元素属性，画布、常驻打印预览与弹窗预览一致呈现。**旧缓存自动迁移**：SEED 带 `meta.seedVersion`，`loadDB()` 发现本地缓存版本更低时自动用 SEED 内置模板覆盖同名模板（自建模板保留），无需手动清 `localStorage`。
+- **导入 / 导出**：Label JSON 的复制与粘贴导入（`code` 冲突则覆盖）。
+- **预览**：用示例数据（`sampleData()`）渲染整张标签；中栏下常驻「打印预览」（只读、随设计同步刷新、空间不足自动等比缩小），工具栏「预览」按钮另开弹窗看大图。
+### 界面样式（工业风 · 2026-10-08 按新设计稿线框截图重做）
+
+- **主题色**：单一品牌色 RGB 0,104,120（`#006878`），用于外框、分栏细线、选中页签、主按钮、画布描边、表头与焦点态；派生色 `--brand-dark: #004f5c`（悬停/深底）与 `--brand-light: #e6f1f2`（浅底）。设计器侧变量与之一一对应：`--ld-brand` / `--ld-brand-dark` / `--ld-brand-soft`（旧的 `--ld-accent*` 三个别名已随重写删除，取值不变）。
+- **外壳与页签（2026-10-08 新 UI 线框）**：外壳**无整体外框**——页签与操作按钮浮于白底；下方三栏各自为独立的 1px 主题色**圆角盒**（圆角 10px，盒间距 24px）。页签是 32px 高**实心**小方签（全部主题色底 + 白字，选中＝深色 `--brand-dark` 区分），距左 ≈21px、间隙 14px，与操作按钮同处顶栏 `.app-bar`。
+- **顶栏操作按钮**：预览 / 导出 / 导入（白底）+ 保存（实心主题色）位于顶栏右侧 `#app-acts`——由 `script.js` 在设计器挂载后把工具栏里同一批按钮（id 与绑定不变）移动过来；切到「模板管理」页签时整组隐藏。独立页 `designer.html` 不加载外壳脚本，按钮留在设计器工具栏中。
+- **字号与尺寸（2026-10-08 用户要求「字体大些」，整体放大约 12%）**：正文 14px、设计器 13.5px、表格 / 按钮 / 页签 / 输入 13–14px、字段标签 12–12.5px、分组标注 11px、标尺刻度 9.5px；控件内边距 4–6px，圆角：控件 0–1px、三栏容器 6px（按用户要求调小）。画布内元素的 `fontSize` 属于标签内容（非界面字号），保持不变。为让独立页 `designer.html`（不加载 `style.css`）与嵌入页一致，`designer.css` 另以 `html { font-size: 13.5px; }` 兜底基准字号（`style.css` 的 `body` 字号优先级更高，二者互不影响）。
+- **三栏 + 中栏上下（2026-10-08 新 UI 线框；圆角后调小、上下改等高）**：左＝组件面板、中＝设计界面（上）+ 打印预览（下）、右＝公司代码 + 属性面板；三栏各为 1px 主题色**圆角盒**（6px），盒间距 24px（**不再有竖线**）；宽度比 **1 : 3 : 1**（左 20% / 中 60% / 右 20%），由 `grid-template-columns: minmax(150px, 1fr) minmax(260px, 3fr) minmax(150px, 1fr)` + `gap: 24px` 实现；中栏盒内两个标签上下排列、以 28px 留白分隔（**无横线、无标题行**），**上下等高 50 : 50**（舞台 357px = 预览 357px：画布 `min-height: 340px` + 标尺 17px）；面板无节标题，组件按钮为品牌色描边小方块（2 列网格）。
+- **公司代码与模板属性（2026-10-08 新 UI 线框）**：「公司代码」字段在**右栏顶部**（`.ld-cofield`，主题色标签 + 全宽输入框）；模板名称 / 宽 / 高 在其下方、未选中元素时以「模板」属性组展示与编辑（`data-t` 字段，改名即时同步模板下拉、改尺寸即时重绘画布）；界面术语统一为「公司代码」（原「公司编码」）。
+- **工具栏取舍（功能不丢）**：嵌入主应用时设计器工具栏（模板下拉 / 新建模板 / 对齐 / 徽标）由 `.ld-embedded` 隐藏——模板切换 / 新建走「模板管理」页签（点「设计」回到设计器），对齐吸附保持默认开启；独立页 `designer.html` 工具栏完整保留。标尺、「打印预览」标题行保留（设计辅助，视觉占比小）。
+- **栏结构稳定**：栏宽比例恒定，窄窗口只整体收窄、**不降级为两栏**（属性面板永不会掉到画布下方）；仅 ≤820px 才堆叠为三个圆角盒竖排（间距 16px，属性面板回到画布下方）。
+- **非满边**：应用外框左右各留 14px（`width: calc(100% - 28px)`）、上下内缩（`margin: 10px auto 16px`，页签贴上边缘后顶部只需小间距）并限宽居中（`max-width: 1360px`），避免把元素拉伸去填满窗口。
+- **样式归属**：外壳与公共控件在 `style.css`（`--brand` 变量），设计器内部在 `designer.css`（`--ld-*` 变量，限定 `.label-designer`），弹窗/提示为 `ld-*` 前缀（全局安全）。
+- **文件结构（2026-10-08 两次重写：先按原截图 1:1 重建渲染结果，再按新设计稿线框重排）**
+  - `style.css`（8 节）：① 设计令牌 ② 基础 ③ 外壳外框+顶栏（页签/操作区） ④ 视图容器与页头 ⑤ 按钮 ⑥ 表单 ⑦ 表格 ⑧ ≤820px。
+  - `designer.css`（18 节）：① 设计令牌 ② 基础 ③ 根容器 ④ 工具栏（含 `.ld-embedded` 嵌入隐藏规则） ⑤ 右栏公司代码字段 ⑥ 三栏栅格（圆角盒 + gap） ⑦ 表单控件 ⑧ 按钮 ⑨ 面板（圆角盒） ⑩ 组件面板 ⑪ 画布舞台+标尺 ⑫ 画布 ⑬ 中栏（设计界面/打印预览，同盒留白分隔） ⑭ 画布内元素+对齐参考线 ⑮ 属性面板 ⑯ 弹窗 ⑰ 提示 Toast ⑱ ≤820px。
+  - `index.html`（外壳：`.app-bar(#tabs + #app-acts)` + `#main` + `.ld-*` 覆盖层）与 `designer.html`（仅设计器挂载点）；`label-core.js`（SEED 版式 + seedVersion 迁移 + `el.src/rotate/borderWidth` 渲染）；`designer.js`（SHELL：去节标题/预览标题行，右栏公司代码字段 + 「模板」属性）与 `script.js`（顶栏构建、按钮上移、切视图隐藏操作区）按新 UI 调整。
+  - 第一次重写删除的零引用残留（原 9 视图版本遗留，逐项 grep 确认无引用）：`.card` / `.stat*` / `.section-title` / `.row` / `.muted` / `.badge*` / `.pill` / `.chips` / `.timeline` / `.legend` / `.toolbar` / `.grid2` / `.form-card` / `.btn-ok` / `.btn-accent`、`.code-block`、`.tab .ic`、未使用令牌 `--bg`；`--ld-accent*` 改名对齐为 `--ld-brand*`（取值不变）。第二次重排再删：`.panel > h4` 节标题、`.pal-group` 分组标注、`.ld-meta` 全宽属性行。
+- **验收（可复跑，脚本在 `%TEMP%\label-smoke`）**：`check-ui.js`（46 PASS，含新 UI 断言：无外框、圆角盒、盒间距、右栏公司代码、预览无标题行）、`smoke2.js`（30 PASS，含 seedVersion 旧缓存迁移）、`measure-ui.js`（56 PASS，实测三栏 20/60/20、盒间距 24px、各盒四边 1px 描边、中栏上下等高 50:50、页签距左 ≈21px）、`check-embed.js`（designer.html / index.html 各 18 PASS）**全部 0 FAIL**；`node --check` 三个 JS 文件语法通过；1366 / 760 截图与新 UI 线框逐区比对一致（含 ≤820px 三盒堆叠）。

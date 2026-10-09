@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketUP 与 Salesforce 线索同步规则</title>
+  <style>
+    :root{--ink:#172033;--muted:#66748a;--line:#dce4ee;--bg:#f5f8fc;--white:#fff;--brand:lab(42.0445% 69.9888 48.0381);--brand-deep:color-mix(in srgb,var(--brand) 78%,#261c35 22%);--brand-light:color-mix(in srgb,var(--brand) 14%,#fff 86%);--blue:var(--brand);--blue-soft:var(--brand-light);--green:#159879;--green-soft:#ecfaf5;--orange:#d58a18;--orange-soft:#fff7e8;--shadow:0 18px 42px rgba(32,58,93,.09)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    .page{max-width:980px;margin:0 auto;padding:34px 26px 56px}
+    .hero{background:linear-gradient(135deg,var(--brand-deep),var(--brand));border-radius:23px;padding:38px 40px;color:#fff;box-shadow:var(--shadow)}
+    .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:700;margin-bottom:11px}
+    h1{font-size:31px;line-height:1.2;letter-spacing:-.04em;margin:0 0 11px;font-weight:760}
+    .hero p{margin:0;max-width:700px;color:rgba(255,255,255,.84);font-size:14px;line-height:1.7}
+    .hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:21px}.tag{font-size:12px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25)}
+    .section{margin-top:25px}.section-kicker{font-size:11px;color:var(--blue);letter-spacing:.15em;text-transform:uppercase;font-weight:800;margin-bottom:6px}h2{font-size:20px;letter-spacing:-.02em;margin:0 0 7px;font-weight:740}.intro{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 14px}
+    .major-title{display:flex;align-items:center;gap:13px;margin-top:34px;padding-bottom:13px;border-bottom:1px solid var(--line)}.major-title .major-no{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:var(--blue);color:#fff;font-size:15px;font-weight:800}.major-title h2{font-size:23px;margin:0}.major-title p{font-size:12px;color:var(--muted);margin:3px 0 0;line-height:1.5}
+    .major-title.second{margin-top:38px}.major-title.second .major-no{background:var(--green)}
+    .panel{background:var(--white);border:1px solid var(--line);border-radius:17px;padding:22px;box-shadow:0 10px 24px rgba(32,58,93,.04)}
+    .query-flow{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;align-items:center}.step{min-height:115px;border:1px solid var(--line);border-radius:13px;padding:15px;background:#fff}.step.blue{border-top:3px solid var(--blue)}.step.orange{border-top:3px solid var(--orange)}.step.green{border-top:3px solid var(--green)}.step-no{font-size:11px;color:var(--muted);margin-bottom:7px;font-weight:700}.step-title{font-size:15px;font-weight:730;margin-bottom:6px}.step p{font-size:12px;color:var(--muted);line-height:1.55;margin:0}.arrow{height:2px;background:var(--line);position:relative;margin:0 6px}.arrow:after{content:"";position:absolute;right:-1px;top:-4px;width:8px;height:8px;border-top:2px solid var(--line);border-right:2px solid var(--line);transform:rotate(45deg)}
+    .rule-box{margin-top:18px;background:var(--blue-soft);border:1px solid #cbdfff;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.6;color:#365a91}.rule-box b{color:var(--blue)}
+    .table-wrap{border:1px solid var(--line);border-radius:13px;overflow:auto;margin-top:14px}table{border-collapse:collapse;width:100%;min-width:560px;font-size:13px}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);background:var(--bg);font-weight:750}tr:last-child td{border-bottom:0}.arrow-text{color:var(--blue);font-weight:740}.priority{color:var(--orange);font-weight:740}
+    .example{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:14px}.example-card{border:1px solid var(--line);border-radius:13px;padding:16px}.example-card.soft{background:var(--orange-soft);border-color:#efd39f}.example-title{font-size:13px;font-weight:730;margin-bottom:12px}.time-list{display:grid;gap:8px}.time-row{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding-bottom:8px;border-bottom:1px dashed var(--line)}.time-row:last-child{border-bottom:0;padding-bottom:0}.time-row span{color:var(--muted)}.time-row strong{font-weight:730}.result{display:flex;align-items:center;gap:10px;margin-top:13px;padding:11px 12px;background:var(--white);border-radius:10px;font-size:13px;font-weight:730;color:var(--orange)}.result:before{content:"";width:8px;height:8px;background:var(--orange);border-radius:50%;box-shadow:0 0 0 4px rgba(213,138,24,.14)}
+    .save-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.save-card{border:1px solid var(--line);border-radius:12px;padding:15px;background:var(--bg)}.save-card h3{font-size:13px;margin:0 0 8px}.save-card p{font-size:12px;color:var(--muted);line-height:1.55;margin:0}.save-card.sf{background:var(--blue-soft);border-color:#cbdfff}.save-card.mu{background:var(--green-soft);border-color:#bfe7d9}.callout{margin-top:14px;padding:13px 14px;border-radius:11px;background:var(--green-soft);border:1px solid #bfe7d9;color:#306956;font-size:12px;line-height:1.6}.callout b{color:var(--green)}
+    .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:19px;padding-top:15px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+    @media(max-width:760px){.query-flow{grid-template-columns:1fr;gap:8px}.arrow{width:2px;height:18px;margin:0 auto;background:var(--line)}.arrow:after{right:-4px;top:auto;bottom:-1px;transform:rotate(135deg)}.example{grid-template-columns:1fr}.save-grid{grid-template-columns:1fr}}
+    @media(max-width:520px){.page{padding:17px 13px 38px}.hero{padding:28px 23px;border-radius:18px}h1{font-size:27px}.panel{padding:17px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Lead Sync Rule</div>
+      <h1>MarketUP 与 Salesforce 线索同步规则</h1>
+      <p>系统每 30 分钟查看两边最近发生变化的线索。只有一边变化时，同步变化的一边；两边都变化时，以 Salesforce 为准。</p>
+      <div class="hero-tags"><span class="tag">每 30 分钟同步</span><span class="tag">按更新时间增量获取</span><span class="tag">双方修改时 SF 优先</span></div>
+    </section>
+
+    <div class="major-title"><div class="major-no">一</div><div><h2>线索基础信息同步</h2><p>根据两边记录更新时间判断同步方向，双方同时修改时以 Salesforce 为准。</p></div></div>
+
+    <section class="section">
+      <div class="section-kicker">01 · 增量查询范围</div>
+      <h2>按照更新时间获取待同步线索</h2>
+      <p class="intro">系统记录两边上一次查询的时间点，每轮仅获取该时间点之后发生更新的线索。</p>
+      <div class="panel">
+        <div class="query-flow">
+          <div class="step blue"><div class="step-no">第 1 步</div><div class="step-title">记录上次查询时间</div><p>MarketUP 和 Salesforce 分别保存各自上一次查询到的时间点。</p></div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="step orange"><div class="step-no">第 2 步</div><div class="step-title">查询最近更新记录</div><p>每 30 分钟只查“上次时间点之后”发生更新的线索。</p></div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="step green"><div class="step-no">第 3 步</div><div class="step-title">进入同步判断</div><p>找到有变化的线索后，再判断应该由哪一边覆盖哪一边。</p></div>
+        </div>
+        <div class="rule-box"><b>查询范围：</b>仅查询上次查询时间点之后发生更新的线索。</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">02 · 同步判定规则</div>
+      <h2>根据双方更新时间确定同步方向</h2>
+      <p class="intro">同步判断以线索记录更新时间为依据，不区分具体修改的字段。</p>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MarketUP 是否变化</th><th>Salesforce 是否变化</th><th>本轮处理方式</th></tr></thead>
+            <tbody>
+              <tr><td>否</td><td>否</td><td>不处理，等待下一轮。</td></tr>
+              <tr><td>是</td><td>否</td><td class="arrow-text">MarketUP → Salesforce</td></tr>
+              <tr><td>否</td><td>是</td><td class="arrow-text">Salesforce → MarketUP</td></tr>
+              <tr><td>是</td><td>是</td><td class="priority">Salesforce → MarketUP，Salesforce 优先</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rule-box"><b>冲突规则：</b>如果两边在同一轮检查前都修改了同一条线索，MarketUP 接受 Salesforce 的整套基础信息，MarketUP 本轮修改的内容可能被覆盖。</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">03 · 同步处理示例</div>
+      <h2>单边修改时的同步处理</h2>
+      <div class="example">
+        <div class="example-card">
+          <div class="example-title">上一次同步完成后保存的时间</div>
+          <div class="time-list">
+            <div class="time-row"><span>MarketUP 上次更新时间</span><strong>09:58</strong></div>
+            <div class="time-row"><span>Salesforce 上次更新时间</span><strong>09:59</strong></div>
+          </div>
+        </div>
+        <div class="example-card soft">
+          <div class="example-title">本轮查询到的当前时间</div>
+          <div class="time-list">
+            <div class="time-row"><span>MarketUP 当前更新时间</span><strong>10:15</strong></div>
+            <div class="time-row"><span>Salesforce 当前更新时间</span><strong>09:59</strong></div>
+          </div>
+          <div class="result">判断结果：只有 MarketUP 发生变化 → 同步到 Salesforce</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">04 · 同步时间记录</div>
+      <h2>同步完成后的时间记录</h2>
+      <p class="intro">这样下一轮既能继续只查询有变化的记录，也能判断这条线索是哪一边发生了变化。</p>
+      <div class="panel">
+        <div class="save-grid">
+          <div class="save-card"><h3>每个系统的查询时间</h3><p>MarketUP 保存 MarketUP 的上次查询时间；Salesforce 保存 Salesforce 的上次查询时间。下一轮只查各自时间之后更新的线索。</p></div>
+          <div class="save-card sf"><h3>每条线索的 Salesforce 更新时间</h3><p>同步成功后，MarketUP 保存 Salesforce 返回的记录更新时间，以 Salesforce 服务器返回的时间为准，不使用发起请求的时间。</p></div>
+          <div class="save-card mu"><h3>每条线索的 MarketUP 更新时间</h3><p>同时保存本条线索在 MarketUP 的上次确认更新时间，用于下一轮判断 MarketUP 是否发生了新的修改。</p></div>
+          <div class="save-card"><h3>同步成功才更新记录</h3><p>如果本轮同步失败，就保留原来的时间记录，下一轮继续处理，不会把失败误认为已经完成。</p></div>
+        </div>
+        <div class="callout"><b>时间依据：</b>MarketUP 使用 Salesforce 返回的记录更新时间作为同步基准，不使用接口请求发起时间。</div>
+      </div>
+    </section>
+
+    <div class="major-title second"><div class="major-no">二</div><div><h2>线索跟进记录同步</h2><p>建议由 MarketUP 统一维护跟进记录，新增或修改后同步到 Salesforce。</p></div></div>
+
+    <section class="section">
+      <div class="section-kicker">01 · 统一维护平台</div>
+      <h2>跟进记录建议只在 MarketUP 中新增和修改</h2>
+      <p class="intro">为避免同一条跟进记录在两个平台分别维护，建议将 MarketUP 作为跟进记录的主要录入平台，Salesforce 作为同步展示平台。</p>
+      <div class="panel">
+        <div class="query-flow">
+          <div class="step green"><div class="step-no">MarketUP</div><div class="step-title">新增或修改跟进</div><p>销售人员在 MarketUP 中记录电话、会议、微信沟通等跟进内容。</p></div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="step orange"><div class="step-no">同步处理</div><div class="step-title">识别新增或修改</div><p>系统根据跟进记录的更新时间，生成同步任务。</p></div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="step blue"><div class="step-no">Salesforce</div><div class="step-title">同步更新跟进记录</div><p>在 Salesforce 中创建或更新对应的跟进活动。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">02 · 新增与修改规则</div>
+      <h2>MarketUP 的跟进变化同步到 Salesforce</h2>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>MarketUP 中的操作</th><th>同步到 Salesforce 的处理</th></tr></thead>
+            <tbody>
+              <tr><td><strong>新增跟进记录</strong></td><td class="arrow-text">在 Salesforce 中创建对应的跟进活动</td></tr>
+              <tr><td><strong>修改已同步的跟进记录</strong></td><td class="arrow-text">更新 Salesforce 中对应的跟进活动</td></tr>
+              <tr><td><strong>Salesforce 中查看同步结果</strong></td><td>可查看同步后的跟进内容和时间</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rule-box"><b>记录对应关系：</b>每条 MarketUP 跟进记录与 Salesforce 中的对应活动建立关联，修改时更新原记录，不重复创建。</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">03 · 使用规则</div>
+      <h2>同一条跟进记录只在一个平台维护</h2>
+      <div class="panel">
+        <div class="save-grid">
+          <div class="save-card mu"><h3>推荐做法</h3><p>在 MarketUP 中新增或修改跟进记录，系统自动同步到 Salesforce。</p></div>
+          <div class="save-card sf"><h3>Salesforce 的使用方式</h3><p>在 Salesforce 中查看同步结果，不建议直接修改同一条已同步跟进。</p></div>
+        </div>
+        <div class="callout"><b>维护原则：</b>如果跟进内容需要调整，统一回到 MarketUP 修改，再由系统同步到 Salesforce，避免两边同时修改产生不一致。</div>
+      </div>
+    </section>
+
+    <footer class="footer"><span>MarketUP × Salesforce 线索同步说明</span><span>同步规则：Salesforce 优先</span></footer>
+  </main>
+</body>
+</html>

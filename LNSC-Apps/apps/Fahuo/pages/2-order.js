@@ -822,7 +822,9 @@ async function placeOrder(o, remarkOverride) {   /* remarkOverride：并单组�
 
 /* 下单/取消下单 固定密码门（2026-09-16 用户规则：密码 18879，防误触软闸；
    应用主题弹窗（替代原生 prompt）：Enter 确定 / Esc 取消 / 错误抖动重试；
-   说明：前端固定口令仅防误操作，非安全边界——源码可见，知悉即可） */
+   说明：前端固定口令仅防误操作，非安全边界——源码可见，知悉即可；
+   豁免（2026-10-08 用户规则）：类型=「其他」（员工快递）的运单**下单免验证**；
+   混选批次只要含发货单/外协单仍照弹（从严）；取消下单无论类型都弹） */
 function orderPassOk() {
   return new Promise(resolve => {
     const mask = $("passMask"), input = $("passInput"), err = $("passErr");
@@ -890,7 +892,10 @@ $("btnOrder").addEventListener("click", async () => {
 
   const sel = selectedOrders().filter(o => !o.waybill_no); /* 仅待下单 */
   if (!sel.length) { alert("请先选择待下单 DN"); return; }
-  if (!(await orderPassOk())) return;                     /* 下单：固定密码门（主题弹窗） */
+  /* 免验证（2026-10-08 用户规则）：所选全部是「其他」（员工快递）→ 跳过密码门；
+     含发货单/外协单的批次照弹（混选从严） */
+  const allOther = sel.every(o => (o.order_type || "发货单") === "其他");
+  if (!allOther && !(await orderPassOk())) return;          /* 下单：固定密码门（主题弹窗） */
 
   /* 下单前表单检查：任一单不合格则整批拦截（防假数据流入承运商） */
   const bad = sel.map(validateOrder).filter(Boolean);
@@ -1119,64 +1124,19 @@ function signBackNo(o) {
   } catch (e) { return ""; }
 }
 
-/* 回单返回"到方地址"（2026-09-29 用户口径终定，平台统一维护）：
-   唯一权威源=服务端 carriers/sf_express.SIGN_BACK_ADDR，页面加载即拉取 GET /api/signback_addr；
-   离线/file:// 打开时用下方兜底同文（与服务端一致，改地址只需改服务端） */
-let SB_ADDR_TEXT = "莱克勒喷嘴系统（常州）有限公司 范蓓蓓 15190535163\n" +
-                   "江苏常州金坛 德城路99号（邮编 213200）";
-(async () => {
-  for (const base of API_CANDIDATES) {
-    try {
-      const r = await fetch(base + "/signback_addr", { signal: AbortSignal.timeout(5000) });
-      if (!r.ok) continue;
-      const d = await r.json();
-      if (d && d.text) SB_ADDR_TEXT = d.text;
-      return;
-    } catch (e) { /* 尝试下一个候选基址 */ }
-  }
-})();
-
-/* 回单返回信息（2026-09-29 用户指正 + 回单运单轨迹实锤，官方逻辑终定）：
-   选择回单后顺丰自动带一张回单返回运单：单号=原单回单号（SF106 开头 waybillType=3），
-   收件人签收后自动**反向、到付**返回——历史单轨迹验证：SF1064982980091（上海→常州）、
-   SF1064982958300（湖州→常州）、SF1064983709198（→常州）、SF1064997481417（苏州→常州）
-   均反向运抵常州金坛并"已签收"。此前"需顺丰人工改单（收寄互换+到付）"结论**错误**：
-   云打印 PDF 那张"寄=莱克勒/收=客户/寄付月结"面单是 POD 签收联（随货给客户签），
-   返回段由顺丰系统自动反向，与该联面单内容无关，无需也无法用改单接口处理（8252 探针方向即错）。
-   回单收不到的真正根因 = 回单返回"到方地址"未维护，回单被派送至错误地址签收。
-   → 行动：向 95338/顺丰销售申请维护到方地址=莱克勒德城路99号；此处一键复制维护申请文案 */
+/* 回单返回信息（2026-09-29 官方逻辑终定；2026-10-08 用户定案：顺丰账号侧到方地址已维护、
+   4 张历史误投回单已结案 → 撤掉「维护申请」文案/复制按钮/硬编码历史单号，此处只留回单返回信息）：
+   选择回单后顺丰自动带一张回单返回运单：单号=原回单号（SF106 开头 waybillType=3），
+   收件人签收后自动**反向、到付**返回（历史单轨迹实锤），无需人工改单、无需再申请维护地址。
+   到方地址为顺丰侧固定值（2026-10-08 用户口径：地址固定、无需维护）——平台侧不配置、不下发、不提示。 */
 function signBackInfoEl(o) {
   const sb = signBackNo(o);
   if (o.carrier !== "顺丰" || !sb) return null;
-  const txt = "【顺丰回单返回到方地址维护申请】\n" +
-    "莱克勒喷嘴系统（常州）有限公司（月结客户）\n" +
-    "请将签单返还服务的“回单返回到方地址”维护/确认为：\n" +
-    SB_ADDR_TEXT + "\n" +
-    "本单回单号：" + sb + "（原运单 " + (o.waybill_no || "") +
+  const txt = "回单运单号：" + sb + "（原运单 " + (o.waybill_no || "") +
       (o.so ? "，DN " + o.so : "") + "）\n" +
-    "说明：收件人签收后回单运单自动反向到付返回；到方地址未维护会派送错误。\n" +
-    "另请协查历史误投回单去向并重新派送：SF1064982980091、SF1064982958300、" +
-    "SF1064983709198、SF1064997481417";
-  const el = stepEl("回单返回：顺丰自动返回（同 SF106 回单号，反向 + 到付）——需维护到方地址", "", txt);
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "btn";
-  b.style.margin = "6px 0 2px";
-  b.textContent = "复制到方地址维护申请";
-  b.addEventListener("click", () => {
-    /* http 非安全上下文无 navigator.clipboard → textarea + execCommand 复制 */
-    const ta = document.createElement("textarea");
-    ta.value = txt;
-    ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    let ok = false;
-    try { ok = document.execCommand("copy"); } catch (e) { /* 忽略 */ }
-    ta.remove();
-    b.textContent = ok ? "已复制 ✓（发给 95338/顺丰销售）" : "复制失败，请手动选中文本复制";
-    setTimeout(() => { b.textContent = "复制到方地址维护申请"; }, 3000);
-  });
-  el.querySelector(".step-main").appendChild(b);
-  return el;
+    "返回方式：收件人签收后顺丰自动反向、运费到付返回莱克勒（金坛区德城路99号）\n" +
+    "平台打印：主面单 + 反向回签单同一 PDF 随货走；实物回单到达后人工置「已回单」（2026-09-29 起新单不自动置）";
+  return stepEl("回单返回：顺丰自动反向 + 到付（同 SF106 回单号）", "", txt);
 }
 
 /* 件数（角标/标题用）：顺丰取 waybills 列表长度；德邦多件无子单号列表 → 用下单存档 parcels（2026-09-17） */
@@ -1242,9 +1202,12 @@ async function printOfficialOrHtml(o, direct) {
       const wbs = waybillList(o);
       let url = `${apiBase}/carrier/label?carrier=${encodeURIComponent(o.carrier)}` +
                 `&waybill_no=${encodeURIComponent(wbs.join(","))}`;
-      /* 2026-09-30 用户指令撤回：不追加 SF106——其云打印=正向 POD 签收联，不是用户要的反向
-         返回运单（收寄互反/到付/签回单原单号回链），见 signBackNo 注释。打印=仅官方主面单；
-         反向回单联暂用速打补打；丰桥官方取法确认后再接入（服务端 with_optional=1 保留供探针） */
+      /* 签回单联（回单联）随货打印（2026-10-08 官方文档 + 客服核实 + 真单实锤）：回单号必须走
+         documents[].backWaybillNo —— 此前塞进 masterWaybillNo 只出正向 POD 签收联（09-30 已撤回）。
+         现传 back_no，服务端取**反向回签单**（收寄互反/到付/「关联主运单」回链）与主面单合并
+         为同一 PDF、一次预览一次打印；取不到服务端静默跳过，绝不阻塞主面单 */
+      const sb = signBackNo(o);
+      if (o.carrier === "顺丰" && sb) url += `&back_no=${encodeURIComponent(sb)}`;
       url += "&raw=1";
       if (direct) await autoPrintPdf(url);
       else await showLabelPdf(url, `${o.so || ("#" + o.id)} · ${o.carrier} · ${o.waybill_no}` +
@@ -1317,7 +1280,7 @@ async function openSteps(o) {
   stepsBody.innerHTML = "";
   /* 第一步：下单返回值（所有下单必有，先渲染再查轨迹） */
   stepsBody.appendChild(stepEl("第一步：下单返回值", o.created_at || "", fmtOrderResp(o)));
-  const sbe = signBackInfoEl(o);   /* 顺丰回单返回：自动反向+到付；到方地址维护申请（2026-09-29 更正） */
+  const sbe = signBackInfoEl(o);   /* 顺丰回单返回：自动反向+到付（2026-10-08 撤维护申请块，只留信息） */
   if (sbe) stepsBody.appendChild(sbe);
   stepsMask.hidden = false;
   /* 后续：承运商轨迹（未开通/失败只追加提示步，不影响第一步） */

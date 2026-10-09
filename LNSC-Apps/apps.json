@@ -7,5 +7,14 @@
     "cat": "workshop",
     "badge": "NEW",
     "color": "#f59e0b"
+  },
+  {
+    "id": "label",
+    "name": "Label",
+    "desc": "SAP 标签管理平台（设计/打印/追溯）",
+    "url": "/apps/label/",
+    "cat": "logistics",
+    "badge": "NEW",
+    "color": "#004b87"
   }
 ]

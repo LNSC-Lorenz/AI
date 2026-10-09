@@ -14,7 +14,7 @@ LNSC 全链发货平台 - SQLite API 服务
     PUT    /api/orders/<id>              更新（状态/备注等）
     DELETE /api/orders/<id>              删除
     GET    /api/stats                    右侧看板统计
-GET    /api/signback_addr            顺丰回单返回到方地址（平台唯一权威源 sf_express.SIGN_BACK_ADDR）
+（2026-10-08 撤 GET /api/signback_addr：回单返回到方地址为顺丰侧固定值，平台无配置/无维护动作）
 同时提供当前目录静态文件（index.html 等），可直接 http://host:8091/ 访问。
 """
 import base64
@@ -435,8 +435,6 @@ class Handler(SimpleHTTPRequestHandler):
             return self._carrier_label_ot_get(qs)
         if re.search(r"/api/addrpool$", path):
             return self._addrpool_list()
-        if re.search(r"/api/signback_addr$", path):
-            return self._signback_addr()
         return super().do_GET()  # 静态文件
 
     def do_POST(self):
@@ -475,14 +473,8 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     # ---------- 业务 ----------
-    def _signback_addr(self):
-        """GET /api/signback_addr → 顺丰回单返回到方地址（2026-09-29 平台统一维护；
-        唯一权威源 carriers/sf_express.SIGN_BACK_ADDR，前端维护申请文案引用）"""
-        try:
-            from carriers import sf_express
-            self._json(200, sf_express.SIGN_BACK_ADDR)
-        except Exception as e:                              # noqa: BLE001
-            self._json(500, {"error": str(e)})
+    # （2026-10-08 撤 _signback_addr：顺丰回单返回到方地址为固定值（顺丰账号侧已设定），
+    #   平台侧不配置、不下发、不提示；接口无调用方，属死代码）
 
     def _addrpool_list(self):
         """GET /api/addrpool → 共享地址池列表（最新在前）"""
@@ -621,11 +613,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": str(e)})
         self._json(200, res)
 
-    def _label_pdf_b64(self, carrier, waybill):
-        """单运单取官方面单 PDF base64（内嵌 base64 / url+token 两形态；失败抛承运商原始错误）"""
+    def _label_pdf_b64(self, carrier, waybill, back=False):
+        """单运单取官方面单 PDF base64（内嵌 base64 / url+token 两形态；失败抛承运商原始错误）
+        back=True → **签回单（回单联）**：顺丰走 documents[].backWaybillNo（2026-10-08 官方口径）"""
         from carriers import print_label, find_pdf_b64, find_label_files
         from carriers.base import fetch_url_pdf_b64
-        data = print_label(carrier, waybill)
+        data = print_label(carrier, waybill, back=back)
         pdf = find_pdf_b64(data)                      # 形态1：响应内嵌 base64
         if not pdf:
             files = find_label_files(data)            # 形态2：url+token（顺丰 v2.0）
@@ -683,19 +676,25 @@ class Handler(SimpleHTTPRequestHandler):
     def _carrier_label(self, qs):
         """GET /api/carrier/label?carrier=顺丰&waybill_no=xxx → 官方面单 PDF（base64）。
         一票多件：waybill_no 逗号分隔多运单 → 逐件取面单合并为一个多页 PDF（2026-09-17 用户规则）
-        optional_no：附加面单——**2026-09-30 用户指令撤回追加（二次终定）**：SF106 回单号云打印
-        实测（新单+已签收单一致，_sb_pages.py/_probe_reverse.py 存档）=1 页正向"POD标快"签收联
-        （寄=莱克勒/收=客户/寄付月结），**不是**用户要的反向返回运单（收寄互反/到付/签回单原单号
-        回链——该联目前仅速打可在签收前出纸，丰桥取法待顺丰官方答复）。默认出纸=仅官方主面单；
-        仅显式 with_optional=1 才合并（探针核验用，失败静默跳过、绝不阻塞主面单）。
-        2026-09-30 用户决策（最终口径）：维持默认 1 页官方主面单，反向回签单由**速打**补打；
-        自绘方案（ot_label.py 同款链路，见 0_README「反向回签单取得路径评估」）备选保留、不启用"""
+        back_no：**签回单（回单联）**随货打印——2026-10-08 官方文档 + 顺丰客服核实 + 真单实锤终定：
+        回单号必须走 documents[].backWaybillNo（打印签回单时 masterWaybillNo/branchWaybillNo 必须
+        为空）；此前把回单号塞进 masterWaybillNo 恒得 1 页正向"POD标快"签收联（寄=莱克勒/收=客户/
+        寄付月结）——正是 2026-09-30 被撤回的错误第 2 页。改传后实测=**反向回签单**（1/1 回: SF106…
+        /「关联主运单」回链 / 收=莱克勒德城路99号 / 到付 / 寄=客户地址；探针 carriers/_sb_back_probe.py
+        order#557 主单 SF5148042784954+回单 SF1065010577207）→ 与主面单合并为同一 PDF、
+        一次预览一次打印，随货走。逗号分隔多回单；取不到静默跳过、绝不阻塞主面单。
+        默认（不传 back_no）=仅官方主面单。兼容旧参：optional_no（语义同 back_no）
+        + with_optional=1（旧探针门控）"""
         carrier = (qs.get("carrier", [""])[0]).strip()
         waybills = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
                                 for x in qs.get("waybill_no", [""])[0].split(",")) if w]
-        optional = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
-                                for x in qs.get("optional_no", [""])[0].split(","))
-                    if w and w not in waybills]
+        # 签回单号（回单联）：新参 back_no（2026-10-08 官方口径，无需门控）；
+        # 兼容旧参 optional_no + with_optional=1（旧探针/脚本，语义同 back_no）
+        _back_raw = qs.get("back_no")
+        _back_on = bool(_back_raw) or qs.get("with_optional", [""])[0] == "1"
+        backs = [w for w in (re.sub(r"[^\w-]", "", x)[:40]
+                             for x in (_back_raw or qs.get("optional_no", [""]))[0].split(","))
+                 if w and w not in waybills]
         if not carrier or not waybills:
             return self._json(400, {"error": "carrier 和 waybill_no 必填"})
         pdfs, last_data = [], None
@@ -707,12 +706,11 @@ class Handler(SimpleHTTPRequestHandler):
                 pdfs.append(pdf)
         except Exception as e:
             return self._json(400, {"error": str(e)})
-        # 2026-09-30 用户指令撤回：SF106 云打印=正向 POD 签收联，非反向返回运单（见 docstring）——
-        # 默认出纸=仅官方主面单；with_optional=1 仅保留供探针核验
-        if qs.get("with_optional", [""])[0] == "1":
-            for w in optional:      # 探针附加页：失败跳过，不阻塞主面单
+        # 签回单联随货走（2026-10-08 官方口径 documents[].backWaybillNo）：失败静默跳过，绝不阻塞主面单
+        if _back_on:
+            for w in backs:
                 try:
-                    pdf_opt, _ = self._label_pdf_b64(carrier, w)
+                    pdf_opt, _ = self._label_pdf_b64(carrier, w, back=True)
                     if pdf_opt:
                         pdfs.append(pdf_opt)
                 except Exception:

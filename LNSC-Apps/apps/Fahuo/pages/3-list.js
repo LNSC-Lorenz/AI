@@ -441,67 +441,26 @@ function signBackNo(o) {   /* 回签单号（顺丰纸质回单 type=3，下单�
   } catch (e) { return ""; }
 }
 
-/* 回单返回"到方地址"（2026-09-29 用户口径终定，平台统一维护；与 2-order.js 同款）：
-   唯一权威源=服务端 carriers/sf_express.SIGN_BACK_ADDR，页面加载即拉取 GET /api/signback_addr；
-   离线/file:// 打开时用下方兜底同文（与服务端一致，改地址只需改服务端） */
-let SB_ADDR_TEXT = "莱克勒喷嘴系统（常州）有限公司 范蓓蓓 15190535163\n" +
-                   "江苏常州金坛 德城路99号（邮编 213200）";
-(async () => {
-  for (const base of API_CANDIDATES) {
-    try {
-      const r = await fetch(base + "/signback_addr", { signal: AbortSignal.timeout(5000) });
-      if (!r.ok) continue;
-      const d = await r.json();
-      if (d && d.text) SB_ADDR_TEXT = d.text;
-      return;
-    } catch (e) { /* 尝试下一个候选基址 */ }
-  }
-})();
-
-/* 回单返回信息（2026-09-29 用户指正 + 回单运单轨迹实锤，官方逻辑终定；与 2-order.js 同款）：
-   回单运单号=原单回单号（SF106 开头），签收后自动反向、到付返回（历史 4 单轨迹已验证）；
-   云打印那张"正向+寄付月结"面单是 POD 签收联，不是返回段运单——无需人工改单（此前结论错误）。
-   回单收不到的真正根因 = 回单返回"到方地址"未维护，被派送至错误地址签收。
-   → 向 95338/顺丰销售申请维护到方地址=莱克勒德城路99号；此处一键复制维护申请文案 */
+/* 回单返回信息（2026-09-29 官方逻辑终定；2026-10-08 用户定案：顺丰账号侧到方地址已维护、
+   4 张历史误投回单已结案 → 撤掉「维护申请」文案/复制按钮/硬编码历史单号，此处只留回单返回信息）：
+   选择回单后顺丰自动带一张回单返回运单：单号=原回单号（SF106 开头 waybillType=3），
+   收件人签收后自动**反向、到付**返回（历史单轨迹实锤），无需人工改单、无需再申请维护地址。
+   到方地址为顺丰侧固定值（2026-10-08 用户口径：地址固定、无需维护）——平台侧不配置、不下发、不提示。 */
 function signBackInfoEl(o) {
   const sb = signBackNo(o);
   if (o.carrier !== "顺丰" || !sb) return null;
-  const txt = "【顺丰回单返回到方地址维护申请】\n" +
-    "莱克勒喷嘴系统（常州）有限公司（月结客户）\n" +
-    "请将签单返还服务的“回单返回到方地址”维护/确认为：\n" +
-    SB_ADDR_TEXT + "\n" +
-    "本单回单号：" + sb + "（原运单 " + (o.waybill_no || "") +
+  const txt = "回单运单号：" + sb + "（原运单 " + (o.waybill_no || "") +
       (o.so ? "，DN " + o.so : "") + "）\n" +
-    "说明：收件人签收后回单运单自动反向到付返回；到方地址未维护会派送错误。\n" +
-    "另请协查历史误投回单去向并重新派送：SF1064982980091、SF1064982958300、" +
-    "SF1064983709198、SF1064997481417";
-  const el = stepEl("回单返回：顺丰自动返回（同 SF106 回单号，反向 + 到付）——需维护到方地址", "", txt);
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "btn";
-  b.style.margin = "6px 0 2px";
-  b.textContent = "复制到方地址维护申请";
-  b.addEventListener("click", () => {
-    /* http 非安全上下文无 navigator.clipboard → textarea + execCommand 复制 */
-    const ta = document.createElement("textarea");
-    ta.value = txt;
-    ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    let ok = false;
-    try { ok = document.execCommand("copy"); } catch (e) { /* 忽略 */ }
-    ta.remove();
-    b.textContent = ok ? "已复制 ✓（发给 95338/顺丰销售）" : "复制失败，请手动选中文本复制";
-    setTimeout(() => { b.textContent = "复制到方地址维护申请"; }, 3000);
-  });
-  el.querySelector(".step-main").appendChild(b);
-  return el;
+    "返回方式：收件人签收后顺丰自动反向、运费到付返回莱克勒（金坛区德城路99号）\n" +
+    "平台打印：主面单 + 反向回签单同一 PDF 随货走；实物回单到达后人工置「已回单」（2026-09-29 起新单不自动置）";
+  return stepEl("回单返回：顺丰自动反向 + 到付（同 SF106 回单号）", "", txt);
 }
 
 async function openSteps(o) {
   stepsTitle.textContent = `${o.so || "#" + o.id} · ${o.carrier || "—"} · ${o.waybill_no}`;
   stepsBody.innerHTML = "";
   stepsBody.appendChild(stepEl("第一步：下单返回值", o.created_at || "", fmtOrderResp(o)));
-  const sbe = signBackInfoEl(o);   /* 顺丰回单返回：自动反向+到付；到方地址维护申请（2026-09-29 更正） */
+  const sbe = signBackInfoEl(o);   /* 顺丰回单返回：自动反向+到付（2026-10-08 撤维护申请块，只留信息） */
   if (sbe) stepsBody.appendChild(sbe);
   stepsMask.hidden = false;
   /* 后续：承运商轨迹（未开通/失败只追加提示步，不影响第一步） */

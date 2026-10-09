@@ -1,7 +1,7 @@
 /* ============================================================
  * LNSC 全链发货平台 - 顶部栏共享脚本（全页面）
  * 实时时钟：时间每秒刷新 + 日期
- * 主题颜色选择：黑白 / 蓝色（localStorage 记忆）
+ * 主题颜色选择：黑白 #000000 / 蓝色 #006878（2026-10-08 用户指定 RGB 0,104,120；localStorage 记忆）
  * ============================================================ */
 (function () {
   "use strict";
@@ -47,7 +47,7 @@
     const brand = tr.querySelector(".tb-brand");
     const anchor = brand ? brand.nextSibling : null;
     tr.insertBefore(mk("bw", "#000000", "黑白模式"), anchor);
-    tr.insertBefore(mk("blue", "#1D459F", "蓝色模式"), anchor);
+    tr.insertBefore(mk("blue", "#006878", "蓝色模式"), anchor);   /* 蓝色块：2026-10-08 用户指定 RGB 0,104,120 */
     apply(saved);   /* 标记当前主题色块 */
   }
 })();

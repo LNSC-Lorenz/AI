@@ -10,8 +10,8 @@ const API_CANDIDATES = ["../api", `${location.protocol}//${location.hostname}:80
 const TODAY = new Date().toLocaleDateString("sv-SE");
 const pad2 = n => String(n).padStart(2, "0");
 
-/* 语义色（与全局口径一致：超时红 / 运输绿 / 已下单蓝 / 待下单灰） */
-const C_RED = "#d32f2f", C_AMBER = "#f0a13a", C_GREEN = "#2e7d32", C_BLUE = "#1D459F", C_GRAY = "#999999";
+/* 语义色（与全局口径一致：超时红 / 运输绿 / 已下单蓝=主题色 RGB 0,104,120 / 待下单灰） */
+const C_RED = "#d32f2f", C_AMBER = "#f0a13a", C_GREEN = "#2e7d32", C_BLUE = "#006878", C_GRAY = "#999999";
 const ROUTE_TARGET_H = 48;                 /* 在途目标时效：48 小时 */
 
 /* ----- 数据加载：API 在线优先，离线显示空（正式模式无模拟数据） ----- */

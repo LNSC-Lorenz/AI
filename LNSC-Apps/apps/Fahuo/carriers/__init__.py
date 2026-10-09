@@ -28,11 +28,18 @@ def query_route(carrier, waybill_no):
     return mod.query_route(waybill_no)
 
 
-def print_label(carrier, waybill_no):
-    """按承运商名分发官方面单获取（目前仅顺丰云打印）"""
+def print_label(carrier, waybill_no, back=False):
+    """按承运商名分发官方面单获取（顺丰云打印 / 德邦 queryBillPrint）
+
+    back=True → **签回单（回单联）**：仅顺丰支持，走 documents[].backWaybillNo
+    （2026-10-08 官方文档实锤：打印签回单时 master/branchWaybillNo 必须为空）"""
     mod = CARRIERS.get(carrier)
     if not mod or not hasattr(mod, "cloud_print"):
         raise base.CarrierError("该承运商暂无官方面单：" + str(carrier))
+    if back:
+        if not hasattr(mod, "cloud_print_back"):
+            raise base.CarrierError("该承运商暂无签回单面单：" + str(carrier))
+        return mod.cloud_print_back(waybill_no)
     return mod.cloud_print(waybill_no)
 
 

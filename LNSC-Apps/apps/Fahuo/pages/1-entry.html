@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LNSC 全链发货平台 | LNSC Full-Chain Delivery System</title>
 <link rel="stylesheet" href="../shared/style.css">
-<link rel="icon" href="../shared/App.ico">
+<link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
+<link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
 <body>
 <div class="layout">
@@ -39,8 +40,13 @@
 
     <!-- 标题栏 -->
     <header class="title-bar">
-      <h1>LNSC 全链发货平台</h1>
-      <span class="tb-mid">LNSC Full-Chain Delivery System</span>
+      <!-- 左段：LECHLER 组合标志（白底，按源文件品牌色显示；2026-10-08 用户指定） -->
+      <div class="tb-logo-box"><img class="tb-logo" src="../shared/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
+      <!-- 中段：中文名 + 英文名同处一段（主题色斜切段，白色字，同一行并排） -->
+      <div class="tb-mid">
+        <h1>LNSC 全链发货平台</h1>
+        <span class="tb-sub">LNSC Full-Chain Delivery System</span>
+      </div>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
         <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
@@ -113,7 +119,10 @@
                    多个 DN 连输或逗号分隔，按 82600+5位 自动拆分多行 -->
               <label class="fld"><span>DN *</span><input id="soInput" class="line-input" type="text" inputmode="numeric"
                      title="多个 DN 可连输或逗号分隔：按 82600+5位 自动拆分多行，下单合并同一运单"></label>
-              <label class="fld"><span>SO</span><input id="soNoInput" class="line-input" type="text" inputmode="numeric" maxlength="10"></label>
+              <!-- SO 取消写入限制（2026-10-08 用户规则：取消录单时候 SO 的写入限制）：
+                   去掉 maxlength=10 与 inputmode=numeric —— SO 可任意文本、任意长度（仍为选填）；
+                   前后端均不校验 SO 格式（入库原样存 so_no，仅下单页运单备注按值拼接） -->
+              <label class="fld"><span>SO</span><input id="soNoInput" class="line-input" type="text"></label>
             </div>
           </div>
           <!-- 外协单：PO + 采购员 + 公司电话 -->

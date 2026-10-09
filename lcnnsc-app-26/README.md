@@ -53,7 +53,7 @@
 
 7. 部署应用文件
    ```
-   scp ../LNSC-Apps/index.html ../LNSC-Apps/style.css ../LNSC-Apps/script.js ../LNSC-Apps/apps.json ../LNSC-Apps/App.ico ../LNSC-Apps/server.js ../LNSC-Apps/package.json sysadmin@10.86.180.76:/var/www/lnsc-apps/
+   scp ../LNSC-Apps/index.html ../LNSC-Apps/style.css ../LNSC-Apps/script.js ../LNSC-Apps/apps.json ../LNSC-Apps/App.ico ../LNSC-Apps/lechler-c-logo-symbol-mark-cmyk-00.svg ../LNSC-Apps/lechler-c-logo-symbol-mark-cmyk-00.png ../LNSC-Apps/server.js ../LNSC-Apps/package.json sysadmin@10.86.180.76:/var/www/lnsc-apps/
    scp -r ../LNSC-Apps/images sysadmin@10.86.180.76:/var/www/lnsc-apps/
    ```
 

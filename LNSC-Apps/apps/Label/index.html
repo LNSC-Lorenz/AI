@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAP 标签管理平台</title>
+  <link rel="icon" type="image/svg+xml" href="lechler-c-logo-symbol-mark-cmyk-00.svg">
+  <link rel="icon" type="image/png" href="lechler-c-logo-symbol-mark-cmyk-00.png">
+  <!-- 外壳样式 + 设计器样式：设计器规则限定在 .label-designer / .ld-*，可同页共存 -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="designer.css">
+</head>
+<body>
+  <!-- 可嵌入外壳（挂载契约：#label-app > .app-bar + #main，无页眉/侧边栏/页脚）。
+       顶栏：#tabs（页签，左）+ #app-acts（操作按钮区，右；script.js 会把设计器的
+       预览/导出/导入/保存 移到这里，id 与绑定不变）。脚本按需补全两个视图：
+       #view-designer（内含 #designer-host，挂载三栏设计器）、#view-templates。 -->
+  <div id="label-app">
+    <div class="app-bar">
+      <div id="tabs" class="tabs" role="tablist" aria-label="功能导航"></div>
+      <div id="app-acts" class="app-acts"></div>
+    </div>
+    <main id="main"></main>
+  </div>
+
+  <!-- 设计器覆盖层：提示 + 弹窗（.ld-* 前缀，宿主缺省时脚本也会按需创建） -->
+  <div id="ld-toast" class="ld-toast" hidden></div>
+
+  <div id="ld-modal" class="ld-modal" hidden>
+    <div class="ld-modal-box">
+      <div class="ld-modal-head">
+        <span id="ld-modal-title">预览</span>
+        <div class="ld-modal-head-actions">
+          <button id="ld-modal-action" class="btn-sm" hidden></button>
+          <button id="ld-modal-close" class="ld-close" title="关闭">✕</button>
+        </div>
+      </div>
+      <div class="ld-modal-body" id="ld-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 共享内核（数据 + 渲染引擎）→ 设计器（window.LabelDesigner）→ 外壳路由 -->
+  <script src="label-core.js"></script>
+  <script src="designer.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

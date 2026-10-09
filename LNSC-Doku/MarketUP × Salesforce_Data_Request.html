@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MarketUP 与 Salesforce 数据请求方案</title>
+  <style>
+    :root{--ink:#172033;--muted:#66748a;--line:#dce4ee;--bg:#f5f8fc;--white:#fff;--brand:lab(42.0445% 69.9888 48.0381);--brand-deep:color-mix(in srgb,var(--brand) 78%,#261c35 22%);--brand-light:color-mix(in srgb,var(--brand) 14%,#fff 86%);--blue:var(--brand);--blue-soft:var(--brand-light);--green:#159879;--green-soft:#ecfaf5;--orange:#d58a18;--orange-soft:#fff7e8;--shadow:0 18px 42px rgba(32,58,93,.09)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    .page{max-width:980px;margin:0 auto;padding:34px 26px 56px}
+    .hero{background:linear-gradient(135deg,var(--brand-deep),var(--brand));border-radius:23px;padding:38px 40px;color:#fff;box-shadow:var(--shadow)}
+    .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:700;margin-bottom:11px}
+    h1{font-size:31px;line-height:1.2;letter-spacing:-.04em;margin:0 0 11px;font-weight:760}
+    .hero p{margin:0;max-width:720px;color:rgba(255,255,255,.84);font-size:14px;line-height:1.7}
+    .hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:21px}.tag{font-size:12px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.25)}
+    .section{margin-top:25px}.section-kicker{font-size:11px;color:var(--blue);letter-spacing:.15em;text-transform:uppercase;font-weight:800;margin-bottom:6px}h2{font-size:20px;letter-spacing:-.02em;margin:0 0 7px;font-weight:740}.intro{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 14px}
+    .panel{background:var(--white);border:1px solid var(--line);border-radius:17px;padding:22px;box-shadow:0 10px 24px rgba(32,58,93,.04)}
+    .rule-box{margin-top:18px;background:var(--blue-soft);border:1px solid #cbdfff;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.6;color:#365a91}.rule-box b{color:var(--blue)}
+.table-wrap{border:1px solid var(--line);border-radius:13px;overflow:auto;margin-top:14px}table{border-collapse:collapse;width:100%;min-width:620px;font-size:13px}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);background:var(--bg);font-weight:750}tr:last-child td{border-bottom:0}td code{font-size:12px;color:#2b4a7d;white-space:nowrap}
+    .callout{margin-top:14px;padding:13px 14px;border-radius:11px;background:var(--green-soft);border:1px solid #bfe7d9;color:#306956;font-size:12px;line-height:1.6}.callout b{color:var(--green)}
+    .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:19px;padding-top:15px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+    .req-list{display:grid;gap:12px;margin-top:14px}
+    .req{display:grid;grid-template-columns:30px 1fr;gap:13px;border:1px solid var(--line);border-radius:13px;padding:15px 16px;background:var(--white)}
+    .req-no{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);font-size:12px;font-weight:800;border:1px solid #cbdfff}
+    .req h3{font-size:14px;margin:0 0 6px;font-weight:730}
+    .req p{font-size:12px;color:var(--muted);line-height:1.65;margin:0}
+    .req ul{margin:9px 0 0;padding-left:17px;display:grid;gap:5px}
+    .req li{font-size:12px;color:var(--muted);line-height:1.6}
+    .req li b{color:var(--ink)}
+    code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace}
+    p code,li code,.note code{font-size:11.5px;background:#eef3fb;border:1px solid #dae3f2;border-radius:5px;padding:1px 5px;color:#2b4a7d}
+    .m{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 7px;border-radius:6px}
+    .m.get{background:#e6f5ef;color:#15805f}.m.post{background:#e8f0ff;color:#2b5db8}.m.patch{background:#fff3e0;color:#b06d0d}
+    .code-block{margin-top:14px;border:1px solid #1f3350;border-radius:12px;background:#101c2e;overflow:hidden}
+    .code-bar{display:flex;align-items:center;gap:9px;padding:9px 14px;background:#16253b;border-bottom:1px solid #1f3350;font-size:11px;font-weight:700;color:#9fb4d1;letter-spacing:.05em}
+    .code-bar .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#2f4463}
+    .code-block pre{margin:0;padding:15px 16px;overflow:auto;font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:12px;line-height:1.62;color:#d7e3f4}
+    .code-block pre .cm{color:#7f97b8}
+    .note{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6}
+    @media(max-width:760px){.table-wrap table{min-width:520px}}
+    @media(max-width:520px){.page{padding:17px 13px 38px}.hero{padding:28px 23px;border-radius:18px}h1{font-size:27px}.panel{padding:17px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Salesforce 数据请求</div>
+      <h1>MarketUP 与 Salesforce 数据请求方案</h1>
+      <p>MarketUP 与 Salesforce 对接通过 Salesforce 标准 REST API 查询、新增和更新联系人，以及新增、更新拜访报告。以下列出需要 Salesforce 团队协助配置的沙箱内容，并附上联调使用的 Java 请求示例。</p>
+      <div class="hero-tags"><span class="tag">Client Credentials Flow</span><span class="tag">REST API</span><span class="tag">Spring Boot（Java）</span><span class="tag">先在沙箱验证</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">01 · 配置事项</div>
+      <h2>请协助在沙箱配置以下内容</h2>
+      <p class="intro">以下四项分别对应 OAuth 应用、集成用户权限、MarketUP 需要的连接凭据，以及拜访报告所需的对象信息。</p>
+
+      <div class="req-list">
+        <div class="req"><div class="req-no">1</div><div>
+          <h3>OAuth 应用</h3>
+          <p>配置支持 Client Credentials Flow 的 OAuth 应用，指定专用集成用户，开启 API 访问范围（<code>api</code>）。</p>
+        </div></div>
+
+        <div class="req"><div class="req-no">2</div><div>
+          <h3>集成用户权限</h3>
+          <p>为集成用户开启 API Enabled 权限，并授权同步范围内的数据：</p>
+          <ul>
+            <li><b>联系人（Contact）：</b>读取、新增、编辑权限。</li>
+            <li><b>拜访报告实际对应的对象：</b>读取、新增、编辑权限。</li>
+            <li><b>关联客户（Account）等对象：</b>按关联需要提供读取权限。</li>
+            <li><b>同步字段：</b>读取权限；可编辑字段的写入权限。</li>
+          </ul>
+        </div></div>
+
+        <div class="req"><div class="req-no">3</div><div>
+          <h3>连接凭据</h3>
+          <p>提供沙箱 My Domain 地址、Client ID（Consumer Key）、Client Secret（Consumer Secret）。</p>
+        </div></div>
+
+        <div class="req"><div class="req-no">4</div><div>
+          <h3>拜访报告对象信息</h3>
+          <p>提供拜访报告的对象及字段 API 名称、必填项、选项值、记录类型和关联关系。若拜访报告涉及主表和明细表，请一并提供。</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">02 · 需要使用的接口</div>
+      <h2>Salesforce REST API 接口</h2>
+      <p class="intro">以下业务路径均以 <code>/services/data/{version}</code> 开头，<code>{version}</code> 使用沙箱支持的版本。</p>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>用途</th><th>方法</th><th>接口路径</th></tr></thead>
+            <tbody>
+              <tr><td>获取访问令牌</td><td><span class="m post">POST</span></td><td><code>/services/oauth2/token</code>，使用沙箱 My Domain</td></tr>
+              <tr><td>按更新时间查询联系人</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/query?q=...</code></td></tr>
+              <tr><td>查询联系人详情及更新时间</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/sobjects/Contact/{Id}</code></td></tr>
+              <tr><td>新增联系人</td><td><span class="m post">POST</span></td><td><code>/services/data/{version}/sobjects/Contact</code></td></tr>
+              <tr><td>更新联系人</td><td><span class="m patch">PATCH</span></td><td><code>/services/data/{version}/sobjects/Contact/{Id}</code></td></tr>
+              <tr><td>新增拜访报告</td><td><span class="m post">POST</span></td><td><code>/services/data/{version}/sobjects/{报告对象API名称}</code></td></tr>
+              <tr><td>更新拜访报告</td><td><span class="m patch">PATCH</span></td><td><code>/services/data/{version}/sobjects/{报告对象API名称}/{Id}</code></td></tr>
+              <tr><td>查询对象字段定义</td><td><span class="m get">GET</span></td><td><code>/services/data/{version}/sobjects/{对象API名称}/describe</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rule-box"><b>版本说明：</b><code>{version}</code> 为占位符，请使用沙箱支持的版本，例如 <code>v60.0</code>。</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">03 · Spring Boot 请求示例</div>
+      <h2>Spring Boot（Java）请求示例</h2>
+      <p class="intro">以下示例使用 JDK 自带的 HTTP 客户端和 Jackson，无需额外引入 Salesforce SDK。</p>
+      <div class="panel">
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>application.yml</div>
+<pre>salesforce:
+  domain: ${SF_DOMAIN}
+  client-id: ${SF_CLIENT_ID}
+  client-secret: ${SF_CLIENT_SECRET}
+  <span class="cm"># 示例，以沙箱支持的版本为准</span>
+  api-version: v60.0</pre>
+        </div>
+
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>SalesforceClient.java</div>
+<pre>import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+
+@Service
+public class SalesforceClient {
+
+    @Value("${salesforce.domain}")
+    private String domain;
+
+    @Value("${salesforce.client-id}")
+    private String clientId;
+
+    @Value("${salesforce.client-secret}")
+    private String clientSecret;
+
+    @Value("${salesforce.api-version}")
+    private String apiVersion;
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    private final HttpClient http = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    <span class="cm">// 1. 使用 Client ID + Client Secret 获取 Token</span>
+    public JsonNode getToken() throws IOException, InterruptedException {
+        String form = "grant_type=client_credentials"
+                + "&amp;client_id=" + encode(clientId)
+                + "&amp;client_secret=" + encode(clientSecret);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(domain.replaceAll("/+$", "")
+                        + "/services/oauth2/token"))
+                .timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+
+        return execute(request);
+    }
+
+    <span class="cm">// 2. 按更新时间查询联系人：返回第一页</span>
+    public JsonNode queryContacts(JsonNode token, Instant since)
+            throws IOException, InterruptedException {
+
+        String soql = "SELECT Id, FirstName, LastName, MobilePhone, "
+                + "Email, AccountId, LastModifiedDate "
+                + "FROM Contact "
+                + "WHERE LastModifiedDate &gt;= " + since.toString()
+                + " ORDER BY LastModifiedDate, Id";
+
+        return call(token, "GET", apiPath() + "/query?q=" + encode(soql), null);
+    }
+
+    <span class="cm">// 3. 查询单个联系人：写入后可读取 SF 实际更新时间</span>
+    public JsonNode getContact(JsonNode token, String contactId)
+            throws IOException, InterruptedException {
+
+        return call(token, "GET",
+                apiPath() + "/sobjects/Contact/" + contactId, null);
+    }
+
+    <span class="cm">// 4. 新增联系人或拜访报告，成功返回包含 id 的 JSON</span>
+    public JsonNode createRecord(
+            JsonNode token, String objectApiName, Map&lt;String, Object&gt; fields)
+            throws IOException, InterruptedException {
+
+        return call(token, "POST",
+                apiPath() + "/sobjects/" + objectApiName, fields);
+    }
+
+    <span class="cm">// 5. 更新联系人或拜访报告，成功通常返回 HTTP 204</span>
+    public void updateRecord(
+            JsonNode token, String objectApiName, String recordId,
+            Map&lt;String, Object&gt; fields)
+            throws IOException, InterruptedException {
+
+        call(token, "PATCH",
+                apiPath() + "/sobjects/" + objectApiName + "/" + recordId,
+                fields);
+    }
+
+    private JsonNode call(
+            JsonNode token, String method, String path, Object body)
+            throws IOException, InterruptedException {
+
+        <span class="cm">// 业务接口使用 Token 响应中的 instance_url</span>
+        String baseUrl = token.get("instance_url").asText();
+        String accessToken = token.get("access_token").asText();
+
+        HttpRequest.BodyPublisher publisher = body == null
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(
+                        mapper.writeValueAsString(body));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/json")
+                .method(method, publisher)
+                .build();
+
+        return execute(request);
+    }
+
+    private JsonNode execute(HttpRequest request)
+            throws IOException, InterruptedException {
+
+        HttpResponse&lt;String&gt; response = http.send(
+                request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() &lt; 200 || response.statusCode() &gt;= 300) {
+            <span class="cm">// 不在异常日志中输出 Secret、Token 或联系人数据</span>
+            throw new IOException(
+                    "Salesforce 请求失败，HTTP " + response.statusCode());
+        }
+
+        return response.body().isBlank()
+                ? mapper.createObjectNode()
+                : mapper.readTree(response.body());
+    }
+
+    private String apiPath() {
+        return "/services/data/" + apiVersion;
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-kicker">04 · 调用示例</div>
+      <h2>实际调用示例</h2>
+      <p class="intro">以下在注入 <code>SalesforceClient sf</code> 的业务方法中调用，示例修改操作仅针对沙箱测试数据。</p>
+      <div class="panel">
+        <div class="code-block">
+          <div class="code-bar"><span class="dot"></span>SalesforceClient 调用示例</div>
+<pre><span class="cm">// 获取 Token：同一轮请求复用，不需要每个请求都重新获取</span>
+JsonNode token = sf.getToken();
+
+<span class="cm">// 查询指定时间之后更新的联系人</span>
+JsonNode contacts = sf.queryContacts(
+        token, Instant.parse("2026-09-20T00:00:00Z"));
+<span class="cm">// 更新联系人：替换成沙箱测试联系人的真实 ID</span>
+String contactId = "替换为沙箱ContactId";
+
+sf.updateRecord(token, "Contact", contactId, Map.of(
+        "LastName", "张三",
+        "MobilePhone", "13800000000"
+));
+
+<span class="cm">// 更新成功后，再查询 SF 服务器实际生成的更新时间</span>
+JsonNode contact = sf.getContact(token, contactId);
+String sfModifiedTime = contact.get("LastModifiedDate").asText();
+
+<span class="cm">// 由 MarketUP 保存 sfModifiedTime，作为该联系人下次同步判断的基准</span>
+<span class="cm">// 新增拜访报告</span>
+<span class="cm">// 以下对象及字段名仅为占位，不代表客户现有 Salesforce 配置</span>
+JsonNode report = sf.createRecord(token, "Visit_Report__c", Map.of(
+        "Subject__c", "客户拜访",
+        "Content__c", "沟通产品需求及后续跟进安排",
+        "Contact__c", contactId
+));
+
+<span class="cm">// MarketUP 保存返回的报告 ID，后续修改时更新同一条记录</span>
+String reportId = report.get("id").asText();
+
+sf.updateRecord(token, "Visit_Report__c", reportId, Map.of(
+        "Content__c", "已补充客户反馈，下周继续跟进"
+));</pre>
+        </div>
+        <div class="callout"><b>注：</b>上面是请求的示例，不是完整同步程序。</div>
+      </div>
+    </section>
+
+    <footer class="footer"><span>MarketUP × Salesforce 数据请求方案</span><span>Salesforce REST API · Client Credentials Flow</span></footer>
+  </main>
+</body>
+</html>
