@@ -18,6 +18,9 @@
   let _loadedCode = null;     // 当前编辑模板在 DB 中的（原）编码，用于公司代码改名保存
   const D_SCALE = 3.4;        // 画布缩放：1mm -> 3.4px
   const SNAP_TOL = 1.2;       // 对齐参考线吸附容差（mm）
+  let ZOOM = 1;               // 视图缩放（1 = 100%，只影响显示，不改变标签数据）
+  let _fitPending = true;     // 首次可见时自动 Fit（2026-10-10 用户要求：默认适配窗口而非 100%）
+  const dScale = () => D_SCALE * ZOOM;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const roundT = (v) => Math.round(v);            // 位置/尺寸吸附到整 mm
   const round2 = (v) => Math.round((+v || 0) * 100) / 100;
@@ -47,15 +50,31 @@
         <div class="ld-ruler-h" id="ld-ruler-h"></div>
         <div class="ld-ruler-v" id="ld-ruler-v"></div>
         <div class="canvas-wrap" id="ld-wrap"></div>
+        <div class="ld-zoom" id="ld-zoom">
+          <button type="button" id="ld-zoom-out" title="缩小">−</button>
+          <span id="ld-zoom-pct">100%</span>
+          <button type="button" id="ld-zoom-in" title="放大">＋</button>
+          <button type="button" id="ld-zoom-fit" title="适配窗口">Fit</button>
+        </div>
       </div>
       <div class="ld-preview">
         <div class="ld-preview-stage" id="ld-prev-inline"></div>
       </div>
+      <div class="ld-status" id="ld-status">
+        <span id="ld-st-count">0 个元素</span><span>·</span><span id="ld-st-size">100 × 60 mm</span>
+        <span class="spacer"></span>
+        <span class="ld-status-hint">拖动吸附对齐 · Delete 删除选中 · Esc 关闭弹窗</span>
+      </div>
     </div>
-    <div class="panel"><div class="panel-body">
-      <div class="field ld-cofield"><label>公司代码</label><input type="text" id="ld-co" placeholder="如 ABC / 1000 / LEC"></div>
-      <div id="ld-props"></div>
-    </div></div>
+    <div class="ld-right">
+      <div class="panel ld-cocard">
+        <span class="ld-cocard-lbl">公司代码</span>
+        <input type="text" id="ld-co" class="ld-cocard-code" maxlength="7" inputmode="numeric" pattern="\d{7}"
+               title="公司代码恒为 7 位数字" placeholder="7 位数字，如 4101901">
+        <div class="ld-cocard-name" id="ld-co-name">—</div>
+      </div>
+      <div class="panel ld-props-panel"><div class="panel-body" id="ld-props"></div></div>
+    </div>
   </div>`;
 
   /* ---------- 提示 / 弹窗 ---------- */
@@ -118,6 +137,9 @@
       DE = { code: '', company: '', name: '', version: 1, status: 'draft', width: 100, height: 60, unit: 'mm', customer: '', elements: [], sel: null };
       refreshMeta(); refreshTplSelect(); canvas(); props();
     }
+    tryFit();   // 首次打开默认 Fit（此刻隐藏则跳过，待 refresh 补）
+    // SQLite 后端在线时与其对账（离线自动回退 localStorage，见 label-core.js syncDB）
+    if (typeof syncDB === 'function') syncDB(() => { api.refresh(); });
     return api;
   }
 
@@ -132,8 +154,15 @@
     $('#ld-modal-action').onclick = () => { if (_modalAction) _modalAction(); };
     $('#ld-modal').addEventListener('click', e => { if (e.target.id === 'ld-modal') ldCloseModal(); });
 
-    // 模板级属性：公司代码 = 画布上方居中输入框；名称 / 宽 / 高 在右栏「模板」属性（见 props()）
-    $('#ld-co').addEventListener('input', e => { if (DE) DE.company = e.target.value; });
+    // 模板级属性：公司代码 = 右栏顶部卡片大号可编辑代码（唯一索引，恒为 7 位数字：仅数字、最长 7 位）
+    $('#ld-co').addEventListener('input', e => {
+      if (!DE) return;
+      const v = e.target.value.replace(/\D/g, '').slice(0, 7);
+      if (v !== e.target.value) e.target.value = v;
+      DE.company = v;
+      const nm = $('#ld-co-name');
+      if (nm) { const c = (DB.customers || []).find(x => x.code === v); nm.textContent = c ? c.name : '—'; }
+    });
 
     // Esc 关闭弹窗
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#ld-modal').hidden) ldCloseModal(); });
@@ -151,6 +180,11 @@
     const wrap0 = $('#ld-wrap');
     if (wrap0) wrap0.addEventListener('scroll', () => rulers());
     if (!window._ldRulerRs) { window._ldRulerRs = 1; window.addEventListener('resize', () => { if (DE) rulers(); }); }
+    // 缩放控件（参考 OpenLabelMaker 中栏：− / 百分比 / ＋ / Fit）
+    const zin = $('#ld-zoom-in'), zout = $('#ld-zoom-out'), zfit = $('#ld-zoom-fit');
+    if (zin) zin.onclick = () => setZoom(ZOOM * 1.25);
+    if (zout) zout.onclick = () => setZoom(ZOOM / 1.25);
+    if (zfit) zfit.onclick = fitZoom;
   }
 
   /* ---------- 模板下拉 / 模板级属性 ---------- */
@@ -168,7 +202,10 @@
 
   function refreshMeta() {
     if (!DE) return;
-    const co = $('#ld-co'); if (co) co.value = DE.company || DE.customer || '';
+    const code = DE.company || DE.customer || '';
+    const co = $('#ld-co'); if (co) co.value = code;
+    const nm = $('#ld-co-name');
+    if (nm) { const c = (DB.customers || []).find(x => x.code === code); nm.textContent = c ? c.name : '—'; }
     const badge = $('#ld-company-badge'); if (badge) badge.textContent = DE.code || '—';
   }
 
@@ -180,11 +217,25 @@
   }
 
   /* ---------- 以公司代码为索引新建模板 ---------- */
+  /* 基础底版（2026-10-12 用户指定）：新建模板自动带出无外框工业简洁版式——
+     左 1mm 粗竖线 + 右 0.5mm LOGO 通道分隔竖线（y 3..57）+ 3 个字段行
+     （粗体单行标题 fs8 左对齐 + 行槽底部 0.35mm 书写细线）+ 右缘竖排 LOGO */
+  const BASE_ELEMENTS = [   // 100×50mm（2026-10-12 高度 60→50，字体不变）
+    { id: 'leftbar', type: 'rectangle', x: 2.5, y: 3, width: 1, height: 44, fill: '#111', borderWidth: 0 },
+    { id: 'rsep', type: 'rectangle', x: 88.5, y: 3, width: 0.5, height: 44, fill: '#111', borderWidth: 0 },
+    { id: 'cap0', type: 'text', text: '物料号 / Material No.', x: 8, y: 4, width: 76, height: 3.4, fontSize: 8, color: '#111', bold: true, align: 'left' },
+    { id: 'line0', type: 'rectangle', x: 8, y: 14.38, width: 77, height: 0.35, fill: '#111', color: '#111', borderWidth: 0 },
+    { id: 'cap1', type: 'text', text: '品名 / DESCRIPTION', x: 8, y: 17.88, width: 76, height: 3.4, fontSize: 8, color: '#111', bold: true, align: 'left' },
+    { id: 'line1', type: 'rectangle', x: 8, y: 28.27, width: 77, height: 0.35, fill: '#111', color: '#111', borderWidth: 0 },
+    { id: 'cap2', type: 'text', text: '数量 / QTY', x: 8, y: 31.77, width: 76, height: 3.4, fontSize: 8, color: '#111', bold: true, align: 'left' },
+    { id: 'line2', type: 'rectangle', x: 8, y: 42.15, width: 77, height: 0.35, fill: '#111', color: '#111', borderWidth: 0 },
+    { id: 'logo', type: 'image', src: 'assets/lechler-c-logo-combination-mark-black-00.png', x: 71, y: 22, width: 45, height: 6, rotate: -90 }
+  ];
   function newTemplate() {
     const n = DB.templates.length + 1;
     let code = 'TMP_' + n;
     while (DB.templates.some(t => t.code === code)) code = 'TMP_' + n + '_' + Math.floor(Math.random() * 900 + 100);
-    const t = { code, company: '', name: '新模板 ' + n, version: 1, status: 'draft', width: 100, height: 60, unit: 'mm', customer: '', updated: nowStr(), elements: [] };
+    const t = { code, company: '', name: '新模板 ' + n, version: 1, status: 'draft', width: 100, height: 50, unit: 'mm', customer: '', updated: nowStr(), elements: clone(BASE_ELEMENTS) };
     DB.templates.push(t); saveDB();
     loadTemplate(code);
     const co = $('#ld-co');
@@ -199,26 +250,49 @@
     qrcode: () => ({ type: 'qrcode', width: 20, height: 20, value: '{{MATNR}}' }),
     line: () => ({ type: 'line', width: 40, height: 2 })
   };
+  /* 组件图标（inline SVG，currentColor 继承按钮前景色） */
+  const ICONS = {
+    text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg>',
+    barcode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5v14M8 5v14M11 5v14M15 5v14M17.5 5v14M20.5 5v14"/></svg>',
+    qrcode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M13 13h3v3h-3zM18 13h2v2h-2zM13 18h2v2h-2zM18 18h2v2h-2z" fill="currentColor" stroke="none"/></svg>',
+    line: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 12h16"/></svg>',
+    /* SAP 字段图标（按字段编码索引，_field 为兜底、_manual 为手工输入） */
+    MATNR: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7l9 9-7 7-9-9V4z"/><circle cx="8.5" cy="8.5" r="1.4"/></svg>',
+    MAKTX: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 6h14M5 10h14M5 14h9M5 18h6"/></svg>',
+    CHARG: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l8 4-8 4-8-4 8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>',
+    LFIMG: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4L7 20M17 4l-2 16M4 9h16M4 15h16"/></svg>',
+    WERKS: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l5 3v-3l5 3V7h4v14"/></svg>',
+    LGORT: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>',
+    BSTKD: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10 12h5M10 16h5"/></svg>',
+    KDMAT: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.2"/><path d="M5.5 20c1-3.6 3.5-5.2 6.5-5.2s5.5 1.6 6.5 5.2"/></svg>',
+    VGBEL: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8h6M9 12h6"/></svg>',
+    _manual: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19l-4 1z"/><path d="M14 7l3 3"/></svg>',
+    _field: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9 10h6M9 14h6" stroke-linecap="round"/></svg>'
+  };
   function palette() {
     const sap = DB.fields.filter(f => f.type === 'SAP');
     const host = $('#ld-palette');
     if (!host) return;
+    /* 元素 + SAP 字段全部展开为图标按钮（2026-10-08 用户要求：不再用下拉框） */
+    const elBtn = (add, icon, label) =>
+      '<button type="button" data-add="' + add + '">' + icon + '<span>' + label + '</span></button>';
+    const fldBtn = (code, label, manual) =>
+      '<button type="button" data-field="' + esc(code) + '" data-flabel="' + esc(label) + '"' + (manual ? ' data-manual="1"' : '') + '>'
+      + (ICONS[code] || ICONS._field) + '<span>' + esc(label) + '</span><i>' + esc(code) + '</i></button>';
     host.innerHTML =
       '<div class="pal-row">'
-      + '<button type="button" data-add="text">文本</button>'
-      + '<button type="button" data-add="barcode">条码</button>'
-      + '<button type="button" data-add="qrcode">二维码</button>'
-      + '<button type="button" data-add="line">线条</button>'
-      + '</div>'
-      + '<div class="pal-field">'
-      + '<select id="ld-field-sel">'
-      + sap.map(f => `<option value="${f.code}" data-label="${esc(f.label)}">${esc(f.label)} · ${esc(f.code)}</option>`).join('')
-      + '<option value="CUST_MATNR" data-label="手工输入" data-manual="1">手工输入 · CUST_MATNR</option>'
-      + '</select>'
-      + '<button type="button" id="ld-field-add" class="btn btn-sm">加入字段</button>'
+      + elBtn('text', ICONS.text, '文本')
+      + elBtn('barcode', ICONS.barcode, '条码')
+      + elBtn('qrcode', ICONS.qrcode, '二维码')
+      + elBtn('line', ICONS.line, '线条')
+      + '<div class="pal-div"></div>'
+      + sap.map(f => fldBtn(f.code, f.label, false)).join('')
+      + fldBtn('CUST_MATNR', '手工输入', true)
       + '</div>';
     $$('#ld-palette [data-add]').forEach(btn => { btn.onclick = () => addFromPalette(btn.dataset.add); });
-    $('#ld-field-add').onclick = addFieldFromSelect;
+    $$('#ld-palette [data-field]').forEach(btn => {
+      btn.onclick = () => addField(btn.dataset.field, btn.dataset.flabel, btn.dataset.manual === '1');
+    });
   }
 
   function addFromPalette(t) {
@@ -226,14 +300,11 @@
     if (make) addElement(make());
   }
 
-  function addFieldFromSelect() {
-    const sel = $('#ld-field-sel');
-    if (!sel) return;
-    const opt = sel.selectedOptions[0] || sel.options[0];
-    const manual = opt && opt.dataset.manual === '1';
+  /* 点击字段图标即加入字段元素（source: sap / manual） */
+  function addField(code, label, manual) {
     addElement({
-      type: 'field', source: manual ? 'manual' : 'sap', field: sel.value,
-      label: opt ? opt.dataset.label : sel.value, required: manual, fontSize: 11, width: 55, height: 7
+      type: 'field', source: manual ? 'manual' : 'sap', field: code,
+      label: label || code, required: !!manual, fontSize: 11, width: 55, height: 7
     });
   }
 
@@ -250,7 +321,7 @@
     const wrap = $('#ld-wrap');
     if (!wrap || !DE) return;
     wrap.innerHTML = '';
-    const c = buildLabel(DE, {}, D_SCALE);
+    const c = buildLabel(DE, {}, dScale());
     const guides = document.createElement('div');
     guides.className = 'guides';
     c.appendChild(guides);
@@ -270,9 +341,31 @@
     });
     wrap.appendChild(c);
     rulers();
-    const size = $('#ld-size');
-    if (size) size.textContent = DE.width + ' × ' + DE.height + ' mm';
+    const zp = $('#ld-zoom-pct'); if (zp) zp.textContent = Math.round(ZOOM * 100) + '%';
+    const sc = $('#ld-st-count'); if (sc) sc.textContent = DE.elements.length + ' 个元素';
+    const ss = $('#ld-st-size'); if (ss) ss.textContent = DE.width + ' × ' + DE.height + ' mm';
     inlinePreview();
+  }
+
+  /* 视图缩放（参考 OpenLabelMaker 中栏：− / % / ＋ / Fit） */
+  function setZoom(z) {
+    ZOOM = Math.min(4, Math.max(0.25, z));
+    canvas();
+  }
+  function fitZoom() {
+    const wrap = $('#ld-wrap');
+    if (!wrap || !DE || !wrap.clientWidth) return;   // 隐藏时量不到尺寸，保持现状（避免被钳到 25%）
+    const zx = (wrap.clientWidth - 28) / (DE.width * D_SCALE);
+    const zy = (wrap.clientHeight - 28) / (DE.height * D_SCALE);
+    setZoom(Math.min(3, Math.min(zx, zy)));
+  }
+  /* 首次打开默认 Fit：挂载/刷新后若已可见则应用一次；仍隐藏（如在模板管理页签）则等下次可见时补 */
+  function tryFit() {
+    if (!_fitPending) return;
+    const wrap = $('#ld-wrap');
+    if (!wrap || !wrap.clientWidth) return;
+    _fitPending = false;
+    fitZoom();
   }
 
   /* ---------- 中下：打印预览（只读，用示例数据渲染整张标签） ---------- */
@@ -304,7 +397,7 @@
       const wr = wrap.getBoundingClientRect(), cr = c.getBoundingClientRect();
       offX = cr.left - wr.left; offY = cr.top - wr.top;
     }
-    const step = 5 * D_SCALE;
+    const step = 5 * dScale();
     let hh = '', vv = '';
     for (let k = Math.ceil(-offX / step), x = offX + k * step; x <= h.clientWidth; k++, x += step) {
       const mm = k * 5, maj = ((mm % 10) + 10) % 10 === 0;
@@ -359,8 +452,8 @@
     const g = DE && DE._guides;
     if (!g) return;
     let h = '';
-    if (gx != null) h += `<div class="gline v" style="left:${gx * D_SCALE}px"></div>`;
-    if (gy != null) h += `<div class="gline h" style="top:${gy * D_SCALE}px"></div>`;
+    if (gx != null) h += `<div class="gline v" style="left:${gx * dScale()}px"></div>`;
+    if (gy != null) h += `<div class="gline h" style="top:${gy * dScale()}px"></div>`;
     g.innerHTML = h;
   }
 
@@ -373,7 +466,7 @@
     const ox = el.x, oy = el.y, ow = el.width, oh = el.height;
     const vx = guideTargets('x'), vy = guideTargets('y');
     function onMove(e) {
-      const dx = (e.clientX - sx) / D_SCALE, dy = (e.clientY - sy) / D_SCALE;
+      const dx = (e.clientX - sx) / dScale(), dy = (e.clientY - sy) / dScale();
       let gx = null, gy = null;
       if (mode === 'move') {
         let nx = ox + dx, ny = oy + dy;
@@ -568,7 +661,7 @@
   const api = {
     mount, load: loadTemplate, open: loadTemplate, save, preview, newTemplate,
     get: () => DE ? clone(DE) : null,
-    refresh: () => { refreshMeta(); refreshTplSelect(); palette(); canvas(); props(); },
+    refresh: () => { refreshMeta(); refreshTplSelect(); palette(); canvas(); props(); tryFit(); },
     exportJSON, importJSON,
     setPendingCode: c => { _pendingCode = c; },
     db: () => DB

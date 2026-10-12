@@ -3,7 +3,7 @@
    · 视图：标签设计 (designer) / 模板管理 (templates)；
    · 本文件只负责「外壳 + 路由 + 模板管理」，标签设计视图直接挂载
      designer.js 暴露的 window.LabelDesigner（同一套三栏设计器）；
-   · 依赖 label-core.js（共享 DB / buildLabel）与 designer.js / designer.css。
+   · 依赖 js/label-core.js（共享 DB / buildLabel）与 js/designer.js / css/designer.css。
    · 对外接口：window.LabelApp = { mount(root), go(view), refresh(), views, DB }
    ========================================================================== */
 (function () {
@@ -107,36 +107,37 @@
     if (('#/' + v) !== location.hash) location.hash = '#/' + v;
   }
 
-/* ---------- 模板管理视图 ---------- */
+/* ---------- 模板管理视图：全部客户逐行 + 模板状态（2026-10-10 用户要求） ----------
+   行 = 客户主数据全部客户（9100 条，过滤框检索，最多显示 200 条）；
+   无归属客户的模板（如 DEFAULT 通用模板）排在最前。
+   列 = 公司代码 / 中文名称 / 尺寸 / 元素 / 更新时间 + 行末操作：
+   有模板 → 设计（打开）+ 删除；无模板 → 设计（新建并预填公司代码）。 */
   function renderTemplates() {
     var host = q('#view-templates');
     if (!host) return;
-    var list = (DB.templates || []).slice().sort(function (a, b) {
-      return String(a.company || a.customer || '').localeCompare(String(b.company || b.customer || ''));
+    var customers = DB.customers || [];
+    var tplByCo = {};
+    (DB.templates || []).forEach(function (t) { tplByCo[String(t.company || t.customer || '')] = t; });
+    var coSet = {};
+    customers.forEach(function (c) { coSet[String(c.code)] = 1; });
+    var orphans = (DB.templates || []).filter(function (t) {
+      var co = String(t.company || t.customer || '');
+      return !co || !coSet[co];
     });
-    var rows = list.map(function (t) {
-      var co = t.company || t.customer || '—';
-      return '<tr>'
-        + '<td class="mono"><b>' + esc(co) + '</b></td>'
-        + '<td>' + esc(t.name || '') + '</td>'
-        + '<td class="mono">' + esc(t.code) + '</td>'
-        + '<td class="mono">' + t.width + ' × ' + t.height + ' mm</td>'
-        + '<td>' + ((t.elements || []).length) + '</td>'
-        + '<td class="mono">' + esc(t.updated || '') + '</td>'
-        + '<td class="col-actions"><div class="actions">'
-        + '<button type="button" class="btn btn-sm" data-edit="' + esc(t.code) + '">设计</button>'
-        + '<button type="button" class="btn btn-sm btn-danger" data-del="' + esc(t.code) + '">删除</button>'
-        + '</div></td></tr>';
-    }).join('');
-    if (!rows) rows = '<tr><td colspan="7" class="empty-row">暂无模板，点击右上角「新建模板」以公司代码创建</td></tr>';
 
     host.innerHTML =
       '<div class="page-head"><div><h2>模板管理</h2>'
-      + '<div class="desc">以「公司代码」为唯一索引管理标签模板，与设计器共享同一份本地数据。</div></div>'
-      + '<button type="button" class="btn btn-primary" id="tpl-new">＋ 新建模板</button></div>'
+      + '<div class="desc">全部 ' + customers.length + ' 个客户逐行列出（公司代码 = 7 位数字，数据来源 <span class="mono">data/Customer Chinese.xlsx</span>），每个客户一张标签模板，点「设计」进入设计器。'
+      + (typeof window !== 'undefined' && window.LABEL_API_ONLINE === false
+          ? '<br><b class="api-off">后端离线：当前为 localStorage 演示数据（' + customers.length + ' 条）——启动 <span class="mono">node server.js</span> 并经 <span class="mono">http://&lt;主机&gt;:8092/</span> 访问，即可载入 SQLite 基本数据库。</b>'
+          : '')
+      + '</div></div>'
+      + '<div class="page-acts"><input type="text" id="cust-q" class="cust-q" placeholder="按代码或中文名称过滤…">'
+      + '<button type="button" class="btn btn-primary" id="tpl-new">＋ 新建模板</button></div></div>'
       + '<div class="table-wrap"><table><thead><tr>'
-      + '<th>公司代码</th><th>模板名称</th><th>索引 code</th><th>尺寸</th><th>元素</th><th>更新时间</th><th></th>'
-      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+      + '<th style="width:120px">公司代码</th><th>中文名称</th><th style="width:120px">尺寸</th>'
+      + '<th style="width:64px">元素</th><th style="width:160px">更新时间</th><th style="width:130px"></th>'
+      + '</tr></thead><tbody id="cust-body"></tbody></table></div>';
 
     var nw = q('#tpl-new', host);
     if (nw) nw.onclick = function () {
@@ -144,26 +145,65 @@
       if (d && d.newTemplate) d.newTemplate();
       go('designer');
     };
-    qa('#view-templates [data-edit]', host).forEach(function (b) {
-      b.onclick = function () {
-        var d = designer();
-        if (d && d.open) d.open(b.dataset.edit);
+
+    var cq = q('#cust-q', host), cbody = q('#cust-body', host);
+    function rowHtml(it) {
+      var t = it.t;
+      var act = '<div class="actions">'
+        + (t ? '<button type="button" class="btn btn-sm" data-open="' + esc(t.code) + '">设计</button>'
+             + '<button type="button" class="btn btn-sm btn-danger" data-del="' + esc(t.code) + '">删除</button>'
+             : '<button type="button" class="btn btn-sm" data-new="' + esc(it.co) + '">设计</button>')
+        + '</div>';
+      return '<tr><td class="mono"><b>' + esc(it.co) + '</b></td><td>' + esc(it.name || '—') + '</td>'
+        + '<td class="mono">' + (t ? t.width + ' × ' + t.height + ' mm' : '—') + '</td>'
+        + '<td>' + (t ? (t.elements || []).length : '—') + '</td>'
+        + '<td class="mono">' + (t ? esc(t.updated || '—') : '—') + '</td>'
+        + '<td class="col-actions">' + act + '</td></tr>';
+    }
+    function renderRows() {
+      if (!cbody) return;
+      var kw = ((cq && cq.value) || '').trim().toLowerCase();
+      var items = orphans.map(function (t) {
+        return { co: String(t.company || t.customer || '') || '—', name: t.name || t.code, t: t };
+      });
+      customers.forEach(function (c) { items.push({ co: String(c.code), name: c.name, t: tplByCo[String(c.code)] }); });
+      var hit = kw ? items.filter(function (it) {
+        return it.co.toLowerCase().indexOf(kw) >= 0
+          || String(it.name || '').toLowerCase().indexOf(kw) >= 0
+          || (it.t && String(it.t.code).toLowerCase().indexOf(kw) >= 0);
+      }) : items;
+      var show = hit.slice(0, 200);
+      var html = show.map(rowHtml).join('');
+      if (!html) html = '<tr><td colspan="6" class="empty-row">无匹配客户</td></tr>';
+      else if (hit.length > show.length) html += '<tr><td colspan="6" class="empty-row">共 ' + hit.length + ' 条匹配，仅显示前 200 条——请继续输入以缩小范围</td></tr>';
+      cbody.innerHTML = html;
+    }
+    if (cq) cq.oninput = renderRows;
+    /* 行内按钮（事件委托：过滤重渲染后无需重绑） */
+    if (cbody) cbody.onclick = function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var d = designer();
+      if (b.dataset.open) { if (d && d.open) d.open(b.dataset.open); go('designer'); return; }
+      if (b.dataset.new) {   // 无模板客户：新建模板并预填公司代码（走输入框监听，掩码与公司名联动生效）
+        if (d && d.newTemplate) d.newTemplate();
         go('designer');
-      };
-    });
-    qa('#view-templates [data-del]', host).forEach(function (b) {
-      b.onclick = function () {
-        var code = b.dataset.del;
-        var t = DB.templates.find(function (x) { return x.code === code; });
-        var name = (t && (t.company || t.customer || t.name)) || code;
+        var coEl = document.getElementById('ld-co');
+        if (coEl) { coEl.value = b.dataset.new; coEl.dispatchEvent(new Event('input')); coEl.focus(); }
+        return;
+      }
+      if (b.dataset.del) {
+        var t = (DB.templates || []).find(function (x) { return x.code === b.dataset.del; });
+        if (!t) return;
+        var name = t.company || t.customer || t.name || t.code;
         if (!window.confirm('确定删除模板「' + name + '」？此操作不可撤销。')) return;
-        DB.templates = DB.templates.filter(function (x) { return x.code !== code; });
+        DB.templates = DB.templates.filter(function (x) { return x.code !== t.code; });
         if (typeof saveDB === 'function') saveDB();
-        var d = designer();
         if (d && d.refresh) d.refresh();
         renderTemplates();
-      };
-    });
+      }
+    };
+    renderRows();
   }
 
   /* ---------- 挂载 / 初始化 ---------- */
@@ -181,7 +221,14 @@
     buildShell(el);
     bindTabs();
     ensureViews();
-    render(hashView() || currentView);
+    /* 2026-10-10 用户要求：首次打开固定落在「标签设计」——忽略 URL hash 里残留的历史页签；
+       会话内点页签切换仍走 hash（hashchange 路由不受影响） */
+    if (hashView() && hashView() !== 'designer' && window.history && history.replaceState) {
+      history.replaceState(null, '', location.pathname + location.search + '#/designer');
+    }
+    render('designer');
+    // SQLite 后端在线时与其对账（离线自动回退 localStorage，见 label-core.js syncDB）
+    if (typeof syncDB === 'function') syncDB(function () { render(currentView); });
     return api;
   }
 

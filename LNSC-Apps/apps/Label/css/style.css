@@ -4,7 +4,7 @@
    职责：只负责「可嵌入外壳」——#label-app 外框 / 页签导航 / #main 内的两个视图
          （标签设计＝挂载进来的 .label-designer 三栏设计器；模板管理＝表格）
    不负责：设计器内部（designer.css，限定 .label-designer）与弹窗/提示（.ld-* 前缀）
-   约定：单主题色 #006878、全直角（0–1px）、尺寸一律 px（无 rem）、正文 14px
+   约定：单主题色 #006878、按钮与三栏容器 6px 圆角（其余控件 0–1px）、尺寸一律 px（无 rem）、正文 14px
    注意：下列规则被 check-ui.js / measure-ui.js 逐行断言（多行/单行文本形式），
          请勿把单行规则合并或换行改写，例如 .tab.active、.tabs 那两条。
    ========================================================================== */
@@ -73,7 +73,7 @@ a { color: var(--brand); text-decoration: none; }
   border: 1px solid var(--brand);
   background: var(--brand);     /* 新设计稿：页签全部实心主题色 */
   color: #fff;
-  border-radius: 0;
+  border-radius: 6px;           /* 2026-10-08 用户要求：页签也圆角（与按钮/容器统一） */
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -96,6 +96,9 @@ a { color: var(--brand); text-decoration: none; }
   margin-bottom: 10px;
   flex-wrap: wrap;
 }
+.page-head .cust-q { width: 260px; }   /* 模板管理过滤框（覆盖表单 input 的 width:100%） */
+.page-acts { display: flex; gap: 8px; align-items: flex-end; }   /* 页头右侧：过滤框 + 新建按钮 */
+.api-off { color: var(--err); }   /* 后端离线提示（演示数据警告） */
 .page-head h2 { font-size: 17px; font-weight: 700; color: var(--brand-dark); }
 .page-head .desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
@@ -103,7 +106,7 @@ a { color: var(--brand); text-decoration: none; }
 .btn {
   border: 1px solid var(--border);
   background: #fff;
-  border-radius: 1px;
+  border-radius: 6px;
   padding: 6px 11px;
   cursor: pointer;
   font-size: 13.5px;
@@ -114,7 +117,7 @@ a { color: var(--brand); text-decoration: none; }
   transition: background .1s, border-color .1s;
 }
 .btn:hover { background: var(--brand-light); border-color: var(--brand); color: var(--brand); }
-.btn-sm { padding: 4px 9px; font-size: 13px; border-radius: 1px; }
+.btn-sm { padding: 4px 9px; font-size: 13px; border-radius: 6px; }
 .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
 .btn-primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
 .btn-danger { color: var(--err); border-color: #e6b8b8; }
