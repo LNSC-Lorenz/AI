@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>清单模式 | LNSC 全链发货平台</title>
-<link rel="stylesheet" href="../shared/style.css?v=20261013fq">
-<link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
-<link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
+<link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261024f">
+<link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
+<link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
 <body>
 <div class="layout">
@@ -37,14 +38,14 @@
   </aside>
 
   <!-- 中间：清单模式 -->
-  <main class="main">
+  <main class="main lm-page">
     <header class="title-bar">
       <!-- 左段：LECHLER 组合标志（白底，按源文件品牌色显示；2026-10-08 用户指定） -->
-      <div class="tb-logo-box"><img class="tb-logo" src="../shared/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
+      <div class="tb-logo-box"><img class="tb-logo" src="../assets/images/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
       <!-- 中段：中文名 + 英文名同处一段（主题色斜切段，白色字，同一行并排） -->
       <div class="tb-mid">
         <h1>LNSC 全链发货平台</h1>
-        <span class="tb-sub">LNSC Full-Chain Delivery System</span>
+        <span class="tb-sub">LNSC FULL-CHAIN DELIVERY SYSTEM</span>
       </div>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
@@ -63,13 +64,18 @@
       <!-- 上部：类型过滤 + 优先级过滤 + 搜索框 -->
       <div class="lm-search">
         <div class="prio-btns lm-type">
+          <button class="btn lm-add-waybill" id="btnManualWaybill" type="button"
+                  title="手工补录系统外运单（支持模糊搜索和批量添加）" aria-label="手工补录系统外运单">＋</button>
           <button class="btn otype" type="button" data-t="发货单">发货单</button>
           <button class="btn otype" type="button" data-t="外协单">外协单</button>
           <button class="btn otype" type="button" data-t="其他">其他</button>
         </div>
         <!-- 优先级筛选组移除（2026-09-20 用户规则：优先级分类只留在录单页；紧急行整行加粗红字） -->
-        <input id="lmSearch" type="search" autocomplete="off"
-               placeholder="搜索 DN / 地址 / 姓名 / 电话 / 备注 / 承运商 / 单号 / 状态…">
+        <div class="lm-search-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <input id="lmSearch" type="search" autocomplete="off" aria-label="搜索当前清单"
+                 placeholder="搜索 DN / 地址 / 姓名 / 电话 / 备注 / 承运商 / 单号 / 状态…">
+        </div>
         <span class="lm-count" id="lmCount"></span>
         <!-- 分享四件套（照搬 PO-Closing：复制/邮件/Teams/导出；2026-09-16 用户要求） -->
         <div class="lm-share">
@@ -146,10 +152,61 @@
   </div>
 </div>
 
-<script src="../shared/stats.js"></script>
-<script src="../shared/topbar.js"></script>
-<script src="../shared/lib/docx-preview.min.js"></script>
-<script src="../shared/lib/xlsx.full.min.js"></script>
-<script src="3-list.js?v=20261013fk"></script>
+<!-- 系统外运单手工补录：模糊搜索、多选后逐单填写，批量事务保存 -->
+<div class="steps-mask" id="manualWaybillMask" hidden>
+  <div class="steps-modal mw-modal" role="dialog" aria-modal="true" aria-labelledby="manualWaybillTitle">
+    <div class="steps-head">
+      <b id="manualWaybillTitle">手工补录系统外运单</b>
+      <button class="steps-close" id="manualWaybillClose" type="button" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <div class="mw-body">
+      <p class="mw-tip">只维护系统外已产生的运单，不调用承运商下单。已有运单的订单不会出现在候选中；批量保存时任意一条失败，整批均不写入。</p>
+      <div class="mw-defaults">
+        <label class="mw-field">默认承运商
+          <input id="mwDefaultCarrier" list="mwCarrierOptions" maxlength="30" value="顺丰" autocomplete="off">
+        </label>
+        <datalist id="mwCarrierOptions">
+          <option value="顺丰"></option><option value="德邦"></option><option value="跨越"></option>
+          <option value="京东"></option><option value="中通"></option><option value="圆通"></option>
+          <option value="韵达"></option><option value="申通"></option><option value="EMS"></option>
+        </datalist>
+        <label class="mw-field">默认路由状态
+          <select id="mwDefaultRouteStatus">
+            <option>待揽收</option><option>已揽收</option><option>运送中</option>
+            <option>派送中</option><option>已签收</option><option>已送达</option>
+          </select>
+        </label>
+        <button class="btn" id="mwApplyDefaults" type="button">应用到全部已选</button>
+      </div>
+      <div class="mw-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="mwSearch" type="search" autocomplete="off" aria-label="模糊搜索可补录订单"
+               placeholder="模糊搜索 DN / SO / 姓名 / 电话 / 地址 / 负责人 / 备注…">
+      </div>
+      <div class="mw-panes">
+        <section class="mw-pane">
+          <div class="mw-pane-title" id="mwResultTitle">可补录订单（点击添加，可多选）</div>
+          <div class="mw-results" id="mwResults"></div>
+        </section>
+        <section class="mw-pane">
+          <div class="mw-pane-title" id="mwSelectedTitle">已选 0 单（逐单填写运单信息）</div>
+          <div class="mw-entries" id="mwEntries"></div>
+        </section>
+      </div>
+      <div class="mw-message" id="mwMessage" role="status" aria-live="polite"></div>
+    </div>
+    <div class="mw-foot">
+      <button class="btn" id="mwCancel" type="button">取消</button>
+      <button class="btn primary" id="mwSave" type="button" disabled>批量保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/stats.js"></script>
+<script src="../assets/js/topbar.js"></script>
+<script src="../assets/vendor/docx-preview.min.js"></script>
+<script src="../assets/vendor/xlsx.full.min.js"></script>
+<script src="../assets/js/note-copy.js?v=20261024a"></script>
+<script src="../assets/js/pages/3-list.js?v=20261024b"></script>
 </body>
 </html>

@@ -5,8 +5,8 @@
 方案：
 - 服务端 Pillow 绘制 300dpi 位图（1181×1772 = 100×150mm），1 位色存储 → PDF 页尺寸恒等于纸张，
   走与顺丰/德邦官方面单相同的 iframe PDF 打印链路，不依赖 Chrome HTML 打印的任何行为。
-- 中文字体：shared/fonts/simhei.ttf（随包部署；如需换 Noto Sans SC 直接替换该文件即可）。
-- 条码/二维码 PNG 由浏览器用已验证前端库（JsBarcode/qrcode-generator）画好随 POST 上传
+- 中文字体：assets/fonts/simhei.ttf（随包部署；如需换 Noto Sans SC 直接替换该文件即可）。
+- 条码 PNG 由浏览器用已验证前端库（JsBarcode）画好随 POST 上传
   （服务端无 symbology 库，也不重复造轮子）；本模块只负责文字/线条/拼图。
 
 渲染坐标系 = 预览 px（宽 287）× 缩放 S=1181/287，与 HTML 预览版式一一对应。
@@ -22,7 +22,7 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-FONT_PATH = os.path.join(BASE, "shared", "fonts", "simhei.ttf")
+FONT_PATH = os.path.join(BASE, "assets", "fonts", "simhei.ttf")
 
 W, H = 1181, 1772                 # 100×150mm @ 300dpi
 S = W / 287.0                     # 预览 px → 300dpi px
@@ -101,8 +101,8 @@ def _settings(order):
 
 
 
-def render_pdf(order, bar_png="", qr_png=""):
-    """order = row_to_json dict；bar/qr_png = 浏览器 canvas dataURL；返回 PDF bytes"""
+def render_pdf(order, bar_png=""):
+    """order = row_to_json dict；bar_png = 浏览器 canvas dataURL；返回 PDF bytes"""
     st = _settings(order)
     carrier = order.get("carrier") or "专车"
     no = re.sub(r"\s", "", order.get("waybill_no") or "")
@@ -202,7 +202,7 @@ def render_pdf(order, bar_png="", qr_png=""):
     text_right(114, dest, 22, bold=True)
     hline(146, 1)
 
-    # ④ 收方 + 二维码（图例「收」；姓名+电话同一行；收件信息再调小一档 2026-09-22） 147..250
+    # ④ 收方通栏（图例「收」；姓名+电话同一行；无二维码侧栏） 147..250
     legend(146, "收")
     y = 159
     fn16, f14 = _f(13), _f(11)
@@ -212,24 +212,17 @@ def render_pdf(order, bar_png="", qr_png=""):
     dr.text((X(30) + wnm + X(6), X(y + 1)), phone, font=f14, fill=BLACK)
     y += 20
     f13 = _f(11)
-    for ln in _wrap(dr, addr, f13, CW - X(92)):
+    for ln in _wrap(dr, addr, f13, X(Rp - 30)):
         dr.text((X(30), X(y)), ln, font=f13, fill=BLACK); y += 15
     s_dest = "目的地公司：" + company
     f11 = _f(11)
-    lim = X(Rp - 70 - 30) if y < 222 else X(Rp - 30)          # 与二维码同高时限宽到二维码左缘
+    lim = X(Rp - 30)                                          # 公司行使用完整内容宽度
     if dr.textlength(s_dest, font=f11) > lim:
         while len(s_dest) > 1 and dr.textlength(s_dest + "…", font=f11) > lim:
             s_dest = s_dest[:-1]
         s_dest += "…"
     text(30, y, s_dest, 11); y += 15
     text(30, y, "运费：" + pay, 11)
-    qr = _png_from_data_url(qr_png)
-    if qr is not None:
-        qr = qr.resize((X(64), X(64)), Image.NEAREST)
-        img.paste(qr, (X(Rp - 66), X(156)))                   # 右列下移居中，与左侧文字列平衡（2026-09-23）
-        fq = _f(9)
-        wq = dr.textlength("扫码追踪", font=fq)
-        dr.text((X(Rp - 66) + (X(64) - wq) / 2, X(223)), "扫码追踪", font=fq, fill=BLACK)
     hline(250, 1)
 
     # ⑤ 寄方：3 行（物流部/公司/地址；图例「寄」黑底白字；字号降档行距加大） 251..317

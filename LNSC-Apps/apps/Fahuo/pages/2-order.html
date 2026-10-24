@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>下单模式 | LNSC 全链发货平台</title>
-<link rel="stylesheet" href="../shared/style.css?v=20261013fq">
-<link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
-<link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
+<link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261024f">
+<link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
+<link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
 <body>
 <div class="layout">
@@ -40,11 +41,11 @@
   <main class="main">
     <header class="title-bar">
       <!-- 左段：LECHLER 组合标志（白底，按源文件品牌色显示；2026-10-08 用户指定） -->
-      <div class="tb-logo-box"><img class="tb-logo" src="../shared/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
+      <div class="tb-logo-box"><img class="tb-logo" src="../assets/images/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
       <!-- 中段：中文名 + 英文名同处一段（主题色斜切段，白色字，同一行并排） -->
       <div class="tb-mid">
         <h1>LNSC 全链发货平台</h1>
-        <span class="tb-sub">LNSC Full-Chain Delivery System</span>
+        <span class="tb-sub">LNSC FULL-CHAIN DELIVERY SYSTEM</span>
       </div>
       <div class="title-right">
         <span class="tb-brand">Logistics</span>
@@ -164,7 +165,7 @@
           </div>
 
           <!-- 专车 / 自提模板（厂内送货单 100×150mm；2026-09-21 用户指定版式：
-               头部公司+车型 / 条码+专车号+发货日期 / 大号编号 / 时效+目的地 / 收方+二维码 /
+               头部公司+车型 / 条码+专车号+发货日期 / 大号编号 / 时效+目的地 / 通栏收方 /
                寄方 / 托寄物+DN/SO+件数数量+备注 / 车牌司机手写栏） -->
           <div class="bill-tpl ot2" id="billOT" hidden>
             <div class="ot2-head">
@@ -191,12 +192,8 @@
                 <div class="ot2-rline"><b>收</b>&nbsp;<b class="f-name">---</b></div>
                 <div class="f-phone">-----------</div>
                 <div class="f-addr">--</div>
-                <div>目的地公司：<b class="f-ot-company">--</b></div>
+                <div class="ot2-company">目的地公司：<b class="f-ot-company">--</b></div>
                 <div>运费：<span class="f-pay">寄付月结</span></div>
-              </div>
-              <div class="ot2-qrbox">
-                <div class="ot-qr"></div>
-                <span>扫码追踪</span>
               </div>
             </div>
             <div class="ot2-send">
@@ -425,14 +422,14 @@
   </div>
 </div>
 
-<script src="../shared/stats.js"></script>
-<script src="../shared/topbar.js"></script>
-<script src="../shared/lib/jszip.min.js"></script>
-<script src="../shared/lib/docx-preview.min.js"></script>
-<script src="../shared/lib/xlsx.full.min.js"></script>
-<!-- 专车/自提面单：CODE128 条码 + 二维码（2026-09-21 用户指定版式） -->
-<script src="../shared/lib/JsBarcode.all.min.js"></script>
-<script src="../shared/lib/qrcode.min.js"></script>
-<script src="2-order.js?v=20261013ey"></script>
+<script src="../assets/js/stats.js"></script>
+<script src="../assets/js/topbar.js"></script>
+<script src="../assets/vendor/jszip.min.js"></script>
+<script src="../assets/vendor/docx-preview.min.js"></script>
+<script src="../assets/vendor/xlsx.full.min.js"></script>
+<!-- 专车/自提面单：CODE128 条码 -->
+<script src="../assets/vendor/JsBarcode.all.min.js"></script>
+<script src="../assets/js/note-copy.js?v=20261024a"></script>
+<script src="../assets/js/pages/2-order.js?v=20261024f"></script>
 </body>
 </html>

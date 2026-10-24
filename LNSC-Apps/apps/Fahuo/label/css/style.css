@@ -26,7 +26,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }   /* 满 iframe 高度（2026-10-12 嵌入 Fahuo 主页面） */
 body {
-  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: "Roboto", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   background: #fff;
   color: var(--text);
   font-size: 14px;        /* 正文（原 12.5px，整体放大约 12%） */
@@ -196,7 +196,7 @@ thead th {
 tbody td { padding: 5px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 14px; }
 tbody tr:hover { background: var(--brand-light); }
 tbody tr.sel { background: var(--brand-light); }
-td.mono, .mono { font-family: Consolas, monospace; }
+td.mono, .mono { font-family: "Roboto", Consolas, monospace; }
 .col-actions { width: 1%; white-space: nowrap; }
 .actions { display: flex; gap: 5px; }
 .empty-row { text-align: center; color: var(--muted); padding: 20px; }

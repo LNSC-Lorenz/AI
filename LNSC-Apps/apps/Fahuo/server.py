@@ -11,6 +11,7 @@ LNSC 全链发货平台 - SQLite API 服务
 接口：
     GET    /api/orders?date=YYYY-MM-DD   发货单列表（默认当天）
     POST   /api/orders                   新建发货单
+    POST   /api/orders/manual-waybills   系统外运单批量补录（单事务、不调用承运商下单）
     PUT    /api/orders/<id>              更新（状态/备注等）
     DELETE /api/orders/<id>              删除
     GET    /api/stats                    右侧看板统计
@@ -33,7 +34,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 BASE = os.path.dirname(os.path.abspath(__file__))            # Fahuo/（server.py 位置不变）
-WEB_ROOT = BASE                                              # 静态页面根（pages/ shared/ index.html 同目录）
+WEB_ROOT = BASE                                              # 静态页面根（pages/ assets/ index.html 同目录）
 DB = os.path.join(BASE, "fahuo.db")
 UPLOAD_DIR = os.path.join(BASE, "Upload")   # 上传文件根目录（按 DN 建子文件夹）
 PORT = int(os.environ.get("PORT", "8091"))
@@ -144,7 +145,7 @@ _route_lock = threading.Lock()
 
 
 def _route_is_final(st):
-    return any(k in (st or "") for k in ("签收", "回单"))
+    return any(k in (st or "") for k in ("签收", "回单", "已送达", "已提"))
 
 
 def _phone_last4(phone):
@@ -273,11 +274,11 @@ def _is_canceled_err(msg):
 
 
 def _sign_time(new_st, old_st, latest_txt):
-    """路由状态首次进入签收/回单/已送达类 → 取最新节点时间（"MM-dd HH:mm" 补当年）作签收时间；
+    """路由状态首次进入签收/回单/已送达/已提类 → 取最新节点时间（"MM-dd HH:mm" 补当年）作完成时间；
     否则 None（已在终态不覆盖；2026-10-22 用户规则「清单页面 在导出时候， 需要把快递的下单时间， 签收时间都导出」）"""
-    if not re.search(r"签收|回单|已送达", new_st or ""):
+    if not re.search(r"签收|回单|已送达|已提", new_st or ""):
         return None
-    if re.search(r"签收|回单|已送达", old_st or ""):
+    if re.search(r"签收|回单|已送达|已提", old_st or ""):
         return None
     m = re.match(r"^(\d{2}-\d{2} \d{2}:\d{2})", latest_txt or "")
     return (time.strftime("%Y") + "-" + m.group(1)) if m else time.strftime("%Y-%m-%d %H:%M")
@@ -470,6 +471,7 @@ def row_to_json(r):
         "merge_group": r["merge_group"] if "merge_group" in r.keys() else "",   # 并单组（2026-09-20 多 DN 合并发货）
         "is_owner": r["is_owner"] if "is_owner" in r.keys() else "",   # IS负责人（2026-10-22）
         "abnormal": r["abnormal"] if "abnormal" in r.keys() else "",   # 异常状态（2026-10-22）
+        "close_note": r["close_note"] if "close_note" in r.keys() else "",
         "created_at": r["created_at"],
     }
 
@@ -654,7 +656,7 @@ def _label_backup():
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
-        super().__init__(*a, directory=WEB_ROOT, **kw)   # 静态根=Fahuo/（pages/、shared/、index.html）
+        super().__init__(*a, directory=WEB_ROOT, **kw)   # 静态根=Fahuo/（pages/、assets/、index.html）
 
     # ---------- 工具 ----------
     def _cors(self):
@@ -718,6 +720,8 @@ class Handler(SimpleHTTPRequestHandler):
         p = urlparse(self.path).path
         if re.search(r"/api/orders$", p):
             return self._create_order()
+        if re.search(r"/api/orders/manual-waybills$", p):
+            return self._manual_waybills()
         if re.search(r"/api/upload$", p):
             return self._upload()
         if re.search(r"/api/carrier/order$", p):
@@ -980,9 +984,9 @@ class Handler(SimpleHTTPRequestHandler):
         return pdf, data
 
     def _carrier_label_ot_post(self):
-        """POST /api/carrier/label_ot {waybill_no, bar_png, qr_png}
+        """POST /api/carrier/label_ot {waybill_no, bar_png}
         专车/自提厂内面单（2026-09-21 用户反馈 HTML 打印屡次乱版/乱码，改服务端渲染 PDF）：
-        浏览器用前端库画好条码/二维码 PNG 上传（服务端无 symbology 库），
+        浏览器用前端库画好条码 PNG 上传（服务端无 symbology 库），
         ot_label 模块 PIL 渲染 100×150mm PDF 并缓存，GET raw 供 iframe 显示/打印。"""
         d = self._body()
         wb = re.sub(r"[^\w-]", "", str(d.get("waybill_no") or ""))[:40]
@@ -995,8 +999,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(404, {"error": "运单 %s 无对应订单" % wb})
         try:
             import ot_label
-            pdf = ot_label.render_pdf(row_to_json(row),
-                                      d.get("bar_png") or "", d.get("qr_png") or "")
+            pdf = ot_label.render_pdf(row_to_json(row), d.get("bar_png") or "")
             ot_label.cache_put(wb, pdf)
         except Exception as e:
             return self._json(500, {"error": "厂内面单渲染失败：%s" % e})
@@ -1173,6 +1176,76 @@ class Handler(SimpleHTTPRequestHandler):
             r = c.execute("SELECT * FROM orders WHERE id=?", (cur.lastrowid,)).fetchone()
         self._json(201, row_to_json(r))
 
+    def _manual_waybills(self):
+        """POST /api/orders/manual-waybills：系统外运单批量补录。
+
+        只写订单资料，不调用承运商下单；一个事务整批成功或失败，且不得覆盖已有运单。
+        请求：{items:[{id, carrier, waybill_no, route_status?}]}，最多 100 条。
+        """
+        d = self._body()
+        items = d.get("items")
+        if not isinstance(items, list) or not items or len(items) > 100:
+            return self._json(400, {"error": "items 必须为 1–100 条的数组"})
+        allowed_status = {"待揽收", "已揽收", "运送中", "派送中", "已签收", "已送达"}
+        clean, ids = [], set()
+        try:
+            for i, item in enumerate(items, 1):
+                if not isinstance(item, dict):
+                    raise ValueError(f"第 {i} 条格式错误")
+                oid = int(item.get("id"))
+                carrier = str(item.get("carrier") or "").strip()
+                waybill = str(item.get("waybill_no") or "").strip()
+                route_status = str(item.get("route_status") or "待揽收").strip()
+                if oid <= 0 or oid in ids:
+                    raise ValueError(f"第 {i} 条订单 ID 无效或重复")
+                if not carrier or len(carrier) > 30:
+                    raise ValueError(f"第 {i} 条承运商必填且不能超过 30 字")
+                if not waybill or len(waybill) > 100 or re.search(r"[\x00-\x1f]", waybill):
+                    raise ValueError(f"第 {i} 条运单号必填、不能超过 100 字且不能含控制字符")
+                if route_status not in allowed_status:
+                    raise ValueError(f"第 {i} 条路由状态无效")
+                ids.add(oid)
+                clean.append((oid, carrier, waybill, route_status))
+        except (TypeError, ValueError) as e:
+            return self._json(400, {"error": str(e) or "订单 ID 无效"})
+
+        try:
+            with db() as c:
+                rows = {}
+                for oid, _, _, _ in clean:
+                    r = c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
+                    if not r:
+                        raise ValueError(f"订单 ID {oid} 不存在，请刷新后重试")
+                    if r["waybill_no"]:
+                        raise RuntimeError(f"订单 {r['so'] or oid} 已有运单 {r['waybill_no']}，未覆盖任何订单")
+                    rows[oid] = r
+                updated = []
+                for oid, carrier, waybill, route_status in clean:
+                    old = rows[oid]
+                    try:
+                        resp = json.loads(old["order_resp"] or "{}")
+                        if not isinstance(resp, dict):
+                            resp = {}
+                    except (TypeError, ValueError):
+                        resp = {}
+                    resp.update({"waybill_no": waybill, "route_status": route_status,
+                                 "manual_entry": {"source": "系统外手工补录",
+                                                  "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")}})
+                    c.execute("UPDATE orders SET carrier=?, waybill_no=?, route_status=?, order_resp=?,"
+                              " printed_at=COALESCE(printed_at, datetime('now','localtime')),"
+                              " signed_at=CASE WHEN ? IN ('已签收','已送达')"
+                              " THEN COALESCE(NULLIF(signed_at,''), datetime('now','localtime'))"
+                              " ELSE signed_at END WHERE id=?",
+                              (carrier, waybill, route_status,
+                               json.dumps(resp, ensure_ascii=False), route_status, oid))
+                    updated.append(row_to_json(c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()))
+            _audit(f"MANUAL-WAYBILLS count={len(updated)} ids={','.join(str(x[0]) for x in clean)}")
+            self._json(200, {"orders": updated, "count": len(updated)})
+        except RuntimeError as e:
+            self._json(409, {"error": str(e)})
+        except ValueError as e:
+            self._json(400, {"error": str(e)})
+
     def _update_order(self, oid):
         d = self._body()
         fields, vals = [], []
@@ -1180,7 +1253,7 @@ class Handler(SimpleHTTPRequestHandler):
                   "phone", "carrier", "note", "ship_date", "status",
                   "waybill_no", "route_status", "priority", "order_type", "so_no",
                   "order_resp", "po", "buyer", "emp_name", "emp_phone", "merge_group",
-                  "is_owner", "abnormal"):
+                  "is_owner", "abnormal", "close_note"):
             if k in d:
                 fields.append(f"{k}=?")
                 vals.append(str(d[k]))
@@ -1195,9 +1268,9 @@ class Handler(SimpleHTTPRequestHandler):
                 # 下单时间：运单号首次写入（下单成功回写；2026-10-22 清单导出需要）
                 fields.append("printed_at=COALESCE(printed_at, datetime('now','localtime'))")
             if old and "route_status" in d \
-               and re.search(r"签收|回单|已送达", d["route_status"] or "") \
-               and not re.search(r"签收|回单|已送达", old["route_status"] or ""):
-                # 签收时间：人工置达/置回单路径（专车「> 送达？」等；2026-10-22）
+               and re.search(r"签收|回单|已送达|已提", d["route_status"] or "") \
+               and not re.search(r"签收|回单|已送达|已提", old["route_status"] or ""):
+                # 完成时间：人工置达/置提/置回单路径（专车/自提关单等）
                 fields.append("signed_at=COALESCE(NULLIF(signed_at, ''), datetime('now','localtime'))")
             c.execute(f"UPDATE orders SET {', '.join(fields)} WHERE id=?", vals)
             r = c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()

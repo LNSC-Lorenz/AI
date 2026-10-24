@@ -109,9 +109,9 @@ for p in /apps/fahuo/carriers.env /apps/fahuo/fahuo.db /apps/fahuo/fahuo.db-wal 
          /apps/fahuo/carriers/_sb_pages.py /apps/fahuo/carriers/sf_express.py \
          /apps/po-closing/.env /apps/po-closing/poclose.db /apps/po-closing/server.py \
          /apps/ctms/toolinventory-server.db /apps/ctms/server.js /apps/ctms/user_info.txt; do check 404 "$p"; done
-for p in /apps/fahuo/ /apps/fahuo/pages/2-order.html /apps/fahuo/pages/2-order.js \
-         /apps/fahuo/shared/style.css /apps/fahuo/shared/region.js /apps/fahuo/shared/lib/JsBarcode.all.min.js \
-         /apps/fahuo/shared/lib/qrcode.min.js /apps/fahuo/shipphotos.json /apps.json \
+for p in /apps/fahuo/ /apps/fahuo/pages/2-order.html /apps/fahuo/assets/js/pages/2-order.js \
+         /apps/fahuo/assets/css/style.css /apps/fahuo/assets/js/region.js /apps/fahuo/assets/vendor/JsBarcode.all.min.js \
+         /apps/fahuo/assets/vendor/qrcode.min.js /apps/fahuo/shipphotos.json /apps.json \
          /apps/ctms/user_info.js /apps/binvision/stock.json /apps/qms/catalog.json \
          /apps/libq/media.json /apps/purchasedrawing/drawings.json /apps/po-closing/; do check 200 "$p"; done
 check 200 "/apps/fahuo/api/stats"        # 反代链路

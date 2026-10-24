@@ -891,15 +891,16 @@
     });
     if (!labelsHtml.length) { ldToast('没有可打印的标签', 'err'); return; }
 
+    const fontsUrl = new URL("../assets/css/fonts.css?v=20261024a", window.location.href).href;
     const w = window.open('', '_blank', 'width=800,height=600');
     if (!w) { ldToast('浏览器拦截了打印窗口，请允许弹出窗口', 'err'); return; }
-    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印标签 · DN ' + esc(dn || '') + '</title><style>'
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印标签 · DN ' + esc(dn || '') + '</title><link rel="stylesheet" href="' + fontsUrl + '"><style>'
       + '@page{size:' + DE.width + 'mm ' + DE.height + 'mm;margin:0}'
       + 'html,body{margin:0;padding:0;background:#fff}'
       + '.print-page{page-break-after:always;width:' + DE.width + 'mm;height:' + DE.height + 'mm;overflow:hidden}'
       + '.canvas{position:relative;overflow:hidden;background:#fff}'
       + '.el{position:absolute;overflow:hidden}'
-      + '.el-text{font-family:\'Microsoft YaHei\',\'PingFang SC\',sans-serif;color:#111;white-space:pre-wrap;word-break:break-word}'
+      + '.el-text{font-family:\'Roboto\',\'Microsoft YaHei\',\'PingFang SC\',sans-serif;color:#111;white-space:pre-wrap;word-break:break-word}'
       + '.el-barcode{background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 4px)}'
       + '.el-qr{background:conic-gradient(#111 25%,#fff 0 50%,#111 0 75%,#fff 0) 0 0/50% 50%,conic-gradient(#111 25%,#fff 0 50%,#111 0 75%,#fff 0) 8px 8px/16px 16px;border:2px solid #111}'
       + '.el-image{background:#f2f5f6;border:1px dashed #b9ccd1;display:flex;align-items:center;justify-content:center;color:#7a8a8e;font-size:10px}'

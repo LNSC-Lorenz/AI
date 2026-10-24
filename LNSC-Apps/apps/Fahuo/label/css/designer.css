@@ -31,6 +31,7 @@
 /* ---------- 2. 基础 ---------- */
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+body { font-family: "Roboto", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
 html { font-size: 13.5px; }
 [hidden] { display: none !important; }
 .spacer { flex: 1; }
@@ -39,7 +40,7 @@ html { font-size: 13.5px; }
 .label-designer {
   /* --font 只定义在根容器（不上提到 :root）：弹窗位于 .label-designer 之外，
      .ld-modal-body .el-text 取不到该变量时回落宿主字体 —— 与还原前保持一致 */
-  --font: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font: "Roboto", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   font-family: var(--font);
   font-size: 13.5px;            /* 正文基准（原 12px，整体放大约 12%） */
   line-height: 1.45;
@@ -61,7 +62,7 @@ html { font-size: 13.5px; }
 .label-designer .ld-toolbar .btn svg { width: 18px; height: 18px; display: block; }   /* 图标化按钮统一尺寸（2026-10-13） */
 .label-designer .ld-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ld-muted); }
 .label-designer .ld-company {
-  font-family: Consolas, monospace; font-weight: 700; font-size: 13px;
+  font-family: "Roboto", Consolas, monospace; font-weight: 700; font-size: 13px;
   border: 1px solid var(--ld-brand); border-radius: 1px; padding: 3px 8px;
   background: var(--ld-brand-soft); color: var(--ld-brand);
 }
@@ -86,7 +87,7 @@ html { font-size: 13.5px; }
 .label-designer .ld-cocard-code {
   width: 100%; border: 0; border-bottom: 2px solid #9fc4c9; border-radius: 0;
   background: transparent; text-align: center; padding: 0 0 2px;
-  font-family: Consolas, monospace; font-size: 34px; font-weight: 800; color: var(--ld-brand);
+  font-family: "Roboto", Consolas, monospace; font-size: 34px; font-weight: 800; color: var(--ld-brand);
   letter-spacing: 0; line-height: 1.1;   /* 高度减小：54→34px */
 }
 .label-designer .ld-cocard-code:focus { outline: none; box-shadow: none; border-bottom-color: var(--ld-brand); }
@@ -106,7 +107,7 @@ html { font-size: 13.5px; }
 .label-designer .ld-co-sug { display: flex; align-items: center; gap: 10px; padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #eef2f3; }
 .label-designer .ld-co-sug:last-child { border-bottom: 0; }
 .label-designer .ld-co-sug:hover { background: var(--ld-brand-soft); }
-.label-designer .ld-co-sug-code { font-family: Consolas, monospace; font-weight: 700; color: var(--ld-brand); white-space: nowrap; }
+.label-designer .ld-co-sug-code { font-family: "Roboto", Consolas, monospace; font-weight: 700; color: var(--ld-brand); white-space: nowrap; }
 .label-designer .ld-co-sug-name { color: var(--ld-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 尺寸卡片（2026-10-12 右栏新线框：宽/高步进器，下划线输入 + ▲▼） */
 .label-designer .ld-sizecard { position: relative; display: flex; align-items: center; justify-content: space-evenly; gap: 8px; padding: 14px 10px 10px; }   /* 线框：图例式标题，两组步进器均布 */
@@ -134,7 +135,7 @@ html { font-size: 13.5px; }
   border-radius: 0;
   background: transparent;
   padding: 4px 0;
-  font-family: Consolas, monospace;
+  font-family: "Roboto", Consolas, monospace;
   font-size: 16px; font-weight: 700;
   color: var(--ld-ink);
 }
@@ -228,7 +229,7 @@ html { font-size: 13.5px; }
 .label-designer .pal-row button svg { width: 40px; height: 40px; display: block; }   /* 2026-10-12 用户要求：左侧图标再加大（30→40px） */
 .label-designer .pal-row button span { line-height: 1.2; font-weight: 700; }
 .label-designer .pal-row button:hover { background: var(--ld-brand-soft); }
-.label-designer .pal-row button i { font-style: normal; font-size: 12px; color: var(--ld-muted); font-family: Consolas, monospace; line-height: 1.1; }
+.label-designer .pal-row button i { font-style: normal; font-size: 12px; color: var(--ld-muted); font-family: "Roboto", Consolas, monospace; line-height: 1.1; }
 .label-designer .pal-div { grid-column: 1 / -1; border-top: 1px solid var(--ld-rule); margin: 4px 0 2px; }
 
 /* ---------- 11. 画布舞台（标尺 20px + 画布区，顶部标尺 17px，1mm≈3.4px） ----------
@@ -256,7 +257,7 @@ html { font-size: 13.5px; }
   min-width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 13px; padding: 0 4px;
 }
 .label-designer .ld-zoom button:hover { background: var(--ld-brand-soft); }
-.label-designer .ld-zoom #ld-zoom-pct { min-width: 42px; text-align: center; font-family: Consolas, monospace; }
+.label-designer .ld-zoom #ld-zoom-pct { min-width: 42px; text-align: center; font-family: "Roboto", Consolas, monospace; }
 
 /* ---------- 12. 画布 ---------- */
 .label-designer .canvas-wrap {
@@ -373,7 +374,7 @@ html { font-size: 13.5px; }
 .dn-mat-head { display: grid; grid-template-columns: 110px 1fr 70px 60px 50px; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ld-muted); padding: 0 2px 6px; border-bottom: 1px solid var(--ld-line); }
 .dn-mat-row { display: grid; grid-template-columns: 110px 1fr 70px 60px 50px; gap: 8px; align-items: center; padding: 6px 2px; border-bottom: 1px solid #eef2f3; }
 .dn-mat-row:last-child { border-bottom: 0; }
-.dn-mat-code { font-family: Consolas, monospace; font-weight: 700; color: var(--ld-brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dn-mat-code { font-family: "Roboto", Consolas, monospace; font-weight: 700; color: var(--ld-brand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dn-mat-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dn-mat-row input { width: 100%; border: 0; border-bottom: 1px solid var(--ld-line-inner); border-radius: 0; background: transparent; padding: 3px 0; font-size: 13px; text-align: center; }
 .dn-mat-row input:focus { outline: none; border-bottom-color: var(--ld-brand); }

@@ -1,5 +1,9 @@
 # SAP Label Management Platform
 
+> **文档性质：早期产品设计与目标技术设想，不是当前实现架构。**
+> 当前标签平台是 Fahuo 内的原生静态前端 + `server.py` 的 `/api/label/*` + SQLite，入口为 `pages/6-label.html`，不再运行独立 Node :8092 服务。
+> 修改前必须遵循 [../CONTRIBUTING.md](../CONTRIBUTING.md) 和 [../0_README.md](../0_README.md)；不得根据下文的 Vue / FastAPI / PostgreSQL 设想另起平行架构。
+
 ## 1. 项目目标
 
 建设一个完全自托管、以开源组件为基础的企业级 SAP 标签管理与打印平台。

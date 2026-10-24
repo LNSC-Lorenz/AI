@@ -12,7 +12,7 @@ const { spawn } = require("child_process");
 const { DatabaseSync } = require("node:sqlite");
 
 const BASE = __dirname;                              // Fahuo/（server.js 位置不变）
-const WEB_ROOT = BASE;                               // 静态页面根（pages/ shared/ index.html 同目录）
+const WEB_ROOT = BASE;                               // 静态页面根（pages/ assets/ index.html 同目录）
 const UPLOAD_DIR = path.join(BASE, "Upload");   // 上传文件根目录（按 DN 建子文件夹）
 const PORT = parseInt(process.env.PORT || "8091", 10);
 
@@ -88,7 +88,8 @@ const STATUS_TS = { printed: "printed_at", shipped: "shipped_at", returned: "ret
 const MIME = {
   ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8", ".json": "application/json",
-  ".png": "image/png", ".wasm": "application/wasm", ".md": "text/plain; charset=utf-8"
+  ".png": "image/png", ".svg": "image/svg+xml", ".ttf": "font/ttf",
+  ".wasm": "application/wasm", ".md": "text/plain; charset=utf-8"
 };
 
 function rowToJson(r) {
