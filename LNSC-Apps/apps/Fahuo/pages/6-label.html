@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>可视化模式 | LNSC 全链发货平台</title>
-<link rel="stylesheet" href="../shared/style.css">
+<title>标签模式 | LNSC 全链发货平台</title>
+<link rel="stylesheet" href="../shared/style.css?v=20261013bc">
 <link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -31,12 +31,15 @@
     </div>
     <div class="mode">
       <div class="mode-num">- 5 -</div>
-      <a class="mode-btn active" href="5-trace.html">追溯</a>
+      <a class="mode-btn active" href="6-label.html">标签</a>
     </div>
+    <!-- 追溯页已移除（2026-10-12 用户规则「移除追溯的页面和功能」） -->
   </aside>
 
-  <!-- 中间：可视化模式（左 1/3 三模块 + 右 2/3 点阵明细） -->
-  <main class="main">
+  <!-- 中间：SAP 标签管理平台整页嵌入（2026-10-12 用户规则「嵌入在fahuo主页面里，
+       像录单一样，就显示在页面的中间位置」）：iframe 隔离 label 自有 CSS/JS 冲突；
+       label 口令门已同日移除，敞口使用 -->
+  <main class="main label-main">
     <header class="title-bar">
       <!-- 左段：LECHLER 组合标志（白底，按源文件品牌色显示；2026-10-08 用户指定） -->
       <div class="tb-logo-box"><img class="tb-logo" src="../shared/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
@@ -50,24 +53,15 @@
         <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
         <button class="btn icon-btn" type="button" title="警告" aria-label="警告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
         <span class="api-dot" id="apiDot" title="API 状态检测中…"></span>
+        <!-- 右上标签图标按钮已撤（2026-10-12 用户规则：入口终定=左侧导航「标签」块） -->
         <button class="btn icon-btn" type="button" title="设置" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn icon-btn" type="button" title="HELP/操作说明" aria-label="HELP/操作说明" onclick="location.href='7-help.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
         <button class="btn icon-btn" type="button" title="关于" aria-label="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
       </div>
     </header>
-    <div class="viz">
-      <!-- 左 1/3：上=在途完成度 / 下=专车情况（点击切换右侧明细）；
-           优先级占比面板移除（2026-09-20 用户规则：优先级分类只留在录单页，紧急行红粗） -->
-      <div class="viz-left">
-        <section class="viz-panel sel" data-viz="route">
-          <div class="vp-body" id="vizRings"></div>
-        </section>
-        <section class="viz-panel" data-viz="truck">
-          <div class="vp-body" id="vizTrucks"></div>
-        </section>
-      </div>
-      <!-- 右 2/3：点击左侧模块 → 点阵动态明细 -->
-      <section class="viz-detail" id="vizDetail"></section>
-    </div>
+    <!-- iframe src 带 ?v= 版本号破缓存（2026-10-13 实证：外层 Ctrl+F5 不清 iframe 文档缓存，
+         旧 HTML 引旧 CSS → 「等高」规则不生效、三栏高度不一致；此后改 label 资源同步升号） -->
+    <iframe class="label-frame" src="../label/index.html?v=20261013ao" title="SAP 标签管理平台"></iframe>
   </main>
 
   <!-- 右侧：发货统计 -->
@@ -95,9 +89,20 @@
   </aside>
 
 </div>
-<div class="dev-wm">开发中</div>   <!-- 大水印（2026-09-16 用户要求；追溯页功能未完成，防误用） -->
-<script src="5-trace.js"></script>
 <script src="../shared/stats.js"></script>
 <script src="../shared/topbar.js"></script>
+<script>
+/* API 状态点（2026-10-13 用户反馈补：本页无独立 JS，各页 markApi 均由页面 JS 调用，
+   本页无人调用导致恒灰；口径与 3-list.js 相同——候选 ../api → 直连 :8091，/stats 探测） */
+(async () => {
+  for (const base of ["../api", `${location.protocol}//${location.hostname}:8091/api`]) {
+    try {
+      const r = await fetch(base + "/stats", { signal: AbortSignal.timeout(5000) });
+      if (r.ok) { markApi(true, base); return; }
+    } catch (e) { /* 尝试下一个候选地址 */ }
+  }
+  markApi(false);
+})();
+</script>
 </body>
 </html>

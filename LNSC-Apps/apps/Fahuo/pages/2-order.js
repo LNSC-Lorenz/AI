@@ -20,6 +20,11 @@ async function fetchOrders() {
 
 /* ----- 面单元素 ----- */
 const $ = id => document.getElementById(id);
+/* 备注列只显示收件区纯备注：剥离入库时拼接的发件方结构化标签（与清单页一致） */
+const cleanNote = n => (n || "")
+  .replace(/PO：\S+|采购员：\S+|发件人：\S+(?:\s+\d+)?|附件：\S+/g, "").trim();
+/* HTML 转义（用于承运商/状态行内 innerHTML 拼接） */
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const dnList = $("dnList"), printBody = $("printBody");
 let orders = [];
 let multiMode = false;   /* 多选模式（批量修改/批量下单） */
@@ -50,10 +55,24 @@ function refreshOrderBtn() {
   b.innerHTML = cancel ? "取消<br>下单" : "下单";
   b.classList.toggle("cancel", cancel);
   /* 选中行已下单且不可取消（运送中/已揽收/派送中/已签收）：下单按钮置灰禁用，防重复下单
-     （2026-09-18 用户规则）；待揽收行=取消下单模式可点、待下单行=正常下单可点 */
-  const row = printBody.querySelector("tr.row-active");
-  const o = row ? orders[+row.dataset.idx] : null;
-  b.disabled = !!(o && o.waybill_no && !cancel);
+     （2026-09-18 用户规则）；待揽收行=取消下单模式可点、待下单行=正常下单可点；
+     多选时：任一选中行已揽收或之后状态 → 按钮置灰禁用（2026-10-21 用户规则） */
+  const rows = printBody.querySelectorAll("tr.row-active");
+  let disabled = false;
+  rows.forEach(row => {
+    const o = orders[+row.dataset.idx];
+    if (o && o.waybill_no) {
+      const rs = o.route_status || "待揽收";
+      if (["专车", "自提"].includes(o.carrier || "")) {
+        /* 专车/自提：已送达/已关闭 → 禁用（2026-10-21 用户规则「专车的已送达 也灰」） */
+        if (rs === "已送达" || rs === "已关闭") disabled = true;
+      } else {
+        /* 普通承运商：非待揽收 → 禁用 */
+        if (rs !== "待揽收") disabled = true;
+      }
+    }
+  });
+  b.disabled = disabled;
 }
 
 /* ----- 三方联动：面单 / DN按钮 / 列表行 ----- */
@@ -163,9 +182,10 @@ function fillBill(o) {
   const masked = (o.phone || "").replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
   setAll(".f-phone", masked || "-----------");
   setAll(".f-addr",  o.address || "--");
-  setAll(".f-dn",    o.so    || "--------");
-  /* 运单备注位：发货单补 SO，外协单补 PO（仅面单打印显示） */
-  setAll(".f-so",    o.so_no ? "　SO：" + o.so_no : (poOf(o) ? "　PO：" + poOf(o) : ""));
+  /* 面单 DN 位：发货单显示 DN，外协单显示 PO（与 DN 同大字号；2026-10-21 用户规则「下单-外协单的 PO像发货单里的DN一样大小」） */
+  setAll(".f-dn",    o.so || (o.order_type === "外协单" ? poOf(o) : "--------"));
+  /* 运单备注位：发货单补 SO，外协单不再重复 PO（PO 已上面单 DN 位） */
+  setAll(".f-so",    o.so_no ? "　SO：" + o.so_no : "");
   /* 目的市：优先 city 字段（直辖市=city 即省名），否则从地址文本取第二段 */
   setAll(".f-dest",  o.city || (o.address || "").split(" ")[1] || "--");
   /* 路由代码（面单大字号位 = 承运商目的地分拣码）：取顺丰下单返回的真实路由码
@@ -346,6 +366,19 @@ const preHtml = (s, pre) => {
 };
 const dnHtml = dn => preHtml(dn, "82600");
 const soHtml = so => preHtml(so, "32600");
+const poHtml = po => preHtml(po, "98260");   /* PO：98260 前缀上标（2026-10-21 用户规则「PO的显示个与DN一致， 98260为上标」） */
+/* DN 列第二行 badge 组：▼ 要求发货日期 + ▶ 承运商下单日期 + 姓名（黑底白字同款；最多跨 3 列；
+   2026-10-23 用户规则「下单与清单里的 DN列 的第二行 的姓名…调为跨3列， 添加2个显示块， 第一个是要求发货日期，第二个是实际承运商的下单日期」） */
+const ymdShort = s => { const m = String(s || "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1].slice(2) + "-" + m[2] + "-" + m[3] : ""; };
+function dnSecondRow(o, owner) {
+  const b = [];
+  const sd = ymdShort(o.ship_date);
+  if (sd) b.push('<span class="dn-badge" title="要求发货日期">▼ ' + sd + "</span>");
+  const pd = ymdShort(o.printed_at);
+  if (pd) b.push('<span class="dn-badge" title="承运商下单日期">▶ ' + pd + "</span>");
+  if (owner) b.push('<span class="dn-owner">' + esc(owner) + "</span>");
+  return b.length ? '<div class="dn-badges">' + b.join("") + "</div>" : "";
+}
 const senderOf = o => o.emp_name || ((o.note || "").match(/发件人：(\S+)/) || [])[1] || "";
 const buyerOf  = o => o.buyer    || ((o.note || "").match(/采购员：(\S+)/) || [])[1] || "";
 const poOf     = o => o.po       || ((o.note || "").match(/PO：(\S+)/) || [])[1] || "";
@@ -374,12 +407,12 @@ function renderDnList() {
         l1.textContent = (o.name || "--") + (o.phone ? " " + o.phone : "");
         l2.textContent = senderOf(o);
       } else {
-        /* 外协单：第一行对方公司；第二行 PO号加粗靠左 + 采购员靠右 */
+        /* 外协单：第一行对方公司；第二行 PO号加粗靠左（98260 上标）+ 采购员靠右 */
         l1.textContent = companyOf(o);
         l2.classList.add("pc-flex");
         const po = document.createElement("b"), by = document.createElement("span");
         po.className = "pc-po";
-        po.textContent = poOf(o);
+        po.innerHTML = poHtml(poOf(o));   /* PO：98260 前缀上标（2026-10-21 用户规则「下单里的外协单 里的列表的PO也调整为这个显示格式」） */
         by.textContent = buyerOf(o);
         l2.append(po, by);
       }
@@ -395,6 +428,8 @@ document.querySelectorAll(".dn-ft").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll(".dn-ft").forEach(x => x.classList.toggle("active", x === b));
     dnFilter = b.dataset.t;
+    /* 外协单视图：打单列表加 ot-wx 类 → DN 列收窄到 2/3（2026-10-23 用户规则「只改外协单的DN列宽…调窄到原先的2/3」） */
+    document.querySelectorAll(".pw-list").forEach(el => el.classList.toggle("ot-wx", dnFilter === "外协单"));
     $("dnTitle").textContent = "录单 " + DN_TITLE[dnFilter] + "（点击选择，平铺滚动）";
     /* 回签单联动：发货单页签默认勾纸质回单，外协单/其他页签默认不勾（2026-09-16 用户规则） */
     $("cfgReceiptPaper").checked = dnFilter === "发货单";
@@ -492,7 +527,7 @@ $("pvClose").addEventListener("click", () => { pvMask.hidden = true; pvBody.inne
 pvMask.addEventListener("click", e => { if (e.target === pvMask) { pvMask.hidden = true; pvBody.innerHTML = ""; } });
 
 /* ----- 下段打单列表（随类型过滤；前两列含义随类型切换；仅近 7 天录单 + 全部已下单） ----- */
-const LIST_HEADS = { "发货单": ["DN", "SO"], "外协单": ["采购员", "PO号"], "其他": ["发件人", "收件城市"] };
+const LIST_HEADS = { "发货单": ["DN", "SO"], "外协单": ["DN", ""], "其他": ["发件人", "收件城市"] };   /* 外协单：采购员列移除，姓名并入 DN 格第二行 badge（2026-10-22 用户规则「外协单 列表 里的采购员列移除， 采购员姓名显示在DN的第二行， 格式与其它DN一致」） */
 const LIST_WINDOW_MS = 7 * 864e5;   /* 待下单只显示近 7 天录单 */
 function inListWindow(o) {
   /* 已签收/回单：只在签收当天显示，隔天从下单列表移除（2026-09-17 用户规则。
@@ -521,25 +556,49 @@ function renderPrintList() {
     const ot = o.order_type || "发货单";
     if (ot !== dnFilter) return;   /* 类型过滤（与 DN 区一致） */
     if (!inListWindow(o)) return;  /* 近 7 天录单 + 已下单 */
-    const c1 = ot === "外协单" ? (buyerOf(o) || "—")
+    const c1 = ot === "外协单" ? (poOf(o) || "—")
              : ot === "其他"   ? (senderOf(o) || "—")
              : (o.so || "");
-    const c2 = ot === "外协单" ? (poOf(o) || "—")
+    const c2 = ot === "外协单" ? ""                 /* 采购员列已移除（姓名并入 DN 格第二行 badge） */
              : ot === "其他"   ? (o.city || "—")
              : (o.so_no || "—");
     const tr = document.createElement("tr");
     tr.dataset.idx = i;
     if (o.priority === "紧急") tr.classList.add("row-urgent");   /* 紧急行加粗红字（2026-09-20 用户规则；优先级列已移除） */
-    [c1, c2, o.name || "", o.carrier || "—",
-     o.waybill_no || "—", o.waybill_no ? "已下单" : "待下单",
-     o.route_status || "—"].forEach((v, ci) => {
+    [c1, c2, o.name || "",
+     o.waybill_no || "—", o.route_status || "—"].forEach((v, ci) => {
       const td = document.createElement("td");
-      if (ci === 4 && o.waybill_no) {
-        td.appendChild(wbLink(o));          /* 单号可点击 → 步骤弹窗（第一步=下单返回值） */
+      if (ci === 3) {                                  /* 承运商/单号/状态列：上行 承运商>状态（> 加粗），下行单号（可点击） */
+        const cDiv = document.createElement("div");
+        cDiv.innerHTML = esc(o.carrier || "—") + ' <b>&gt;</b> ' + (o.waybill_no ? "已下单" : "待下单");
+        td.appendChild(cDiv);
+        if (o.waybill_no) td.appendChild(wbLink(o));
+        else { const wDiv = document.createElement("div"); wDiv.textContent = "—"; td.appendChild(wDiv); }
       } else if (ci === 0 && ot === "发货单") {
-        td.innerHTML = dnHtml(o.so);        /* DN 列：前缀上标 */
+        /* DN 列：第一行号码（.dn-num 限宽省略），第二行 badge 组（▼ 要求发货日期 / ▶ 下单日期 / IS负责人，最多跨 3 列） */
+        const num = o.order_type === "外协单" ? poHtml(o.po || "—") : dnHtml(o.so);
+        const owner = o.order_type === "外协单" ? (o.buyer || "") : (o.is_owner || "");
+        td.innerHTML = '<span class="dn-num">' + num + "</span>" + dnSecondRow(o, owner);
       } else if (ci === 1 && ot === "发货单") {
         td.innerHTML = soHtml(o.so_no || "—");   /* SO 列：32600 前缀上标 */
+        td.title = o.so_no || "";                 /* 悬浮显示完整 SO（2026-10-21 用户规则「超过单元格宽度 当鼠标悬浮时候 需要提示显示所有的内容」） */
+      } else if (ci === 0 && ot === "外协单") {
+        /* DN 列（第1列）：外协单第一行 PO 号（98260 前缀上标，.dn-num 限宽省略），
+           第二行 badge 组（▼ 要求发货日期 / ▶ 下单日期 / 采购员，最多跨 3 列） */
+        td.innerHTML = '<span class="dn-num">' + poHtml(poOf(o) || "—") + "</span>" + dnSecondRow(o, buyerOf(o));
+      } else if (ci === 4) {                        /* 路由状态列（第5列）：专车直送下方加「> 送达？」关闭按钮 */
+        const stDiv = document.createElement("div");
+        stDiv.textContent = v;
+        td.appendChild(stDiv);
+        if (o.carrier === "专车" && o.route_status === "专车直送") {
+          const closeBtn = document.createElement("button");
+          closeBtn.type = "button";
+          closeBtn.className = "sp-close-btn";
+          closeBtn.innerHTML = '<b>&gt;</b> 送达？';
+          closeBtn.title = "关闭专车订单";
+          closeBtn.addEventListener("click", e => { e.stopPropagation(); openCloseSpecialModal(o); });
+          td.appendChild(closeBtn);
+        }
       } else {
         td.textContent = v;                      /* 联系人列只显示姓名（2026-09-15 用户规则：下单列表不要电话） */
       }
@@ -568,12 +627,24 @@ function renderPrintList() {
     });
     tdP.appendChild(pb);
     tr.appendChild(tdP);
-    /* 查看列：该发货单已上传的文件，格式图标（PDF/图片=预览 / Excel=本地程序打开） */
+    /* 备注列（与打印列交换后：先打印后备注，备注列加宽；悬浮显示完整备注；
+       换行最多 3 行：2026-10-22 用户规则「所有列表的 备注列， 都可以换行显示，最多显示3行」） */
+    const tdN = document.createElement("td");
+    tdN.innerHTML = '<div class="clamp3">' + esc(cleanNote(o.note) || "—") + "</div>";
+    tdN.title = cleanNote(o.note) || "";
+    tr.appendChild(tdN);
+    /* 查看列：该发货单已上传的文件，格式图标（PDF/图片=预览 / Excel=本地程序打开）；
+       文件多时加左右箭头滚动（2026-10-20 用户规则「上传的文件很多的情况下， 左右加上左右的箭头，用户可以点击查看没有显示出来的文件」） */
     const tdV = document.createElement("td");
     tdV.className = "view-cell";
     if (o.so && apiBase) {
-      loadUploadFiles(o.so).then(files => {
+      loadUploadFiles(o.so || o.po).then(files => {
         if (!files.length) { tdV.textContent = "—"; return; }
+        const wrap = document.createElement("div");
+        wrap.className = "view-files-wrap";
+        const inner = document.createElement("div");
+        inner.className = "view-files-inner";
+        wrap.appendChild(inner);
         files.forEach(fn => {
           const ext = (fn.split(".").pop() || "").toLowerCase();
           /* 格式图标：PDF/Excel/Word/图片 用专属图标（图片统一 file-type-png），其它格式统一 File */
@@ -590,14 +661,42 @@ function renderPrintList() {
           img.alt = ext;
           b.appendChild(img);
           if (kind === "xls" || kind === "csv") {
-            b.title = fn + "（用本地 Excel 打开）";
-            b.addEventListener("click", e => { e.stopPropagation(); openLocalExcel(o.so, fn); });
+            b.title = fn + "（点击下载）";
+            b.addEventListener("click", e => {
+              e.stopPropagation();
+              const a = document.createElement("a");
+              a.href = "../Upload/" + (o.so || o.po) + "/" + encodeURIComponent(fn);
+              a.download = fn;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            });
           } else {
             b.title = fn + "（点击预览）";
             b.addEventListener("click", e => { e.stopPropagation(); openPreview(o.so, fn); });
           }
-          tdV.appendChild(b);
+          inner.appendChild(b);
         });
+        /* 文件多于 2 个：加左右箭头滚动（每点一次换一页显示，初始滚到最右显示最新文件） */
+        if (files.length > 2) {
+          const left = document.createElement("button");
+          left.type = "button";
+          left.className = "view-arrow";
+          left.textContent = "‹";
+          left.title = "向左滚动（上一页文件）";
+          left.addEventListener("click", e => { e.stopPropagation(); inner.scrollBy({ left: -inner.clientWidth, behavior: "smooth" }); });
+          const right = document.createElement("button");
+          right.type = "button";
+          right.className = "view-arrow";
+          right.textContent = "›";
+          right.title = "向右滚动（下一页文件）";
+          right.addEventListener("click", e => { e.stopPropagation(); inner.scrollBy({ left: inner.clientWidth, behavior: "smooth" }); });
+          wrap.insertBefore(left, inner);
+          wrap.appendChild(right);
+          /* 初始滚到最右，显示最新文件 */
+          requestAnimationFrame(() => { inner.scrollLeft = inner.scrollWidth; });
+        }
+        tdV.appendChild(wrap);
       });
     } else {
       tdV.textContent = "—";
@@ -608,17 +707,78 @@ function renderPrintList() {
   });
 }
 
-/* 更新列表行的 承运商/单号/下单状态/路由状态（列序：DN SO 联系人 承运商 单号… 索引 3/4/5/6；
-   优先级列移除后顺移，2026-09-20） */
+/* 更新列表行的 承运商/单号/状态/路由状态（列序：DN SO 联系人 承运商/单号/状态 路由状态 打印 备注 查看；索引 3/4） */
 function updateRowCells(o, i) {
   const row = printBody.querySelector(`tr[data-idx="${i}"]`);
   if (!row) return;
-  row.cells[3].textContent = o.carrier || "—";
-  row.cells[4].textContent = "";
-  if (o.waybill_no) row.cells[4].appendChild(wbLink(o));   /* 单号可点击 → 步骤弹窗 */
-  else row.cells[4].textContent = "—";
-  row.cells[5].textContent = o.waybill_no ? "已下单" : "待下单";
-  row.cells[6].textContent = o.route_status || "—";
+  /* 承运商/单号/状态列（索引 3）：上行 承运商>状态（> 加粗），下行单号（可点击） */
+  row.cells[3].textContent = "";
+  const cDiv = document.createElement("div");
+  cDiv.innerHTML = esc(o.carrier || "—") + ' <b>&gt;</b> ' + (o.waybill_no ? "已下单" : "待下单");
+  row.cells[3].appendChild(cDiv);
+  if (o.waybill_no) row.cells[3].appendChild(wbLink(o));
+  else { const wDiv = document.createElement("div"); wDiv.textContent = "—"; row.cells[3].appendChild(wDiv); }
+  row.cells[4].textContent = o.route_status || "—";
+}
+
+/* 专车关闭弹窗：关闭备注 + 关闭按钮（2026-10-15 用户规则「专车需要给一个关闭动作，不然一致会挂在那」） */
+function openCloseSpecialModal(o) {
+  const mask = document.createElement("div");
+  mask.className = "pm-mask";
+  const box = document.createElement("div");
+  box.className = "pm-box";
+  mask.appendChild(box);
+  mask.addEventListener("click", e => { if (e.target === mask) mask.remove(); });
+
+  const head = document.createElement("div");
+  head.className = "pm-head";
+  const ttl = document.createElement("b");
+  ttl.textContent = "关闭专车订单 · " + (o.so || o.waybill_no || "");
+  const sp = document.createElement("span"); sp.className = "spacer";
+  const close = document.createElement("button");
+  close.className = "btn"; close.textContent = "取消";
+  close.addEventListener("click", () => mask.remove());
+  head.append(ttl, sp, close);
+
+  const body = document.createElement("div");
+  body.className = "sp-close-body";
+  const label = document.createElement("div");
+  label.textContent = "关闭备注（选填）";
+  label.className = "sp-close-label";
+  const ta = document.createElement("textarea");
+  ta.className = "sp-close-note";
+  ta.rows = 3;
+  ta.placeholder = "可填写送达说明…";
+  const btns = document.createElement("div");
+  btns.className = "sp-close-btns";
+  const ok = document.createElement("button");
+  ok.className = "btn btn-primary";
+  ok.textContent = "关闭";
+  ok.addEventListener("click", async () => {
+    const note = ta.value.trim();
+    await closeSpecialOrder(o, note);
+    mask.remove();
+  });
+  btns.appendChild(ok);
+  body.append(label, ta, btns);
+
+  box.append(head, body);
+  document.body.appendChild(mask);
+}
+
+async function closeSpecialOrder(o, note) {
+  if (!apiBase) { alert("API 离线，无法关闭"); return; }
+  try {
+    const r = await fetch(`${apiBase}/orders/${o.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route_status: "已送达", close_note: note || "" })
+    });
+    if (!r.ok) { alert("关闭失败：" + (await r.text()).slice(0, 80)); return; }
+    o.route_status = "已送达";
+    o.close_note = note || "";
+    renderPrintList();   /* 重新渲染列表以刷新状态 */
+  } catch (e) { alert("关闭接口不可达：" + e.message); }
 }
 
 /* ----- 承运商设置联动：所有输入传入对应承运商下单元素 ----- */
@@ -1325,6 +1485,7 @@ document.addEventListener("keydown", e => {
 /* ----- 初始化 ----- */
 (async () => {
   orders = await fetchOrders();
+  updateWarnBtn(orders);   /* 警告按钮：紧急单未下单红色背景（2026-10-20 用户规则） */
   renderPrintList();
   renderDnList();
   /* API 状态点：在线=黑实心，离线=灰（统一 topbar.js markApi） */

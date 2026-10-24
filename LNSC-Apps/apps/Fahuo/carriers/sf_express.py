@@ -110,12 +110,14 @@ def place_order(order, cfg=None):
     return _real_place_order(order, cfg)
 
 
-def query_route(waybill_no, cfg=None):
-    """轨迹查询 → {"route_status", "detail"}（未配密钥直接报错）"""
+def query_route(waybill_no, cfg=None, check_phone_no=""):
+    """轨迹查询 → {"route_status", "route_reason_code"?, "detail"}（未配密钥直接报错；
+    route_reason_code 仅在 reasonRemark 存在时返回，表示 API 侧的异常原因码；
+    check_phone_no：寄/收件人手机后4位，2026-10-24 发现必须传否则月结卡号不匹配）"""
     cfg = cfg or base.get_cfg(_PREFIX)
     if not base.configured(cfg):
         raise base.CarrierError("顺丰未配置密钥，无法查询轨迹")
-    return _real_query_route(waybill_no, cfg)
+    return _real_query_route(waybill_no, cfg, check_phone_no)
 
 
 def cancel_order(order_id, waybill_no, logistic_id="", cfg=None):
@@ -284,20 +286,32 @@ def cloud_print_back(back_waybill_no, cfg=None):
     return _cloud_print_docs([{"backWaybillNo": back_waybill_no}], cfg)
 
 
-def _real_query_route(waybill_no, cfg):
-    data = _call(cfg, SERVICE_ROUTE, {
+def _real_query_route(waybill_no, cfg, check_phone_no=""):
+    params = {
         "language": "zh-CN",
         "trackingType": 1,
         "trackingNumber": [waybill_no],
-    })
+    }
+    if check_phone_no:
+        params["checkPhoneNo"] = check_phone_no
+    data = _call(cfg, SERVICE_ROUTE, params)
     resps = data.get("routeResps") or []
-    routes = (resps[0].get("routes") if resps else []) or []
+    resp0 = resps[0] if resps else {}
+    routes = resp0.get("routes") or []
     latest = routes[-1] if routes else {}
-    # 状态取值（2026-09-15 真实轨迹实测）：顺丰自带 firstStatusName（已揽收/运送中/派送中/已签收），
-    # 优先于 acceptAddress（地点非状态，曾误显示"常州市"）；无轨迹节点 = 待揽收
+    # 2026-10-23：读取 reasonCode/reasonRemark（此前被忽略，
+    # 导致"月结卡号不匹配"(20028)等权限错误误显示为"待揽收"）
+    reason_code = resp0.get("reasonCode") or ""
+    reason_remark = resp0.get("reasonRemark") or ""
+    if routes:
+        status = (latest.get("firstStatusName") or latest.get("secondaryStatusName")
+                  or latest.get("acceptAddress") or latest.get("remark") or "运输中")
+    elif reason_remark:
+        status = reason_remark   # e.g. "月结卡号不匹配" / "暂无路由信息"
+    else:
+        status = "待揽收"
     return {
-        "route_status": latest.get("firstStatusName") or latest.get("secondaryStatusName")
-                        or latest.get("acceptAddress") or latest.get("remark")
-                        or ("待揽收" if not routes else "运输中"),
+        "route_status": status,
+        "route_reason_code": reason_code,
         "detail": routes[-10:],
     }

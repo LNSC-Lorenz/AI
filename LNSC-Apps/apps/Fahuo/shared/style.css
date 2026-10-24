@@ -91,6 +91,13 @@ body {
   min-width: 0;
 }
 
+/* 标签页：SAP 标签管理平台整页嵌入（2026-10-12 用户规则「嵌入在fahuo主页面里，像录单一样，
+   显示在页面中间位置」）：iframe 隔离 label 自有 CSS/JS（$ 助手/全局样式与主站冲突），
+   main 改两行 grid，iframe 吃满 1fr 中间区 */
+.main.label-main { grid-template-rows: auto 1fr; }
+.label-frame { width: 100%; height: 100%; min-height: 0; border: 0; display: block;
+               background: var(--white); border-radius: 10px; }
+
 /* 标题栏：斜切分段（栏底白色，分段主题色底白字） */
 .title-bar {
   background: var(--white);
@@ -176,6 +183,15 @@ body {
 .tb-clock b { color: var(--black); }
 .tb-clock i { color: var(--gray); }
 .title-right .btn.icon-btn:hover { color: var(--gray); }
+/* 警告按钮：紧急单未下单时红色背景（2026-10-20 用户规则「紧急单 只要未下单， 那警告符号一直红色背景显示」；
+   2026-10-20 用户规则「调整为红色背景， 但是大小不要大，注意整行其他图标的大小，保持一致」：
+   红色背景但与其他 icon-btn 同尺寸，不加 outline；
+   2026-10-20 用户规则「红色背景里的没有居中显示」：图标 flex 居中） */
+.title-right .btn.icon-btn.warn-active {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #d32f2f; color: #fff; border-color: #d32f2f;
+}
+.title-right .btn.icon-btn.warn-active:hover { background: #b71c1c; color: #fff; }
 .title-right .theme-sw { border-color: var(--black); }
 .title-right .theme-sw.on { outline-color: var(--black); }
 .title-right .api-dot { border-color: var(--black); background: #bbbbbb; }
@@ -828,6 +844,9 @@ html { scrollbar-gutter: stable; }
 }
 .ms-switch input:checked + i { background: var(--black); }
 .ms-switch input:checked + i::after { left: 24px; background: var(--white); }
+/* 异常/允许发货 滑块按钮加长显示（2026-10-21 用户规则「滑块按钮加长显示」） */
+.toggle-row .ms-switch { width: 72px; }
+.toggle-row .ms-switch input:checked + i::after { left: 44px; }
 
 /* 上段：DN 平铺滚动（触屏大按钮，5 列网格） */
 .pw-dn-list {
@@ -868,7 +887,7 @@ html { scrollbar-gutter: stable; }
 }
 .dn-ft.active { background: var(--black); color: var(--white); }
 /* 打单列表「查看」列：格式图标（icon/file-type-*.svg；PDF/图片=预览 / XLS=本地 Excel 打开） */
-.col2-view { width: 110px; }
+.col2-view { width: 200px; }  /* 查看列加宽显示多个文件（2026-10-21 用户规则「尽量放宽显示， 预览多个」） */
 .f-ico {
   display: inline-block;
   margin: 1px 2px 1px 0;
@@ -879,6 +898,13 @@ html { scrollbar-gutter: stable; }
 }
 .f-ico img { display: block; width: 24px; height: 24px; }
 .f-ico:hover img { opacity: .55; }  /* 全透明，hover 仅降透明度 */
+/* 查看列文件滚动容器（2026-10-20 用户规则：文件多时加左右箭头滚动；
+   2026-10-21 用户规则「尽量放宽显示， 预览多个」：内宽加大，初始滚动到最右，左箭头向左滚动） */
+.view-files-wrap { display: flex; align-items: center; gap: 2px; }
+.view-files-inner { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; max-width: 160px; }
+.view-files-inner::-webkit-scrollbar { display: none; }
+.view-arrow { border: 0; background: none; color: var(--gray); cursor: pointer; font-size: 22px; line-height: 1; padding: 4px 6px; font-weight: 700; }
+.view-arrow:hover { color: var(--black); background: var(--light); border-radius: 4px; }
 
 /* 文件预览弹窗（PDF iframe / Excel 表格 / Word 渲染 / 图片直显） */
 .pv-mask {
@@ -935,7 +961,7 @@ html { scrollbar-gutter: stable; }
 .pw-chip.active .pc-l2 { color: #bbbbbb; }
 /* 外协单第二行：PO 加粗靠左 + 采购员靠右（两端分布） */
 .pw-chip .pc-l2.pc-flex { display: flex; justify-content: space-between; gap: 6px; }
-.pw-chip .pc-po { font-weight: 800; color: var(--black); }
+.pw-chip .pc-po { font-weight: 900; font-size: 15px; color: var(--black); }  /* PO 加大加粗（2026-10-21 用户规则「加大加粗显示」） */
 .pw-chip.active .pc-po { color: var(--white); }
 
 /* 中段：顺丰设置 + 下单按钮（两框） */
@@ -1008,6 +1034,8 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
   transition: background .1s, color .1s;
 }
 .pw-order-btn:hover { background: #333333; }
+.pw-order-btn:disabled { background: var(--gray); border-color: var(--gray); color: var(--white); cursor: not-allowed; opacity: .6; }
+.pw-order-btn:disabled:hover { background: var(--gray); }
 /* 警告灯：有待下单紧急录单时顶栏警告图标红色闪现；warn-fast 频率加大（2026-09-16 用户规则） */
 @keyframes warnBlink {
   0%, 100% { color: var(--black); border-color: var(--black); }
@@ -1049,6 +1077,10 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 /* 下段：打单列表列宽 */
 .pw-list { min-height: 0; }
 .pw-list td:first-child { font-weight: 800; }   /* 列表 DN 号加粗 */
+/* 下单列表行高压低（承运商/单号/状态两行更紧凑；2026-10-14 用户规则「行高再低些」） */
+.pw-list .order-table td { padding: 5px 12px; }
+.pw-list .order-table td:nth-child(4) { line-height: 1.25; }
+.pw-list .order-table td:nth-child(4) div { line-height: 1.25; }
 /* 模拟路由时间线（左下面单下方；点击已下单行显示） */
 .pw-track {
   border: 2px solid var(--black);
@@ -1093,6 +1125,20 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .pw-list tbody tr:hover { background: #f0f0f0; }
 .pw-list tbody tr.row-active,
 .pw-list tbody tr.row-active:hover { background: #e3e3e3; color: var(--black); }
+/* 选中行姓名反向显示（2026-10-22 用户规则「选中某行时候，姓名没有反向显示回去」） */
+.pw-list tbody tr.row-active td:nth-child(5) { background: var(--black); color: var(--white); }
+/* 专车关闭按钮（2026-10-15 用户规则：专车路由状态下方加「> 送达？」关闭按钮） */
+.sp-close-btn { margin-top: 2px; border: 0; background: var(--black); color: #fff; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 6px; font-weight: 700; }
+.sp-close-btn:hover { background: var(--gray); color: #fff; }
+/* 清单下单状态列回单日期徽章（「回单 ₂₆ 10-19」格式：深色背景+白字加粗+微圆角；
+   2026-10-15 并入下单状态列；2026-10-23 用户规则「回单日期的显示块都消失了， 加回来」重建） */
+.ret-badge { display: block; margin-top: 2px; padding: 2px 8px; background: var(--black); color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; width: fit-content; white-space: nowrap; }
+.ret-badge sup { font-size: 0.72em; font-weight: 700; }  /* 年份小号上标（₂₆） */
+.ret-badge.ret-transit { background: var(--gray); }  /* 回单在途：灰底（2026-10-12 规则「回单未签收但回单运单有路由 → 显示在途」） */
+.sp-close-body { display: flex; flex-direction: column; gap: 8px; }
+.sp-close-label { font-size: 13px; font-weight: 600; color: var(--black); }
+.sp-close-note { width: 100%; border: 1px solid var(--line-light); border-radius: 4px; padding: 6px 8px; font-size: 13px; font-family: inherit; resize: vertical; }
+.sp-close-btns { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* 打印面单按钮（面单下方，撑满列宽） */
 #btnPrint { width: 100%; }
@@ -1213,10 +1259,10 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .lm-list { flex: 1; min-height: 0; }
 .lm-list td:first-child { font-weight: 800; }   /* DN 加粗 */
 .col3-dn      { width: 5.5%; }  /* DN：再宽一点点（2026-09-16 用户要求） */
-.col3-so      { width: 6%; }  /* SO：加宽（2026-09-15 用户要求） */
+.col3-so      { width: 8%; }  /* SO：加宽（2026-09-15 用户要求 6%；2026-10-23 用户规则「SO 列 加宽些」→8%） */
 .col3-prio    { width: 4%; }  /* 优先级+类型合并列（两行各2~3字；2026-09-16 再窄一点点） */
 .col3-addr    { width: 20%; }  /* 地址：加宽（2026-09-15 用户要求） */
-.col3-name    { width: 8%; }  /* 姓名+电话两行：电话 11 位不省略（2026-09-15 用户规则） */
+.col3-name    { width: 6%; }  /* 姓名+电话两行：电话 11 位不省略（2026-09-15 用户规则 8%；2026-10-23 用户规则「姓名列 窄些」→6%，恰为电话不省略下限） */
 .col3-phone   { width: 8%; }
 .col3-note    { width: 7%; }
 .col3-carrier { width: 7%; }
@@ -1233,6 +1279,25 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .photo-ic { display: inline-flex; color: var(--gray); opacity: .5; }
 .photo-ic svg { width: 22px; height: 22px; }  /* 图标放大（2026-09-16 用户规则） */
 .photo-ic.has { color: var(--black); opacity: 1; cursor: pointer; }
+/* 清单下单状态列回单日期（2026-10-15 用户规则：回单放在已下单下面，格式「回单 ₂₆ 10-19」） */
+.ret-line { display: inline-block; margin-top: 2px; padding: 1px 8px; background: var(--black); color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.ret-year { font-size: 0.72em; vertical-align: super; font-weight: 700; }
+.photo-cell-wrap { display: flex; gap: 6px; align-items: center; }
+.photo-row { display: flex; gap: 6px; align-items: center; }
+.photo-ic.file-ic.has { color: var(--black); opacity: 1; cursor: pointer; }
+.photo-ic + .photo-ic { margin-left: 6px; }   /* 照片图标与文件图标同一行并排间距 */
+.photo-ic .file-n { font-size: 11px; font-weight: 800; line-height: 1; align-self: flex-start; margin-left: 1px; }  /* 上传文件数量角标 */
+.photo-ic.plus-ic { color: var(--black); opacity: .85; cursor: pointer; }
+.photo-ic.plus-ic:hover { opacity: 1; }
+.pm-file-link { display: block; padding: 4px 0; color: var(--black); text-decoration: underline; word-break: break-all; }
+.pm-empty { padding: 20px; text-align: center; color: var(--gray); }
+/* 清单上传文件预览卡片（2026-10-15 用户规则：点击文件图标后以预览方式展开） */
+.pm-file-card { border: 1px solid var(--line-light); border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #fff; }
+.pm-file-name { font-size: 13px; font-weight: 700; color: var(--black); margin-bottom: 6px; word-break: break-all; }
+.pm-file-card img { max-width: 100%; max-height: 300px; display: block; cursor: zoom-in; }
+.pm-frame { width: 100%; height: 400px; border: 1px solid var(--line-light); border-radius: 4px; }
+.pm-doc { max-height: 300px; overflow: auto; border: 1px solid var(--line-light); border-radius: 4px; padding: 8px; background: #fff; }
+.pm-doc-inner { transform-origin: 0 0; }
 /* 发货照片预览弹窗 */
 .pm-mask { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 90; }
 .pm-box { background: var(--white); border-radius: 10px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 14px 16px; }
@@ -1299,6 +1364,9 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .rt-flip { display: block; }
 .rt-seg { display: block; white-space: nowrap; overflow: hidden; }
 .order-table td.rt-over { overflow: visible; }
+/* 清单姓名列跨列：未下单（单号空）时姓名/电话可视觉溢出到单号空位（2026-10-22 用户规则「姓名没有跨列显示」——视觉溢出替代 colspan，保持格子数=列数不错位）；有单号保持省略避免与运单号相撞 */
+.lm-list td.nm-span { overflow: visible; text-overflow: clip; }
+.lm-list td.nm-span > div { position: relative; z-index: 1; }
 /* 筛选标签 */
 .lm-tag { font-weight: 800; }
 .lm-tag a { color: var(--black); margin-left: 8px; text-decoration: none; border-bottom: 2px solid var(--black); }
@@ -1512,13 +1580,16 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .colS-carrier { width: 7%; }
 .colS-waybill { width: 12%; }
 .colS-exp     { width: 8%; }
-.col2-dn    { width: 9%; }  /* DN：再窄一点点（2026-09-16 用户要求） */
+.col2-dn    { width: 14%; }  /* DN：发货单/其他视图保持 14%（10-23 撤销「减半」）；仅外协单视图收窄，见下条 */
 .col2-so    { width: 11%; } /* SO 号（10 位数字完整显示） */
 .col2-prio  { width: 7%; }  /* 优先级 */
 .col2-name  { width: 8%; }
 .col2-car   { width: 9%; }  /* 承运商 */
 .col2-sf    { width: 18%; } /* 单号（15 位运单号+「（共N件）」完整显示；2026-09-17 加宽一点） */
 .col2-st    { width: 10%; }
+.col2-note  { width: 29%; }  /* 下单列表备注列加宽（18%→26%→29%；10-23 撤销 36% 恢复 29%） */
+/* 仅外协单视图：DN 列收窄到原先的 2/3（14%×2/3≈9.3%；2026-10-23 用户规则「发货单不用改DN列宽， 只改外协单的DN列宽…调窄到原先的2/3」） */
+.pw-list.ot-wx col.col2-dn { width: 9.3%; }
 .col2-ret   { width: 9%; }  /* 回单日期 */
 .col2-pr    { width: 8%; }
 .order-table {
@@ -1549,6 +1620,18 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .col-so     { width: 5%; }  /* DN 列（82600 前缀上标后更紧凑，2026-09-15 用户再收窄） */
 /* DN 82600 前缀：小号上标淡显，剩余 5 位加粗为主体（2026-09-15 用户规则：本厂 DN 均 82600 开头） */
 .dn-pre { font-size: 0.72em; vertical-align: super; color: var(--gray); font-weight: 700; margin-right: 1px; }  /* 前缀小号上标但也加粗（2026-09-15 用户要求）；SO 同款 */
+/* DN/PO 列（第一列）仅含姓名 badge 的单元格放开裁剪：第二行姓名 badge 可跨列到 SO 列显示（2026-10-22 用户规则「DN / PO 的第二行姓名并没有实现跨一列显示」——td 默认 overflow:hidden 会裁掉超宽 badge）；:has(.dn-owner) 限定范围，清单页（无 badge）保持省略，避免异常长 DN 溢出压 SO 列（2026-10-22 用户规则「清单列 有显示错乱」） */
+.order-table td:first-child:has(.dn-owner), .order-table td:first-child:has(.dn-badges) { overflow: visible; text-overflow: clip; }
+/* DN 列第二行 badge 组：▼ 要求发货日期 / ▶ 承运商下单日期 / 姓名 横排，最多跨 3 列
+   （2026-10-23 用户规则「第二行的姓名…调为跨3列， 添加2个显示块：要求发货日期、实际承运商的下单日期」） */
+.dn-badges { display: flex; gap: 3px; margin-top: 2px; width: fit-content; max-width: 310%; overflow: hidden; white-space: nowrap; position: relative; z-index: 1; }  /* 310%：外协单视图 DN 收窄 9.3% 后恰好覆盖完整 3 列（9.3+11+8=28.3%；300%≈27.9% 会裁到姓名块，2026-10-23 用户反馈） */
+.dn-badge { display: inline-block; padding: 1px 6px; background: var(--black); color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; flex: none; }
+.dn-badges .dn-owner { margin-top: 0; flex: none; }  /* badge 组内的姓名块取消块级上边距 */
+.pw-list.ot-wx .dn-badges { max-width: 400%; }  /* 下单外协单视图 DN 列 9.3%：310%≈28.8% 截断 → 340%≈31.6% 仍不全（2026-10-23「还是没显示全 还有加宽」） → 400%≈37.2% */
+.lm-list .dn-badges { max-width: 400%; }  /* 清单 DN 列仅 5.5%：3 块总宽（2 日期+长姓名）超 3 列容量，320%≈17.6% 仍截断 → 400%≈22% 可容纳（2026-10-23 用户规则「还是有截断」；黑底 z-index:1 压盖右列第二行空位） */
+/* DN 列第一行号码：限宽省略——badge 格放开裁剪后，异常长 DN（如 261022>01>?）也不得溢出压 SO 列（2026-10-22 清单 DN 列同步 badge 后兜底） */
+.order-table td:first-child .dn-num { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.dn-owner { display: block; margin-top: 2px; padding: 1px 8px; background: var(--black); color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; width: fit-content; white-space: nowrap; position: relative; z-index: 1; }  /* DN/PO 第二行 IS负责人/采购员：回单格式、换行显示、长度长可跨列（2026-10-21 用户规则「不是显示在一行，还是换行显示，在第二行如果长度长了，可以跨列显示」）；z-index 压过右侧 SO 列文字 */
 /* 一票多件角标：实心圆圈白字，调大（2026-09-17 用户规则） */
 .wb-pieces {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1562,11 +1645,16 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .order-table td:nth-child(3) { padding-left: 4px; padding-right: 4px; }   /* 合并列：窄列下削减内距保内容 */
 .col-otype  { width: 4%; }  /* 类型：最多3字，收窄（2026-09-15 用户要求），余量给地址 */
 .col-addr   { width: 23%; } /* 地址：两行显示（2026-09-15 用户调宽），省市区行完整显示 */
-.col-name   { width: 9%; }  /* 姓名+电话两行：电话 11 位不省略（2026-09-15 电话列取消并入） */
+.col-name   { width: 4.9%; }  /* 姓名+电话两行：再窄 1/4（2026-10-23 用户规则「姓名列再窄1/4」），余量给备注 */
 .col-phone  { width: 11%; }
-.col-note   { width: 7%; }  /* 备注：再收窄（2026-09-15 用户要求） */
+.col-note   { width: 13.1%; }  /* 备注：再加宽（2026-10-23 用户规则「姓名列再窄1/4」余量），其它列不动 */
 .col-carrier{ width: 6%; }  /* 承运商：调窄 */
-.col-date   { width: 7%; }  /* 要求发货日期：收窄（2026-09-15 用户要求），余量给地址 */
+.col-date   { width: 4.5%; }  /* 要求发货日期：再减窄（2026-10-23 用户规则「再调整一次」），余量给备注 */
+/* 日期列减窄配套：表头/数据格 12px + 减内距 → 表头不换行、ISO 日期 10 字符不省略（2026-10-23） */
+.order-table th.col-date { font-size: 12px; padding-left: 2px; padding-right: 2px; }
+#orderBody td:nth-child(8) { font-size: 12px; padding-left: 2px; padding-right: 2px; }
+/* 姓名列再窄 1/4 配套：仅减内距，字号保持原样不改小（2026-10-23 用户规则「不要改字体大小，调整回去」） */
+#orderBody td:nth-child(5) { padding-left: 2px; padding-right: 2px; }
 .col-del    { width: 1.5%; }  /* 删除列（最后列；2026-09-16 用户要求：列宽 1.5%，内边距收紧适配 22px 图标） */
 #orderBody td:last-child { padding-left: 2px; padding-right: 2px; }   /* 删除格：窄列下去掉左右内距 */
 /* 删除按钮：Feather 垃圾桶图标，灰显悬停红（仅未下单行渲染） */
@@ -1578,7 +1666,13 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 #orderBody tr.row-locked:hover { background: none; }
 
 /* 录单列表地址列：取消单行省略，允许换行显示全 */
-#orderBody td:nth-child(5) { white-space: normal; }
+#orderBody td:nth-child(6) { white-space: normal; }  /* 备注列允许换行（2026-10-21 用户规则「备注可以换行显示」） */
+/* 所有列表备注列：换行显示、最多 3 行（2026-10-22 用户规则「所有列表的 备注列， 都可以换行显示，最多显示3行」） */
+.clamp3 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: normal; word-break: break-all; }
+/* 清单备注列例外：单行不换行；悬浮 title 显示全部，悬浮时横向可滚动（鼠标滑动查看全部；
+   2026-10-23 用户规则「清单页面里的备注不要换行，可以悬浮显示全部，可以鼠标滑动显示全部」） */
+.lm-list td.lm-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.lm-list td.lm-note:hover { overflow-x: auto; text-overflow: clip; scrollbar-width: thin; }
 /* 下单类型区（1/6 右列：类型按钮独立横排 / SO·DN+上传 边框盒 / 确定通高竖条） */
 .type-panel { display: flex; flex-direction: column; gap: 6px; min-width: 0; justify-content: space-between; }  /* 三行间距相等 */
 .type-btns { display: flex; gap: 8px; }
@@ -1600,7 +1694,24 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 #modeShip .type-dn-row { flex: 1; }
 /* 三视图统一：6px 固定行距 + 内容组垂直居中（两行/三行行距完全一致） */
 .type-dn-row { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.type-dn-row-2col { flex-direction: row; gap: 8px; }  /* SO 与 IS负责人 一行显示（2026-10-21 用户规则「录单 SO与请选择IS负责人在一行显示」） */
+.type-dn-row-2col .fld { flex: 1; min-width: 0; }  /* min-width:0 允许收缩不溢出 */
+.type-dn-row-2col .fld:last-child { flex: 1.6; }  /* IS负责人 加宽（2026-10-21 用户规则「请选择IS负责人 加宽些」） */
+.type-dn-row-2col .fld span { width: 32px; }  /* 标签列收窄与 .fld 一致（2026-10-21 用户规则「SO没有收窄」） */
+.toggle-row { flex-direction: row; justify-content: center; gap: 8px; }  /* 异常/允许发货 向中间收拢（2026-10-22 用户规则「且向中间收拢些」） */
+.toggle-row-down { margin-top: 16px; }  /* 异常/允许发货 整体向下偏移（2026-10-22 用户规则「整体向下偏移些」） */
+.abn-sub { display: inline-flex !important; align-items: center !important; gap: 8px; margin-left: 4px; }  /* 中括号与整行水平居中对齐、向中间靠拢（2026-10-22 用户规则「中括号向上移些，也向中间靠拢」） */
+.abn-bracket { display: inline-flex; align-items: center; font-weight: 400; font-size: 18px; line-height: 1; color: var(--black); margin-top: -2px; }  /* 中括号向上移（2026-10-22 用户规则「中括号向上移些」） */
+.chk-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--black); cursor: pointer; flex-direction: row-reverse; }  /* 文字在左勾选框在右（2026-10-21 用户规则「文字在做，勾选框在右」） */
+.abn-sub[hidden] { display: none; }
+.pool-check-sm { width: 18px !important; height: 18px !important; }  /* 勾选框再大些（2026-10-22 用户规则「勾选框再大些」） */
+.pool-check-sm:checked::after { font-size: 14px; }  /* 勾选框勾号 */
+tr.row-abnormal td { color: #b8860b !important; }  /* 异常订单整行黄色显示（2026-10-22 用户规则「当勾选异常后，整行的记录文字用黄色显示」） */
+tr.row-abnormal .dn-owner { background: #b8860b; }  /* 异常订单 IS负责人/采购员 badge 黄色 */
+tr.row-abnormal .dn-badge { background: #b8860b; }  /* 异常订单日期 badge 黄色 */
 #modeOut, #modeOther { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+#modeOther .fld span { width: 64px; }  /* 员工姓名/员工电话 标签加宽显示全（2026-10-21 用户规则「其他里面的 员工姓名和员工电话 加宽显示全」） */
+#modeOut .line-input { text-align: right; }  /* 外协单 PO/采购员/公司电话 内容靠右显示（2026-10-21 用户规则「外协单里的 PO 采购员 公司电话， 的内容 都靠右显示」） */
 /* 盒内输入框：无框（横线由 .fld 整行容器提供）；聚焦=中栏同款浅灰阴影（.line-input:focus 全局生效） */
 .type-box .line-input, .type-dn-row .line-input,
 #modeOut .line-input, #modeOther .line-input {
@@ -1611,10 +1722,11 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
   border-bottom: none;
 }
 /* 字段固定标签（SO / DN / 采购员等：有值时不消失）；整行下划线：横线与标签左对齐 */
-.fld { display: flex; align-items: baseline; gap: 6px; border-bottom: 1px solid var(--line-inner); }  /* 框内横线调细 */
-.fld span { flex: none; width: 64px; font-size: 12px; font-weight: 700; color: var(--gray); white-space: nowrap; }  /* 定宽：内容与下划线左对齐 */
+.fld { display: flex; align-items: baseline; gap: 4px; border-bottom: 1px solid var(--line-inner); }  /* 框内横线调细 */
+.fld span { flex: none; width: 32px; font-size: 12px; font-weight: 700; color: var(--gray); white-space: nowrap; }  /* 标签收窄，拉近与填写位置（2026-10-21 用户规则「DN SO 与填写的位置太远， 调整窄些」） */
 
-.fld .line-input { flex: 1; }
+.fld .line-input { flex: 1; min-width: 0; }
+.fld .req { flex: none; color: #d32f2f; font-weight: 900; font-size: 18px; }  /* 必填*符号最后显示、红色加大（2026-10-21 用户规则「所有的必填符号再加大些显示」） */
 /* 公司电话行：与 .fld 输入行同款；整行下划线（横线与标签左对齐） */
 .buyer-phone {
   display: flex;
@@ -1629,12 +1741,14 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
   font-weight: 400;
   color: var(--black);
   letter-spacing: 1px;
+  text-align: right;  /* 公司电话靠右显示（2026-10-21 用户规则「0519 6822-8088 靠右显示」） */
+  padding-right: 20px;  /* 与上边下拉箭头对齐（2026-10-21 用户规则「电话号码右边与上边的下拉箭头对齐」） */
   padding-bottom: 7px;  /* 行线下移量与输入行一致（横线在 .buyer-phone 容器上） */
 }
 
 /* 上传文件：虚线拖传区样式（hover 反色） */
 .upload-btn {
-  margin-top: auto;
+  margin-top: 20px;   /* 整体上移下移（2026-10-20 用户规则「上传的 按钮 整体 下移些」） */
   width: 100%;
   font-size: 14px;
   font-weight: 700;

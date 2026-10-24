@@ -129,6 +129,14 @@ class DatabaseService {
         }));
     }
 
+    // SAP 工单物料查询（RFC → Z_OA_GET_ORDERMAT_ORDERNR）
+    // 返回 [{AUFNR,PLNBEZ,MAKTX,BMEINS,GAMNG,...,FOUND,ERROR}]；接口异常时抛错
+    async queryOrderMaterial(orders) {
+        const data = await this._request('POST', await this._base() + 'order-material', { orders });
+        if (!data.ok) throw new Error(data.error || 'SAP 工单查询失败');
+        return data.rows || [];
+    }
+
     async getAllInventoryHistory() {
         const data = await this._request('GET', await this._base() + 'history');
         return (data || []).map(h => ({

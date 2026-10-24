@@ -65,7 +65,7 @@ def place_order(order, cfg=None):
     return _real_place_order(order, cfg)
 
 
-def query_route(waybill_no, cfg=None):
+def query_route(waybill_no, cfg=None, check_phone_no=""):
     """轨迹查询（新标准轨迹 newTraceQuery，2026-09-17 对接）→ {"route_status", "detail"}"""
     cfg = cfg or _cfg()
     if not _configured(cfg):

@@ -16,6 +16,9 @@ Upload/
 ShippingPhotos/
 shipphotos.json
 
+# Label 平台数据（2026-10-12 并入；生产库在服务器 /opt/label/data，本地 label/data 为开发库）
+label/data/
+
 # Python 字节码
 __pycache__/
 *.pyc

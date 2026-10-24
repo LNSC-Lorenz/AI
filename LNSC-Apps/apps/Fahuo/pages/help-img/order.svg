@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <rect x="10" y="10" width="110" height="180" fill="#fff" stroke="#006878" stroke-width="2" rx="4"/>
+  <text x="20" y="32" font-size="12" fill="#63767c" font-family="Microsoft YaHei, sans-serif">面单预览</text>
+  <rect x="20" y="50" width="90" height="60" fill="#e6f1f2" rx="2"/>
+  <rect x="20" y="120" width="60" height="16" fill="#006878" rx="3"/>
+  <text x="28" y="132" font-size="10" fill="#fff" font-family="Microsoft YaHei, sans-serif">打印</text>
+  <rect x="130" y="10" width="260" height="55" fill="#fff" stroke="#006878" stroke-width="2" rx="4"/>
+  <text x="140" y="30" font-size="12" fill="#63767c" font-family="Microsoft YaHei, sans-serif">DN 选择</text>
+  <rect x="140" y="42" width="40" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="188" y="42" width="40" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="236" y="42" width="40" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="284" y="42" width="40" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="130" y="75" width="260" height="55" fill="#fff" stroke="#006878" stroke-width="2" rx="4"/>
+  <text x="140" y="95" font-size="12" fill="#63767c" font-family="Microsoft YaHei, sans-serif">承运商设置</text>
+  <rect x="140" y="107" width="70" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="220" y="107" width="70" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="300" y="107" width="70" height="14" fill="#e6f1f2" rx="2"/>
+  <rect x="130" y="140" width="260" height="50" fill="#fff" stroke="#006878" stroke-width="2" rx="4"/>
+  <text x="140" y="160" font-size="12" fill="#63767c" font-family="Microsoft YaHei, sans-serif">打单列表</text>
+  <line x1="140" y1="172" x2="380" y2="172" stroke="#d5dfe1"/>
+</svg>

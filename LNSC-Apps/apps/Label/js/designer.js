@@ -68,12 +68,20 @@
     </div>
     <div class="ld-right">
       <div class="panel ld-cocard">
-        <span class="ld-cocard-lbl">公司代码</span>
+        <span class="ld-card-lbl">公司代码</span>
         <input type="text" id="ld-co" class="ld-cocard-code" maxlength="7" inputmode="numeric" pattern="\d{7}"
                title="公司代码恒为 7 位数字" placeholder="7 位数字，如 4101901">
         <div class="ld-cocard-name" id="ld-co-name">—</div>
       </div>
-      <div class="panel ld-props-panel"><div class="panel-body" id="ld-props"></div></div>
+      <div class="panel ld-sizecard">
+        <span class="ld-card-lbl">尺寸</span>
+        <div class="ld-spin"><input type="number" id="ld-w" min="10" step="1" title="宽度 (mm)">
+          <span class="ld-spin-btns"><button type="button" id="ld-w-up" tabindex="-1">▲</button><button type="button" id="ld-w-down" tabindex="-1">▼</button></span></div>
+        <div class="ld-spin"><input type="number" id="ld-h" min="10" step="1" title="高度 (mm)">
+          <span class="ld-spin-btns"><button type="button" id="ld-h-up" tabindex="-1">▲</button><button type="button" id="ld-h-down" tabindex="-1">▼</button></span></div>
+      </div>
+      <div class="panel ld-props-panel"><span class="ld-card-lbl" id="ld-props-lbl">属性</span><div class="panel-body" id="ld-props"></div></div>
+      <button type="button" class="ld-print-btn" id="ld-print"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>打 印</span></button>
     </div>
   </div>`;
 
@@ -164,6 +172,22 @@
       if (nm) { const c = (DB.customers || []).find(x => x.code === v); nm.textContent = c ? c.name : '—'; }
     });
 
+    // 尺寸卡片：宽/高步进器（▲▼ ±1mm 或直接输入；最小 10mm；画布与状态栏即时联动）
+    function sizeSet(key, v) {
+      if (!DE) return;
+      v = Math.max(10, Math.round(parseFloat(v) || 0));
+      if (DE[key] === v) return;
+      DE[key] = v; syncSizeInputs(); canvas();
+    }
+    $('#ld-w').addEventListener('change', e => sizeSet('width', e.target.value));
+    $('#ld-h').addEventListener('change', e => sizeSet('height', e.target.value));
+    $('#ld-w-up').onclick = () => sizeSet('width', (DE ? DE.width : 0) + 1);
+    $('#ld-w-down').onclick = () => sizeSet('width', (DE ? DE.width : 0) - 1);
+    $('#ld-h-up').onclick = () => sizeSet('height', (DE ? DE.height : 0) + 1);
+    $('#ld-h-down').onclick = () => sizeSet('height', (DE ? DE.height : 0) - 1);
+    // 底部打印按钮
+    $('#ld-print').onclick = printLabel;
+
     // Esc 关闭弹窗
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#ld-modal').hidden) ldCloseModal(); });
     // Delete / Backspace 删除选中元素（输入框内不触发）
@@ -200,6 +224,12 @@
       `<option value="${t.code}" ${t.code === DE.code ? 'selected' : ''}>${esc(tplLabel(t))}</option>`).join('');
   }
 
+  /* 尺寸卡片输入框与 DE 同步（加载/步进后调用） */
+  function syncSizeInputs() {
+    const w = $('#ld-w'), h = $('#ld-h');
+    if (w && DE) w.value = DE.width;
+    if (h && DE) h.value = DE.height;
+  }
   function refreshMeta() {
     if (!DE) return;
     const code = DE.company || DE.customer || '';
@@ -207,6 +237,7 @@
     const nm = $('#ld-co-name');
     if (nm) { const c = (DB.customers || []).find(x => x.code === code); nm.textContent = c ? c.name : '—'; }
     const badge = $('#ld-company-badge'); if (badge) badge.textContent = DE.code || '—';
+    syncSizeInputs();
   }
 
   function loadTemplate(code) {
@@ -503,31 +534,16 @@
   }
 
   /* ---------- 元素属性面板 ---------- */
+  const TYPE_CN = { text: '文本', line: '线条', barcode: '条码', qrcode: '二维码', image: '图片', field: '字段', rectangle: '矩形' };   /* 属性面板图例中文名（2026-10-12 线框：选中元素时图例显示元素类型） */
   function props() {
     const host = $('#ld-props');
     if (!host) return;
+    const lbl = $('#ld-props-lbl');
     const el = DE && DE.elements.find(e => e.id === DE.sel);
+    if (lbl) lbl.textContent = el ? (TYPE_CN[el.type] || el.type) : (DE ? '模板' : '属性');
     if (!el) {
-      /* 新设计稿：右栏在未选中元素时展示「模板」属性（名称 / 宽 / 高），
-         取代旧版横跨全宽的模板级属性行；公司代码在画布上方居中输入框。 */
-      if (!DE) { host.innerHTML = '<div class="prop-empty">未选中元素</div>'; return; }
-      host.innerHTML =
-        '<div class="props-head"><span class="tag">模板</span></div>'
-        + '<div class="props-grid">'
-        + '<div class="field" style="grid-column: 1 / -1"><label>模板名称</label><input type="text" data-t="name" value="' + esc(DE.name || '') + '" placeholder="模板名称"></div>'
-        + '<div class="field"><label>宽度 (mm)</label><input type="number" step="1" min="10" data-t="width" value="' + DE.width + '"></div>'
-        + '<div class="field"><label>高度 (mm)</label><input type="number" step="1" min="10" data-t="height" value="' + DE.height + '"></div>'
-        + '</div>'
-        + '<div class="prop-empty">选中画布元素可编辑其属性</div>';
-      $$('#ld-props [data-t]').forEach(inp => {
-        inp.addEventListener('input', () => {
-          if (inp.dataset.t === 'name') { DE.name = inp.value; refreshTplSelect(); }
-        });
-        inp.addEventListener('change', () => {
-          const k = inp.dataset.t, v = parseFloat(inp.value);
-          if ((k === 'width' || k === 'height') && !isNaN(v) && v > 0) { DE[k] = v; canvas(); }
-        });
-      });
+      /* 右栏在未选中元素时展示「模板」属性（仅名称；宽/高已移入上方「尺寸」卡片——2026-10-12 新线框） */
+      host.innerHTML = '';   /* 2026-10-12 用户要求：未选中时属性面板全部留空（模板名称、提示文字均移除） */
       return;
     }
     let fields = '';
@@ -547,7 +563,7 @@
     }
     if (el.type === 'text' || el.type === 'field') fields += numField('字号', 'fontSize', el.fontSize || 11);
     host.innerHTML =
-      `<div class="props-head"><span class="tag">${esc(el.type)}</span>
+      `<div class="props-head">
          <div class="props-acts">
            <button type="button" class="btn-sm" id="ld-dup">复制</button>
            <button type="button" class="btn-sm btn-danger" id="ld-del">删除</button>
@@ -620,6 +636,31 @@
     const html = buildLabel(DE, DEMO_CTX, D_SCALE);
     ldOpenModal('标签预览 · ' + (DE.code || '未保存'),
       '<div id="ld-prev-stage" class="modal-stage">' + html.outerHTML + '</div>', null, null);
+  }
+
+  /* 打印当前模板（右栏底部「打印」按钮）：新开窗口按标签实际毫米尺寸渲染
+     （1mm = PXPERMM px ≈ 96dpi），@page 精确匹配标签尺寸、零边距，加载后自动唤起打印。
+     元素样式内联自带（与 designer.css 第 14 节一致），不依赖外部 CSS。 */
+  function printLabel() {
+    if (!DE) return;
+    const node = buildLabel(DE, DEMO_CTX, (typeof PXPERMM === 'number' ? PXPERMM : 3.78));
+    const w = window.open('', '_blank', 'width=420,height=340');
+    if (!w) { ldToast('浏览器拦截了打印窗口，请允许弹出窗口', 'err'); return; }
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>打印 · ' + esc(DE.code || '标签') + '</title><style>'
+      + '@page{size:' + DE.width + 'mm ' + DE.height + 'mm;margin:0}'
+      + 'html,body{margin:0;padding:0;background:#fff}'
+      + '.canvas{position:relative;overflow:hidden;background:#fff}'
+      + '.el{position:absolute;overflow:hidden}'
+      + '.el-text{font-family:\'Microsoft YaHei\',\'PingFang SC\',sans-serif;color:#111;white-space:pre-wrap;word-break:break-word}'
+      + '.el-barcode{background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 4px)}'
+      + '.el-qr{background:conic-gradient(#111 25%,#fff 0 50%,#111 0 75%,#fff 0) 0 0/50% 50%,conic-gradient(#111 25%,#fff 0 50%,#111 0 75%,#fff 0) 8px 8px/16px 16px;border:2px solid #111}'
+      + '.el-image{background:#f2f5f6;border:1px dashed #b9ccd1;display:flex;align-items:center;justify-content:center;color:#7a8a8e;font-size:10px}'
+      + '.el-img img{width:100%;height:100%;display:block;object-fit:contain}'
+      + '.el-rect{border:1px solid #111}'
+      + '.el-line{background:#111;height:2px !important}'
+      + '</style></head><body>' + node.outerHTML
+      + '<script>window.onload=function(){setTimeout(function(){window.print();},120);};<\/script></body></html>');
+    w.document.close();
   }
 
   function exportJSON() {

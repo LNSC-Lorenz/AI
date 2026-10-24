@@ -1,0 +1,147 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HELP / 操作说明 | LNSC 全链发货平台</title>
+<link rel="stylesheet" href="../shared/style.css?v=20261013bc">
+<link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
+<link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
+</head>
+<body>
+<div class="layout">
+
+  <!-- 左侧：模式导航 -->
+  <aside class="sidebar-left">
+    <div class="mode"><div class="mode-num">- 1 -</div><a class="mode-btn" href="1-entry.html">录单</a></div>
+    <div class="mode"><div class="mode-num">- 2 -</div><a class="mode-btn" href="2-order.html">下单</a></div>
+    <div class="mode"><div class="mode-num">- 3 -</div><a class="mode-btn" href="3-list.html">清单</a></div>
+    <div class="mode"><div class="mode-num">- 4 -</div><a class="mode-btn" href="4-sap.html">SAP</a></div>
+    <div class="mode"><div class="mode-num">- 5 -</div><a class="mode-btn" href="6-label.html">标签</a></div>
+  </aside>
+
+  <!-- 中间：HELP 操作说明 -->
+  <main class="main">
+    <header class="title-bar">
+      <div class="tb-logo-box"><img class="tb-logo" src="../shared/lechler-c-logo-combination-mark-cmyk-00.svg" alt="LECHLER"></div>
+      <div class="tb-mid">
+        <h1>LNSC 全链发货平台</h1>
+        <span class="tb-sub">LNSC Full-Chain Delivery System</span>
+      </div>
+      <div class="title-right">
+        <span class="tb-brand">Logistics</span>
+        <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
+        <button class="btn icon-btn" type="button" title="警告" aria-label="警告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <span class="api-dot" id="apiDot" title="API 状态检测中…"></span>
+        <button class="btn icon-btn" type="button" title="设置" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn icon-btn" type="button" title="HELP/操作说明" aria-label="HELP/操作说明" onclick="location.href='7-help.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <button class="btn icon-btn" type="button" title="关于" aria-label="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </header>
+
+    <div class="lm-main">
+      <style>
+        .help-main { width: 100%; }
+        .help-title { font-size: 20px; font-weight: 800; color: var(--black); margin-bottom: 4px; }
+        .help-sub { font-size: 13px; color: var(--gray); margin-bottom: 18px; }
+        .help-sec { background: #fff; border: 2px solid var(--black); border-radius: 6px; padding: 16px 18px; margin-bottom: 16px; }
+        .help-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .help-sec-head .ic { width: 36px; height: 36px; border: 2px solid var(--black); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--black); flex: 0 0 auto; }
+        .help-sec-head .ic svg { width: 22px; height: 22px; }
+        .help-sec-head h2 { font-size: 16px; font-weight: 800; color: var(--black); margin: 0; }
+        .help-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .help-step { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line-light); border-radius: 6px; background: #fafcfc; }
+        .help-step .no { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: var(--black); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .help-step .txt { font-size: 13px; line-height: 1.5; color: var(--black); }
+        .help-note { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--black); background: #f4f7f7; font-size: 12px; color: var(--gray); line-height: 1.5; }
+        .help-shot { margin-top: 10px; border: 1px solid var(--line-light); border-radius: 6px; overflow: hidden; background: #fff; }
+        .help-shot img { width: 100%; display: block; }
+      </style>
+      <div class="help-main">
+        <div class="help-title">HELP / 操作说明</div>
+        <div class="help-sub">录单 · 下单 · 清单 三步操作指引</div>
+
+        <!-- 录单 -->
+        <section class="help-sec">
+          <div class="help-sec-head">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+            <h2>① 录单（1-entry）</h2>
+          </div>
+          <div class="help-steps">
+            <div class="help-step"><div class="no">1</div><div class="txt"><b>粘贴地址</b>：左侧粘贴收件地址文本（支持多行、逗号分隔），点击「识别」自动解析省市区/街道/姓名/电话。</div></div>
+            <div class="help-step"><div class="no">2</div><div class="txt"><b>选择类型</b>：发货单填 DN（必填）/SO（选填），外协单填 PO/采购员，其他填员工姓名/电话。</div></div>
+            <div class="help-step"><div class="no">3</div><div class="txt"><b>填写日期与承运商</b>：选择发货日期，点击承运商按钮（顺丰/德邦/跨越/专车/自提）。</div></div>
+            <div class="help-step"><div class="no">4</div><div class="txt"><b>上传附件</b>：发货单/外协单可点「上传文件」，附件存到 Upload/&lt;DN或PO&gt;/，可多次上传。</div></div>
+            <div class="help-step"><div class="no">5</div><div class="txt"><b>填写备注</b>：在备注框输入手写备注（PO/采购员/发件人等结构化标签由系统自动拼接）。</div></div>
+            <div class="help-step"><div class="no">6</div><div class="txt"><b>确认入单</b>：核对信息无误后点「确认」，订单进入下单队列；紧急可点亮「紧急」按钮。</div></div>
+          </div>
+          <div class="help-note">提示：DN 支持多个连输或逗号分隔，系统自动拆分；紧急单会整行标红。</div>
+        </section>
+
+        <!-- 下单 -->
+        <section class="help-sec">
+          <div class="help-sec-head">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+            <h2>② 下单（2-order）</h2>
+          </div>
+          <div class="help-steps">
+            <div class="help-step"><div class="no">1</div><div class="txt"><b>选择订单</b>：右侧 DN 平铺区点击要下单的订单（支持多选批量操作）。</div></div>
+            <div class="help-step"><div class="no">2</div><div class="txt"><b>设置承运商</b>：选顺丰/德邦/跨越/专车/自提，填托寄物、重量、体积、付款方式、回单类型。</div></div>
+            <div class="help-step"><div class="no">3</div><div class="txt"><b>确认设置</b>：检查面单预览无误后点「下单」，系统生成运单号并写入订单。</div></div>
+            <div class="help-step"><div class="no">4</div><div class="txt"><b>打印面单</b>：点打印图标补打面单；顺丰/德邦支持官方面单 PDF，专车/自提用厂内模板。</div></div>
+            <div class="help-step"><div class="no">5</div><div class="txt"><b>查看附件</b>：「查看」列显示已上传文件，可预览/下载。</div></div>
+            <div class="help-step"><div class="no">6</div><div class="txt"><b>关闭专车</b>：专车/自提订单点「&gt; 送达？」，填关闭备注后关闭，状态变为「已送达」。</div></div>
+          </div>
+          <div class="help-note">提示：多 DN 合并发货只下一次承运商单；专车关闭后状态变为「已送达」。</div>
+        </section>
+
+        <!-- 清单 -->
+        <section class="help-sec">
+          <div class="help-sec-head">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+            <h2>③ 清单（3-list）</h2>
+          </div>
+          <div class="help-steps">
+            <div class="help-step"><div class="no">1</div><div class="txt"><b>搜索筛选</b>：顶部搜索框按 DN/地址/姓名/电话/备注/承运商/单号/状态模糊搜索，类型按钮切换发货单/外协单/其他。</div></div>
+            <div class="help-step"><div class="no">2</div><div class="txt"><b>查看状态</b>：承运商/单号/状态列显示「承运商 &gt; 已下单/待下单」及运单号，点击单号打开运单步骤弹窗。</div></div>
+            <div class="help-step"><div class="no">3</div><div class="txt"><b>回单日期</b>：已回单订单在下单状态下方显示「回单 ₂₆ 10-19」。</div></div>
+            <div class="help-step"><div class="no">4</div><div class="txt"><b>照片与文件</b>：发货照片列图标查看共享盘照片；文件图标查看录单上传附件，弹窗内可「+ 上传」。</div></div>
+            <div class="help-step"><div class="no">5</div><div class="txt"><b>分享导出</b>：右上角复制/邮件/Teams/导出当前筛选结果为 Excel。</div></div>
+            <div class="help-step"><div class="no">6</div><div class="txt"><b>紧急识别</b>：紧急行整行标红；路由信息超时自动滚动刷新。</div></div>
+          </div>
+          <div class="help-note">提示：紧急行整行标红；路由信息超时自动滚动刷新。</div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- 右侧：发货统计 -->
+  <aside class="sidebar-right">
+    <div class="stat">
+      <div class="stat-label">昨日发货</div>
+      <div class="stat-value">00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日待发货</div>
+      <div class="stat-value">00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">超时未发货</div>
+      <div class="stat-value">00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">计划发货</div>
+      <div class="stat-value">00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">今日回单</div>
+      <div class="stat-value">00</div>
+    </div>
+  </aside>
+
+</div>
+
+<script src="../shared/stats.js"></script>
+<script src="../shared/topbar.js"></script>
+</body>
+</html>

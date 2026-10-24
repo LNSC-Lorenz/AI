@@ -10,7 +10,7 @@ const { DatabaseSync } = require('node:sqlite');
 const PORT = parseInt(process.argv[2]) || process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'toolinventory-server.db');
 // 前端"上传Excel"写入的目标文件（正式部署时用环境变量指向 web 目录里的信息表）
-const EXCEL_PATH = process.env.EXCEL_PATH || path.join(__dirname, '车间工具库存管理-信息表.xlsx');
+const EXCEL_PATH = process.env.EXCEL_PATH || path.join(__dirname, 'data', '车间工具库存管理-信息表.xlsx');
 
 // ===== 数据库初始化 =====
 const db = new DatabaseSync(DB_PATH);
@@ -124,6 +124,48 @@ fs.watchFile(path.join(__dirname, 'user_info.txt'), { interval: 5000 }, () => {
     loadUserMap();
 });
 
+// ===== RFC：SAP 工单物料查询（Z_OA_GET_ORDERMAT_ORDERNR，移植自 PO-Closing）=====
+// 仅在已部署 SAP NW RFC SDK + pyrfc 的设备上可用（部署见 rfc/README.md）；
+// 本机开发无 pyrfc 时接口返回友好错误，不影响其他功能
+const RFC_PYTHON = process.env.CTMS_RFC_PYTHON || 'python3';
+const RFC_SCRIPT = process.env.CTMS_RFC_SCRIPT || path.join(__dirname, 'rfc', 'order_mat_check.py');
+// 接口为单工单逐条查询（约0.3~0.5s/条），大批量导出耗时长，默认 5 分钟
+const RFC_TIMEOUT_MS = parseInt(process.env.CTMS_RFC_TIMEOUT_MS || '300000');
+const RFC_MAX_ORDERS = parseInt(process.env.CTMS_RFC_MAX_ORDERS || '500');
+
+// 必须异步执行：spawnSync 会阻塞事件循环，RFC 查询期间整个服务的 API 全部卡死
+function queryOrderMaterial(orders) {
+    if (!fs.existsSync(RFC_SCRIPT)) {
+        return Promise.resolve({ ok: false, error: 'RFC 脚本不存在: ' + RFC_SCRIPT + '（部署见 rfc/README.md）' });
+    }
+    const os = require('node:os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ctms-rfc-'));
+    const cleanup = () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) { } };
+    return (async () => {
+        const infile = path.join(tmp, 'orders.csv');
+        const outfile = path.join(tmp, 'result.csv');
+        const jsonfile = path.join(tmp, 'result.json');
+        fs.writeFileSync(infile, orders.join('\n'), 'utf8');
+        const { execFile } = require('node:child_process');
+        const { promisify } = require('node:util');
+        try {
+            await promisify(execFile)(RFC_PYTHON, [RFC_SCRIPT, infile, outfile, '--json', jsonfile],
+                { timeout: RFC_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' });
+        } catch (e) {
+            // python 不存在 / 超时 / 非零退出：若结果文件已生成仍按有效处理
+            if (!fs.existsSync(jsonfile)) {
+                return { ok: false, error: 'RFC 调用失败: ' + (e.killed ? '超时' : e.message) + '（设备端需 pyrfc 环境，见 rfc/README.md）' };
+            }
+        }
+        if (!fs.existsSync(jsonfile)) {
+            return { ok: false, error: 'RFC 调用失败: 未生成结果文件' };
+        }
+        const rows = JSON.parse(fs.readFileSync(jsonfile, 'utf8'));
+        return { ok: true, source: 'rfc', count: rows.length, rows };
+    })().catch(e => ({ ok: false, error: 'RFC 调用失败: ' + e.message }))
+        .finally(cleanup);
+}
+
 // ===== API 处理 =====
 function stateToJson(s) {
     return {
@@ -151,7 +193,16 @@ function histToJson(h) {
 }
 
 const api = {
-    'GET /api/health': () => ({ ok: true }),
+    'GET /api/health': () => ({ ok: true, rfc: fs.existsSync(RFC_SCRIPT) }),
+
+    // SAP 工单物料查询（RFC → Z_OA_GET_ORDERMAT_ORDERNR）；body: { orders: ["1352095", ...] }
+    'POST /api/order-material': (q, body) => {
+        const raw = (body && Array.isArray(body.orders)) ? body.orders : [];
+        const orders = [...new Set(raw.map(o => String(o).trim()).filter(o => /^\d{1,12}$/.test(o)))];
+        if (!orders.length) return { ok: false, error: '未提供有效工单号（纯数字，body.orders 数组）' };
+        if (orders.length > RFC_MAX_ORDERS) return { ok: false, error: `单次最多 ${RFC_MAX_ORDERS} 个工单` };
+        return queryOrderMaterial(orders);   // 返回 Promise，由分发处 await
+    },
 
     // 上传新版《车间工具库存管理-信息表.xlsx》（body 为原始二进制，先备份再覆盖）
     'POST /api/upload-excel': (q, body) => {
@@ -347,8 +398,9 @@ const MIME = {
     '.svg': 'image/svg+xml'
 };
 
-// 禁止通过HTTP访问的敏感文件
-const BLOCKED_FILES = ['user_info.txt', 'server.js', 'toolinventory-server.db', 'initial_inventory.js', 'initial_inventory.js.bak'];
+// 禁止通过HTTP访问的敏感文件（.env 含 SAP 凭据；rfc/venv 目录整目录禁止）
+const BLOCKED_FILES = ['user_info.txt', 'server.js', 'toolinventory-server.db', 'initial_inventory.js', 'initial_inventory.js.bak', '.env'];
+const BLOCKED_DIRS = ['rfc', 'venv', 'node', '__pycache__'];
 
 function serveStatic(req, res, urlPath) {
     let filePath = decodeURIComponent(urlPath === '/' ? '/index.html' : urlPath);
@@ -356,6 +408,13 @@ function serveStatic(req, res, urlPath) {
     const fullPath = path.join(__dirname, filePath);
 
     if (BLOCKED_FILES.includes(path.basename(fullPath).toLowerCase())) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('Forbidden');
+        return;
+    }
+
+    const relSegs = path.relative(__dirname, fullPath).split(/[\\/]+/).map(s => s.toLowerCase());
+    if (relSegs.some(s => BLOCKED_DIRS.includes(s))) {
         res.writeHead(403, { 'Content-Type': 'text/plain' });
         res.end('Forbidden');
         return;
@@ -395,7 +454,7 @@ const server = http.createServer((req, res) => {
     if (handler) {
         const chunks = [];
         req.on('data', chunk => chunks.push(chunk));
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 // 上传Excel接口接收原始二进制，其余接口按 JSON 解析
                 let body;
@@ -405,7 +464,7 @@ const server = http.createServer((req, res) => {
                     const bodyStr = Buffer.concat(chunks).toString('utf8');
                     body = bodyStr ? JSON.parse(bodyStr) : null;
                 }
-                const result = handler(url.searchParams, body);
+                const result = await handler(url.searchParams, body);   // handler 可同步或返回 Promise
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify(result));
             } catch (e) {

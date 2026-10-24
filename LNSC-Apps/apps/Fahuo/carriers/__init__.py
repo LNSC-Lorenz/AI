@@ -20,12 +20,12 @@ def place_order(carrier, order):
     return mod.place_order(order)
 
 
-def query_route(carrier, waybill_no):
+def query_route(carrier, waybill_no, check_phone_no=""):
     """按承运商名分发轨迹查询"""
     mod = CARRIERS.get(carrier)
     if not mod:
         raise base.CarrierError("该承运商不支持轨迹查询：" + str(carrier))
-    return mod.query_route(waybill_no)
+    return mod.query_route(waybill_no, check_phone_no=check_phone_no)
 
 
 def print_label(carrier, waybill_no, back=False):

@@ -140,9 +140,16 @@ function getDrawerHeight(cabIndex, drawIndex) {
 }
 
 // ===== Excel Data Loading =====
+// Excel 库存数量单元格 → 非负整数；空/非数字 → null（注意：0 是有效值，不能用 || null）
+function toStockNum(v) {
+    if (v == null || v === '') return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : Math.max(0, Math.round(n));
+}
+
 async function loadExcelData() {
     try {
-        const response = await fetch('车间工具库存管理-信息表.xlsx', { cache: 'no-store' });
+        const response = await fetch('data/车间工具库存管理-信息表.xlsx', { cache: 'no-store' });
         if (!response.ok) {
             console.warn('Excel file not found, using empty data');
             return;
@@ -156,6 +163,10 @@ async function loadExcelData() {
         for (let sheetIndex = 0; sheetIndex < Math.min(5, sheetNames.length); sheetIndex++) {
             const sheet = workbook.Sheets[sheetNames[sheetIndex]];
             const rows = XLSX.utils.sheet_to_json(sheet);
+            // M/N 列（新品库存/旧品库存）：表头按包含匹配，防止列位变动或表头带空格
+            const headerKeys = rows.length ? Object.keys(rows[0]) : [];
+            const newStockKey = headerKeys.find(k => k && k.includes('新品库存'));
+            const oldStockKey = headerKeys.find(k => k && k.includes('旧品库存'));
 
             rows.forEach(row => {
                 const item = {
@@ -174,6 +185,8 @@ async function loadExcelData() {
                     sapNumber: (row['SAP号'] || '').toString().trim(),
                     unitPrice: parseFloat(row['单价']) || null,
                     toolBrand: row['刀具品牌'] || '',
+                    excelNewStock: newStockKey ? toStockNum(row[newStockKey]) : null,
+                    excelOldStock: oldStockKey ? toStockNum(row[oldStockKey]) : null,
                     curState: null
                 };
                 if (item.drawerNumber > 0) {
@@ -651,6 +664,83 @@ function goToItem(item) {
 }
 
 // ===== 上传新版库存信息表（xlsx），上传成功后用新表刷新界面 =====
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 确认对话框（与 showMessage 同风格，确定/取消 两按钮），resolve true=确认
+function showConfirm(msg) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'msg-overlay';
+        overlay.innerHTML = `
+        <div class="msg-box">
+            <p style="white-space:pre-line;text-align:left;max-height:50vh;overflow:auto">${msg}</p>
+            <div style="display:flex;gap:12px;justify-content:center">
+                <button data-act="yes">以Excel为准更新</button>
+                <button data-act="no">不更新</button>
+            </div>
+        </div>`;
+        overlay.querySelector('[data-act="yes"]').onclick = () => { overlay.remove(); resolve(true); };
+        overlay.querySelector('[data-act="no"]').onclick = () => { overlay.remove(); resolve(false); };
+        document.body.appendChild(overlay);
+    });
+}
+
+// 上传新表后：把 Excel M/N 列（新品/旧品库存）与软件实时数量比对，
+// 列出差异确认后以 Excel 为准更新（写入出入库历史，人员记为"Excel同步"）。
+// 仅在上传这一主动动作时执行；日常打开页面不同步，避免旧 Excel 覆盖实时出入库结果。
+async function syncCountsFromExcel() {
+    const candidates = excelData.filter(x => x.uniqueIdentifier && (x.excelNewStock != null || x.excelOldStock != null));
+    if (!candidates.length) return { changed: 0, applied: false };
+
+    const stockMap = await fetchAllStockMap();
+    const diffs = [];
+    const seen = new Set();
+    candidates.forEach(x => {
+        const key = x.uniqueIdentifier.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        const cur = stockMap[key] || { newCount: 0, oldCount: 0 };
+        // 某列 Excel 留空 = 该列不动，保持软件现值
+        const newTarget = x.excelNewStock != null ? x.excelNewStock : cur.newCount;
+        const oldTarget = x.excelOldStock != null ? x.excelOldStock : cur.oldCount;
+        if (newTarget !== cur.newCount || oldTarget !== cur.oldCount) {
+            diffs.push({
+                uid: x.uniqueIdentifier, name: x.materialName || '',
+                curNew: cur.newCount, curOld: cur.oldCount, newTarget, oldTarget
+            });
+        }
+    });
+    if (!diffs.length) return { changed: 0, applied: false };
+
+    const preview = diffs.slice(0, 10)
+        .map(d => `${escapeHtml(d.uid)} ${escapeHtml(d.name)}：新品 ${d.curNew}→${d.newTarget}，旧品 ${d.curOld}→${d.oldTarget}`)
+        .join('\n');
+    const ok = await showConfirm(
+        `新表中有 ${diffs.length} 项库存数量与软件不一致：\n${preview}` +
+        `${diffs.length > 10 ? `\n……（共 ${diffs.length} 项，仅列出前 10 项）` : ''}` +
+        `\n\n是否以Excel为准更新软件库存？（变更将写入出入库历史，人员记为"Excel同步"）`);
+    if (!ok) return { changed: diffs.length, applied: false };
+
+    let done = 0, failed = 0;
+    for (const d of diffs) {
+        try {
+            if (d.newTarget !== d.curNew) {
+                await dbService.updateInventory(d.uid, true, d.newTarget - d.curNew, 'Excel同步', d.name);
+            }
+            if (d.oldTarget !== d.curOld) {
+                await dbService.updateInventory(d.uid, false, d.oldTarget - d.curOld, 'Excel同步', d.name);
+            }
+            done++;
+        } catch (e) {
+            failed++;
+            console.error('库存同步失败:', d.uid, e);
+        }
+    }
+    return { changed: diffs.length, applied: true, done, failed };
+}
+
 async function uploadExcelFile(input) {
     const file = input.files && input.files[0];
     input.value = ''; // 重置，允许重复选择同一个文件
@@ -667,7 +757,23 @@ async function uploadExcelFile(input) {
     try {
         const r = await dbService.uploadExcel(file);
         await loadExcelData(); // 用新表重新加载 库位/名称/安全库存/采购量 并刷新界面
-        showMessage(`上传成功（${(r.size / 1024).toFixed(0)} KB），数据已按新表刷新。`);
+        // M/N 库存列同步（差异确认后以Excel为准，见 syncCountsFromExcel）
+        let syncMsg;
+        try {
+            const s = await syncCountsFromExcel();
+            if (s.applied) {
+                await loadExcelData(); // 数量已变，重新拉取库存刷新界面
+                syncMsg = `库存同步：已按新表更新 ${s.done} 项${s.failed ? `，${s.failed} 项失败（详见控制台）` : ''}。`;
+            } else if (s.changed > 0) {
+                syncMsg = '库存同步：已取消，数量保持软件现值。';
+            } else {
+                syncMsg = '库存同步：新表数量与软件一致，无需更新。';
+            }
+        } catch (e) {
+            console.error('库存同步失败:', e);
+            syncMsg = '库存同步失败：' + e.message;
+        }
+        showMessage(`上传成功（${(r.size / 1024).toFixed(0)} KB）。${syncMsg}`);
     } catch (e) {
         showMessage('上传失败：' + e.message);
     } finally {
@@ -1075,6 +1181,25 @@ async function personIdConfirmClick() {
     }
 }
 
+// ===== SAP 查询进度遮罩（RFC 逐条查询耗时较长，导出时给用户反馈）=====
+function showSapLoading(text) {
+    let el = document.getElementById('sapLoadingOverlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'sapLoadingOverlay';
+        el.className = 'msg-overlay';
+        el.innerHTML = '<div class="msg-box"><p id="sapLoadingText"></p></div>';
+        document.body.appendChild(el);
+    }
+    el.querySelector('#sapLoadingText').textContent = text || '正在查询SAP，请稍候…';
+    el.style.display = 'flex';
+}
+
+function hideSapLoading() {
+    const el = document.getElementById('sapLoadingOverlay');
+    if (el) el.style.display = 'none';
+}
+
 // ===== Export Functions =====
 // 一次请求拉取全部库存，返回小写ID索引的映射
 async function fetchAllStockMap() {
@@ -1206,11 +1331,40 @@ async function doExportHistory(start, end) {
                 return;
             }
         }
+        // SAP 工单信息（RFC → Z_OA_GET_ORDERMAT_ORDERNR）：GAMNG=工单数量、MAKTX=产品图号
+        // 接口为单工单逐条查询（约0.3~0.5s/条），分批 50 个/次并显示进度；
+        // RFC 不可用时不阻塞导出（对应两列留空，提示中带说明）
+        let orderInfoMap = {};
+        let rfcFailed = false;
+        const orderNos = [...new Set(histories.map(h => (h.orderNo || '').trim()).filter(no => /^\d{1,12}$/.test(no)))];
+        if (orderNos.length) {
+            const SAP_BATCH = 50;
+            showSapLoading(`正在查询SAP工单信息（0/${orderNos.length}），请稍候…`);
+            try {
+                for (let i = 0; i < orderNos.length; i += SAP_BATCH) {
+                    const sapRows = await dbService.queryOrderMaterial(orderNos.slice(i, i + SAP_BATCH));
+                    sapRows.forEach(r => {
+                        if (r && r.FOUND === 'X') orderInfoMap[String(parseInt(r.AUFNR, 10))] = r;
+                    });
+                    showSapLoading(`正在查询SAP工单信息（${Math.min(i + SAP_BATCH, orderNos.length)}/${orderNos.length}），请稍候…`);
+                }
+            } catch (e) {
+                rfcFailed = true;
+                console.warn('SAP 工单信息获取失败（导出继续，工单数量/产品图号为空）:', e);
+            } finally {
+                hideSapLoading();
+            }
+        }
+
         const rows = histories.map(h => {
             const type = (h.isNew ? '新品' : '旧品') + (h.delta > 0 ? ' 入库' : (h.delta < 0 ? ' 出库' : ' 工单登记'));
             const sapItem = excelData.find(x => x.uniqueIdentifier && x.uniqueIdentifier.toLowerCase() === (h.uniqueIdentifier || '').toLowerCase() && x.sapNumber);
             const priceItem = excelData.find(x => x.uniqueIdentifier && x.uniqueIdentifier.toLowerCase() === (h.uniqueIdentifier || '').toLowerCase() && x.unitPrice != null);
             const brandItem = excelData.find(x => x.uniqueIdentifier && x.uniqueIdentifier.toLowerCase() === (h.uniqueIdentifier || '').toLowerCase() && x.toolBrand);
+            const orderNoTrim = (h.orderNo || '').trim();
+            const sapOrder = /^\d{1,12}$/.test(orderNoTrim) ? orderInfoMap[String(parseInt(orderNoTrim, 10))] : null;
+            const orderQtyNum = parseFloat(h.orderQty);
+            const unitPriceNum = priceItem ? parseFloat(priceItem.unitPrice) : NaN;
             return {
                 '唯一ID': h.uniqueIdentifier || '',
                 '物料名称': h.materialName || '',
@@ -1224,13 +1378,18 @@ async function doExportHistory(start, end) {
                 '材质': h.orderTexture || '',
                 '数量': h.orderQty != null ? h.orderQty : '',
                 '时间': h.timestamp,
-                '人员': h.person || ''
+                '人员': h.person || '',
+                '工单数量': sapOrder ? sapOrder.GAMNG : '',
+                '产品图号': sapOrder ? (sapOrder.MAKTX || '') : '',
+                '单价汇总': (!isNaN(orderQtyNum) && !isNaN(unitPriceNum)) ? Math.round(orderQtyNum * unitPriceNum * 100) / 100 : ''
             };
         });
 
         const fileSuffix = fNo ? `_工单${fNo}` : '';
         if (downloadExcel(rows, `出入库记录${fileSuffix}${rangeSuffix(start, end)}.xlsx`)) {
-            showMessage(hasFilter ? `导出成功，共 ${rows.length} 条符合工单条件的记录。` : '导出成功。');
+            let msg = hasFilter ? `导出成功，共 ${rows.length} 条符合工单条件的记录。` : '导出成功。';
+            if (rfcFailed) msg += '（SAP工单信息获取失败，工单数量/产品图号两列为空）';
+            showMessage(msg);
         }
     } catch (ex) {
         showMessage('导出失败：' + ex.message);

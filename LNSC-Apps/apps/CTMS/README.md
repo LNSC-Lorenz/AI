@@ -79,7 +79,7 @@ node -e "require('node:sqlite'); console.log('node:sqlite OK')"
 sudo mkdir -p /etc/systemd/system/ctms.service.d
 sudo tee /etc/systemd/system/ctms.service.d/override.conf << 'EOF'
 [Service]
-Environment=EXCEL_PATH=/var/www/lnsc-apps/apps/ctms/车间工具库存管理-信息表.xlsx
+Environment=EXCEL_PATH=/var/www/lnsc-apps/apps/ctms/data/车间工具库存管理-信息表.xlsx
 EOF
 sudo systemctl daemon-reload && sudo systemctl restart ctms
 
@@ -98,7 +98,7 @@ curl -X POST http://127.0.0.1:3001/api/upload-excel
 ## 数据管理
 
 - **数据库文件**：`/opt/ctms/toolinventory-server.db`（唯一数据库，web root 之外防下载）
-- **主数据 Excel**：`/var/www/lnsc-apps/apps/ctms/车间工具库存管理-信息表.xlsx`（库位/名称/安全库存等静态主数据的唯一权威，见下方"功能更新"第 5、6 条）
+- **主数据 Excel**：`/var/www/lnsc-apps/apps/ctms/data/车间工具库存管理-信息表.xlsx`（库位/名称/安全库存等静态主数据的唯一权威，见下方"功能更新"第 5、6 条）
 - **初始数据归档**：首次导入成功后自动将 `initial_inventory.js` 重命名为 `.bak`，避免误删数据库后静默用旧数据重建
 - **每日自动备份**（凌晨2点，保留最近30天）：
 
@@ -120,11 +120,37 @@ echo '0 2 * * * root cp /opt/ctms/toolinventory-server.db /backup/ctms/toolinven
 | 扫码枪输入 | 键盘事件监听 |
 | 导出 Excel | 浏览器下载 xlsx 文件 |
 
+## 目录结构（2026-10 重组为标准 HTML5 布局）
+
+```
+CTMS/
+├── index.html            # 页面入口
+├── css/styles.css        # 样式
+├── js/                   # 前端脚本：app.js(主逻辑) / db.js(API服务) / user_info.js(用户数据)
+├── lib/xlsx.full.min.js  # 第三方库：SheetJS
+├── assets/               # 图标等静态资源（lechler logo）
+├── data/车间工具库存管理-信息表.xlsx   # 主数据 Excel（前端 fetch 读取，上传Excel写入）
+├── rfc/                  # SAP RFC 脚本（部署见 rfc/README.md）
+├── install/bach_CTMS     # Ubuntu 一键安装脚本
+└── server.js / user_info.txt / initial_inventory.js / *.db   # 后端（部署于 /opt/ctms，web root 之外）
+```
+
 ## 界面结构
 
 - **主界面**: 5列柜子网格布局，每个柜子含多个抽屉和状态指示灯
 - **详情界面**: 左侧柜子预览 + 中间刀具卡片(8×4) + 右侧操作面板
 - **底部功能栏**: 导出操作按钮 / 柜子快速切换按钮
+
+## SAP RFC：工单物料查询（2026-10，移植自 PO-Closing）
+
+- 新增 `POST /api/order-material`：按工单号实时查 SAP 物料信息（`Z_OA_GET_ORDERMAT_ORDERNR`），返回物料号/描述/单位/工单数量(GAMNG)等
+- 依赖服务器端 pyrfc 环境（SDK 与 PO-Closing 同机复用），部署与验证步骤见 `rfc/README.md`
+- 本机 Windows 开发无需任何依赖，接口会返回友好错误，不影响其他功能
+- **【生成出入库记录】新增 3 列**（追加在末尾，原有 A–M 列不动）：
+  - `工单数量` = SAP GAMNG（按导出记录中的工单号批量实时查询；查无此单或 RFC 不可用则留空，导出不受阻）
+  - `产品图号` = SAP 物料描述 MAKTX
+  - `单价汇总` = 数量(K列) × 单价(D列)，两位小数
+- **SAP 查询体验与稳定性**（2026-10-16）：RFC 接口为单工单逐条查询（约 0.3~0.5s/条），导出时显示"正在查询SAP工单信息（x/y）"进度遮罩，分批 50 个/次避免超时；后端 RFC 调用由 spawnSync 改为异步 execFile（修复查询期间整个 CTMS 后端阻塞所有 API 的问题），超时默认放宽到 5 分钟（`CTMS_RFC_TIMEOUT_MS`）
 
 ## 功能更新（2026-09）
 
@@ -137,4 +163,5 @@ echo '0 2 * * * root cp /opt/ctms/toolinventory-server.db /backup/ctms/toolinven
 4. **库位搜索**：主界面左下角搜索框，按型号/名称/SAP号/唯一ID/品牌模糊查找，结果显示库位（柜/抽屉/行/位）和当前库存，点击（或回车）直接跳到对应柜抽屉并闪烁高亮目标卡片。模糊匹配做了归一化：全角→半角、忽略大小写、忽略空格和 `- _ / \ . × Φ` 等分隔符（`D10.5-45`、`d10 5 45`、`10545` 互相可搜）
 5. **Excel 为主数据权威**：每次页面加载时，自动把 Excel 中的物料名称同步覆盖到数据库（只覆盖不清空）；出入库时同理。改名称只需改 Excel，刷新页面即全系统生效。同时前端加载 Excel 已禁用浏览器缓存（`no-store`），保证每次拿到的都是最新表
 6. **页面上传Excel**：搜索框右侧【上传Excel】按钮，选择新版 xlsx 后直接写入服务器 web 目录（旧文件自动备份为 `…-备份日期-时间.xlsx`），上传后页面立即用新表刷新，无需 SSH/拷贝。需配置 `EXCEL_PATH` 环境变量（见"部署方法"第 4 步）。历史流水中的物料名称保留当时快照不回溯；新记录自动使用 Excel 名称
+7. **上传Excel时同步 M/N 库存列**（2026-10）：Excel 的 `新品库存`(M列)/`旧品库存`(N列) 此前仅在建库初始化时用一次，之后改动无效。现在上传新表后，自动比对新表数量与软件实时数量，**弹出差异清单（前 10 项预览），确认后才以 Excel 为准更新**；某列留空 = 该列不动，0 是有效值；变更逐条写入出入库历史（人员记为 `Excel同步`，含变更前后数量，导出记录可追溯）。**日常打开页面不做此同步**——Excel 是静态快照，若每次加载都以它为准，会把未及时更新表格期间的出入库结果覆盖回退
 

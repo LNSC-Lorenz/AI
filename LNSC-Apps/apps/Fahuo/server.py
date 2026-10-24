@@ -14,6 +14,9 @@ LNSC 全链发货平台 - SQLite API 服务
     PUT    /api/orders/<id>              更新（状态/备注等）
     DELETE /api/orders/<id>              删除
     GET    /api/stats                    右侧看板统计
+    GET    /api/label/health             标签平台健康检查（2026-10-12 Label 并入；原 Node :8092 退役）
+    GET    /api/label/db                 标签平台整库读取（meta/templates/rules/fields/customers/deliveries/history）
+    PUT    /api/label/db                 标签平台整库事务清写（缺省分表不变；每天首写自动备份保留 7 份）
 （2026-10-08 撤 GET /api/signback_addr：回单返回到方地址为顺丰侧固定值，平台无配置/无维护动作）
 同时提供当前目录静态文件（index.html 等），可直接 http://host:8091/ 访问。
 """
@@ -21,6 +24,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -33,6 +37,26 @@ WEB_ROOT = BASE                                              # 静态页面根�
 DB = os.path.join(BASE, "fahuo.db")
 UPLOAD_DIR = os.path.join(BASE, "Upload")   # 上传文件根目录（按 DN 建子文件夹）
 PORT = int(os.environ.get("PORT", "8091"))
+
+# 加载承运商 API 密钥（2026-10-22 用户规则「SF5141480295413 已经在派送了， 但是页面显示还是待揽收」：
+# systemd EnvironmentFile 未正确注入时，server.py 主动加载 carriers.env 兜底）
+def _load_carriers_env():
+    env_file = os.path.join(BASE, "carriers.env")
+    if not os.path.isfile(env_file):
+        return
+    try:
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k and v and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+_load_carriers_env()
 
 OID_SEQ = os.path.join(BASE, "oid.seq")
 
@@ -123,9 +147,26 @@ def _route_is_final(st):
     return any(k in (st or "") for k in ("签收", "回单"))
 
 
+def _phone_last4(phone):
+    """提取手机号后4位（用于顺丰 API checkPhoneNo 参数）"""
+    if not phone:
+        return ""
+    digits = re.sub(r"\D", "", str(phone))
+    return digits[-4:] if len(digits) >= 4 else ""
+
+
+def _row_phone4(r):
+    """从 orders 行记录提取收件人/寄件人手机后4位"""
+    return _phone_last4(r["phone"] or r["emp_phone"])
+
+
 # ---------- 回单运单追踪（2026-09-23 顺丰 isSignBack=2 静默无效事故后新增） ----------
 # 主运单签收终态后，改查 type=3 回单运单（下单存档 order_resp.sign_back_no）：
 # 回单运单出现终态节点（签收/回单返还）→ 订单自动置 returned + returned_at（回单日期自动填）。
+# 回单运单**签收日期**提取存档 order_resp.sign_back_date（2026-10-12 用户规则「回单是有单号的，
+# 显示回单的签收日期」）：终态节点 acceptTime 优先（含「签收/回单」字样节点，兜底最新节点）；
+# 清单「回单日期」列 = 人工置回单日（实物核实 returned_at）优先，否则该签收日期。
+# 未签收但回单运单已有路由节点 → 存档 order_resp.sign_back_status，列显示「在途」（同日用户规则）。
 # 只发货日起 SIGN_BACK_WINDOW_D 天内追踪，历史单不空转；复用 route_checked_at 节流（主单终态后该字段空闲）。
 SIGN_BACK_WINDOW_D = 30
 # 口径修正（2026-09-29 用户定夺：对新单生效）：回单运单终态 ≠ 纸质回单已返还
@@ -143,6 +184,20 @@ def _sign_back_no(r):
         return ""
 
 
+def _sb_sign_date(res):
+    """回单运单的签收日期（2026-10-12 用户规则：回单有单号，显示回单的签收日期）：
+    轨迹节点倒序找含「签收/回单」字样的节点取 acceptTime；兜底最新节点时间；无节点返回 ''"""
+    det = res.get("detail") or []
+    for n in reversed(det):
+        txt = "%s %s %s" % (n.get("firstStatusName") or "",
+                            n.get("secondaryStatusName") or "", n.get("remark") or "")
+        if "签收" in txt or "回单" in txt:
+            return str(n.get("acceptTime") or "")[:19]
+    if det:
+        return str(det[-1].get("acceptTime") or "")[:19]
+    return ""
+
+
 def _refresh_sign_back(c, r, now):
     if r["status"] == "returned" or r["carrier"] != "顺丰":
         return
@@ -155,8 +210,8 @@ def _refresh_sign_back(c, r, now):
         resp0 = {}
     # 新单口径（2026-09-29）：created_at ≥ SIGN_BACK_MANUAL_SINCE 只提示不自动置 returned
     manual = (r["created_at"] or "")[:10] >= SIGN_BACK_MANUAL_SINCE
-    if manual and resp0.get("sign_back_final"):
-        return        # 已提示过终态：停查省接口，等人工核实实物回单后置 returned
+    if manual and resp0.get("sign_back_final") and resp0.get("sign_back_date"):
+        return        # 已提示终态且已存档签收日期：停查省接口，等人工核实实物回单后置 returned
     try:                                   # 时间窗：发货日超 30 天不再查
         if r["ship_date"]:
             age = (now - time.mktime(time.strptime(r["ship_date"], "%Y-%m-%d"))) / 86400.0
@@ -172,26 +227,41 @@ def _refresh_sign_back(c, r, now):
     if now - checked < ROUTE_THROTTLE_S:
         return
     st = ""
+    sb_date = ""
+    sb_track = False
     try:
-        st = (carrier_query_route(r["carrier"], sb) or {}).get("route_status") or ""
+        res = carrier_query_route(r["carrier"], sb, check_phone_no=_row_phone4(r)) or {}
+        st = res.get("route_status") or ""
+        sb_date = _sb_sign_date(res)         # 回单运单签收日期（2026-10-12 用户规则）
+        sb_track = bool(res.get("detail"))   # 回单运单已有路由节点（在途回返中）
     except Exception:
         pass                                 # 查询失败照常写检查时间节流，下一轮再试
     c.execute("UPDATE orders SET route_checked_at=datetime('now','localtime') WHERE id=?",
               (r["id"],))
     if not _route_is_final(st):
+        # 在途标记（2026-10-12 用户规则：回单未签收但回单运单有路由信息 → 清单「回单日期」列显示 在途）
+        if sb_track and st and resp0.get("sign_back_status") != st:
+            resp0["sign_back_status"] = st
+            c.execute("UPDATE orders SET order_resp=? WHERE id=?",
+                      (json.dumps(resp0, ensure_ascii=False), r["id"]))
         return
     if manual:                               # 新单：只写提示标记 + 审计，不自动置 returned
-        resp0["sign_back_final"] = "%s @ %s（回单运单终态；实物回单待人工核实，核实后手动置回单）" % (
-            st, time.strftime("%Y-%m-%d %H:%M:%S"))
+        if sb_date and not resp0.get("sign_back_date"):
+            resp0["sign_back_date"] = sb_date   # 签收日期存档（清单「回单日期」列回显）
+            _audit("SIGNBACK-DATE id=%s waybill=%s sign_back=%s date=%s"
+                   % (r["id"], r["waybill_no"], sb, sb_date))
+        if not resp0.get("sign_back_final"):
+            resp0["sign_back_final"] = "%s @ %s（回单运单终态；实物回单待人工核实，核实后手动置回单）" % (
+                st, sb_date or time.strftime("%Y-%m-%d %H:%M:%S"))
+            _audit("SIGNBACK-FINAL id=%s waybill=%s sign_back=%s st=%s (只提示不自动置回单)"
+                   % (r["id"], r["waybill_no"], sb, st))
         c.execute("UPDATE orders SET order_resp=? WHERE id=?",
                   (json.dumps(resp0, ensure_ascii=False), r["id"]))
-        _audit("SIGNBACK-FINAL id=%s waybill=%s sign_back=%s st=%s (只提示不自动置回单)"
-               % (r["id"], r["waybill_no"], sb, st))
-    else:                                    # 历史单（< 2026-09-29）：维持自动回单
-        c.execute("UPDATE orders SET status='returned',"
-                  " returned_at=datetime('now','localtime') WHERE id=?", (r["id"],))
-        _audit("SIGNBACK-RETURNED id=%s waybill=%s sign_back=%s st=%s"
-               % (r["id"], r["waybill_no"], sb, st))
+    else:                                    # 历史单（< 2026-09-29）：维持自动回单（日期取轨迹签收节点）
+        c.execute("UPDATE orders SET status='returned', returned_at=? WHERE id=?",
+                  (sb_date or time.strftime("%Y-%m-%d %H:%M:%S"), r["id"]))
+        _audit("SIGNBACK-RETURNED id=%s waybill=%s sign_back=%s st=%s date=%s"
+               % (r["id"], r["waybill_no"], sb, st, sb_date or "-"))
 
 
 def _is_canceled_err(msg):
@@ -202,6 +272,17 @@ def _is_canceled_err(msg):
                                 "已撤销", "不允许撤销"))   # 德邦撤销措辞（2026-09-17 #490 实测）
 
 
+def _sign_time(new_st, old_st, latest_txt):
+    """路由状态首次进入签收/回单/已送达类 → 取最新节点时间（"MM-dd HH:mm" 补当年）作签收时间；
+    否则 None（已在终态不覆盖；2026-10-22 用户规则「清单页面 在导出时候， 需要把快递的下单时间， 签收时间都导出」）"""
+    if not re.search(r"签收|回单|已送达", new_st or ""):
+        return None
+    if re.search(r"签收|回单|已送达", old_st or ""):
+        return None
+    m = re.match(r"^(\d{2}-\d{2} \d{2}:\d{2})", latest_txt or "")
+    return (time.strftime("%Y") + "-" + m.group(1)) if m else time.strftime("%Y-%m-%d %H:%M")
+
+
 def _refresh_routes():
     if carrier_query_route is None or not _route_lock.acquire(blocking=False):
         return
@@ -210,7 +291,7 @@ def _refresh_routes():
         with db() as c:
             rows = c.execute(
                 "SELECT id, carrier, waybill_no, route_status, route_checked_at,"
-                " status, order_resp, ship_date, created_at"
+                " status, order_resp, ship_date, created_at, phone, emp_phone"
                 " FROM orders WHERE waybill_no != ''").fetchall()
             for r in rows:
                 if _route_is_final(r["route_status"]):
@@ -226,7 +307,7 @@ def _refresh_routes():
                 st = None
                 latest_txt = None
                 try:
-                    res = carrier_query_route(r["carrier"], r["waybill_no"])
+                    res = carrier_query_route(r["carrier"], r["waybill_no"], check_phone_no=_row_phone4(r))
                     st = res.get("route_status") or None
                     det = res.get("detail") or []
                     if det:   # 最新节点 → "MM-dd HH:mm 文本"（时间线卡片显示，替代原模拟时间线）
@@ -244,9 +325,15 @@ def _refresh_routes():
                         continue
                     # 其余失败（未开通轨迹/网络）：保持旧值，照常写检查时间节流
                 if latest_txt:
-                    c.execute("UPDATE orders SET route_status=?, route_latest=?,"
-                              " route_checked_at=datetime('now','localtime') WHERE id=?",
-                              (st or r["route_status"], latest_txt, r["id"]))
+                    sgt = _sign_time(st or r["route_status"], r["route_status"], latest_txt)   # 签收时间（2026-10-22）
+                    if sgt:
+                        c.execute("UPDATE orders SET route_status=?, route_latest=?, signed_at=?,"
+                                  " route_checked_at=datetime('now','localtime') WHERE id=?",
+                                  (st or r["route_status"], latest_txt, sgt, r["id"]))
+                    else:
+                        c.execute("UPDATE orders SET route_status=?, route_latest=?,"
+                                  " route_checked_at=datetime('now','localtime') WHERE id=?",
+                                  (st or r["route_status"], latest_txt, r["id"]))
                 else:
                     c.execute("UPDATE orders SET route_status=?,"
                               " route_checked_at=datetime('now','localtime') WHERE id=?",
@@ -338,9 +425,11 @@ def init_db():
             c.execute("ALTER TABLE orders ADD COLUMN route_checked_at TEXT DEFAULT ''")  # 轨迹检查时间（自动刷新节流）
         if "route_latest" not in cols:
             c.execute("ALTER TABLE orders ADD COLUMN route_latest TEXT DEFAULT ''")  # 最新路由节点文本（"MM-dd HH:mm 内容"）
+        if "signed_at" not in cols:
+            c.execute("ALTER TABLE orders ADD COLUMN signed_at TEXT DEFAULT ''")  # 签收时间（路由首次进入签收/回单/已送达类时的节点时间；2026-10-22 清单导出需要）
         # PO/采购员/发件人/公司/并单组：独立列（原塞在 note 标签/street 里；备注列只存手写备注）
         # merge_group：多 DN 合并发货同组标记（2026-09-20；同组下单只下一次承运商单、共享运单号）
-        for col in ("po", "buyer", "emp_name", "emp_phone", "company", "merge_group"):
+        for col in ("po", "buyer", "emp_name", "emp_phone", "company", "merge_group", "close_note", "is_owner", "abnormal"):
             if col not in cols:
                 c.execute(f"ALTER TABLE orders ADD COLUMN {col} TEXT DEFAULT ''")
         pcols = [r[1] for r in c.execute("PRAGMA table_info(addr_pool)")]
@@ -367,6 +456,8 @@ def row_to_json(r):
         "waybill_no": r["waybill_no"] if "waybill_no" in r.keys() else "",
         "route_status": r["route_status"] if "route_status" in r.keys() else "",
         "route_latest": r["route_latest"] if "route_latest" in r.keys() else "",
+        "printed_at": (r["printed_at"] or "") if "printed_at" in r.keys() else "",   # 下单时间（运单号首次写入时自动打；2026-10-22）
+        "signed_at": r["signed_at"] if "signed_at" in r.keys() else "",   # 签收时间（2026-10-22）
         "shipped_at": r["shipped_at"], "returned_at": r["returned_at"],
         "priority": r["priority"] if "priority" in r.keys() else "一般",
         "order_type": r["order_type"] if "order_type" in r.keys() else "发货单",
@@ -377,8 +468,188 @@ def row_to_json(r):
         "emp_name": r["emp_name"] if "emp_name" in r.keys() else "",
         "emp_phone": r["emp_phone"] if "emp_phone" in r.keys() else "",
         "merge_group": r["merge_group"] if "merge_group" in r.keys() else "",   # 并单组（2026-09-20 多 DN 合并发货）
+        "is_owner": r["is_owner"] if "is_owner" in r.keys() else "",   # IS负责人（2026-10-22）
+        "abnormal": r["abnormal"] if "abnormal" in r.keys() else "",   # 异常状态（2026-10-22）
         "created_at": r["created_at"],
     }
+
+
+# ---------- SAP 标签管理平台并入（2026-10-12 用户规则：复制 Label 到 Fahuo、迁移全部功能含端口） ----------
+# 原 Label 独立 Node 后端（apps/Label/server.js :8092，label.service）退役：
+# 整库读写 API 原样并入本服务 /api/label/*（语义与 Node 版一致：整库读组装 JSON /
+# 整库事务清写、payload 缺省分表保持不变 / 每天首次写入自动备份 label-YYYYMMDD.db 保留 7 份）；
+# 数据库沿用 /opt/label/data/label.db（数据不动；本地开发回退 <Fahuo>/label/data/label.db）。
+LABEL_DB_DIR = os.environ.get("LABEL_DB_DIR") or (
+    "/opt/label/data" if os.path.isdir("/opt/label/data")
+    else os.path.join(BASE, "label", "data"))
+LABEL_DB_PATH = os.path.join(LABEL_DB_DIR, "label.db")
+LABEL_BAK_DIR = os.path.join(LABEL_DB_DIR, "backup")
+_label_lock = threading.Lock()
+LABEL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS templates (code TEXT PRIMARY KEY, name TEXT, version INTEGER, status TEXT,
+  width REAL, height REAL, unit TEXT, customer TEXT, updated TEXT, elements TEXT);
+CREATE TABLE IF NOT EXISTS rules (id TEXT PRIMARY KEY, cond TEXT, template TEXT, copies TEXT, printer TEXT, active INTEGER);
+CREATE TABLE IF NOT EXISTS fields (code TEXT PRIMARY KEY, label TEXT, sap TEXT, type TEXT);
+CREATE TABLE IF NOT EXISTS customers (code TEXT PRIMARY KEY, name TEXT, kunnr TEXT, logo TEXT, contact TEXT);
+CREATE TABLE IF NOT EXISTS deliveries (dn TEXT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS history (jobid TEXT PRIMARY KEY, dn TEXT, customer TEXT, template TEXT,
+  ver INTEGER, printer TEXT, copies INTEGER, user TEXT, time TEXT, status TEXT, manual TEXT);
+"""
+
+
+def _label_connect():
+    os.makedirs(LABEL_BAK_DIR, exist_ok=True)
+    c = sqlite3.connect(LABEL_DB_PATH)
+    c.row_factory = sqlite3.Row
+    c.executescript(LABEL_SCHEMA)
+    return c
+
+
+def _label_read():
+    """整库读取：组装成与前端 loadDB() 同构的 JSON（与 Node 版 readDB 同语义）"""
+    with _label_connect() as c:
+        meta = {}
+        for r in c.execute("SELECT key, value FROM meta"):
+            try:
+                meta[r["key"]] = json.loads(r["value"])
+            except Exception:
+                meta[r["key"]] = r["value"]
+        templates = []
+        for t in c.execute("SELECT * FROM templates"):
+            d = dict(t)
+            try:
+                d["elements"] = json.loads(d.get("elements") or "[]")
+            except Exception:
+                d["elements"] = []
+            templates.append(d)
+        rules = []
+        for r in c.execute("SELECT * FROM rules"):
+            d = dict(r)
+            d["active"] = bool(d.get("active"))
+            rules.append(d)
+        deliveries = {}
+        for d in c.execute("SELECT dn, data FROM deliveries"):
+            try:
+                deliveries[d["dn"]] = json.loads(d["data"])
+            except Exception:
+                pass                                # 跳过坏行
+        history = []
+        for h in c.execute("SELECT * FROM history"):
+            d = dict(h)
+            try:
+                d["manual"] = json.loads(d.get("manual") or "{}")
+            except Exception:
+                d["manual"] = {}
+            history.append(d)
+        out = {
+            "meta": meta, "templates": templates, "rules": rules,
+            "fields": [dict(r) for r in c.execute("SELECT * FROM fields")],
+            "customers": [dict(r) for r in c.execute("SELECT * FROM customers")],
+            "deliveries": deliveries, "history": history,
+        }
+    if meta.get("seedVersion") is None and not templates:
+        out["__empty"] = True                           # 空库：等前端播种
+    return out
+
+
+def _label_write(data):
+    """整库写入：事务内逐表清写（payload 缺省分表保持不变；与 Node 版 writeDB 同语义同默认值）"""
+    with _label_lock:
+        with _label_connect() as c:
+            c.execute("BEGIN")
+            try:
+                if isinstance(data.get("meta"), dict):
+                    c.execute("DELETE FROM meta")
+                    for k, v in data["meta"].items():
+                        c.execute("INSERT INTO meta (key, value) VALUES (?, ?)",
+                                  (k, json.dumps(v, ensure_ascii=False)))
+                if isinstance(data.get("templates"), list):
+                    c.execute("DELETE FROM templates")
+                    for t in data["templates"]:
+                        if not t or not t.get("code"):
+                            continue
+                        c.execute(
+                            "INSERT INTO templates (code,name,version,status,width,height,"
+                            "unit,customer,updated,elements) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (t["code"], t.get("name") or "", t.get("version") or 1,
+                             t.get("status") or "draft", t.get("width") or 0,
+                             t.get("height") or 0, t.get("unit") or "mm",
+                             t.get("customer") or "", t.get("updated") or "",
+                             json.dumps(t.get("elements") or [], ensure_ascii=False)))
+                if isinstance(data.get("rules"), list):
+                    c.execute("DELETE FROM rules")
+                    for r in data["rules"]:
+                        if not r or not r.get("id"):
+                            continue
+                        c.execute(
+                            "INSERT INTO rules (id,cond,template,copies,printer,active)"
+                            " VALUES (?,?,?,?,?,?)",
+                            (r["id"], r.get("cond") or "", r.get("template") or "",
+                             str(r.get("copies") or "1"), r.get("printer") or "",
+                             1 if r.get("active") else 0))
+                if isinstance(data.get("fields"), list):
+                    c.execute("DELETE FROM fields")
+                    for f in data["fields"]:
+                        if not f or not f.get("code"):
+                            continue
+                        c.execute(
+                            "INSERT INTO fields (code,label,sap,type) VALUES (?,?,?,?)",
+                            (f["code"], f.get("label") or "", f.get("sap") or "",
+                             f.get("type") or "SAP"))
+                if isinstance(data.get("customers"), list):
+                    c.execute("DELETE FROM customers")
+                    for x in data["customers"]:
+                        if not x or not x.get("code"):
+                            continue
+                        c.execute(
+                            "INSERT INTO customers (code,name,kunnr,logo,contact)"
+                            " VALUES (?,?,?,?,?)",
+                            (x["code"], x.get("name") or "", x.get("kunnr") or "",
+                             x.get("logo") or "", x.get("contact") or ""))
+                if isinstance(data.get("deliveries"), dict):
+                    c.execute("DELETE FROM deliveries")
+                    for dn, v in data["deliveries"].items():
+                        c.execute("INSERT INTO deliveries (dn,data) VALUES (?,?)",
+                                  (dn, json.dumps(v or {}, ensure_ascii=False)))
+                if isinstance(data.get("history"), list):
+                    c.execute("DELETE FROM history")
+                    for h in data["history"]:
+                        if not h or not h.get("jobid"):
+                            continue
+                        c.execute(
+                            "INSERT INTO history (jobid,dn,customer,template,ver,printer,"
+                            "copies,user,time,status,manual) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (h["jobid"], h.get("dn") or "", h.get("customer") or "",
+                             h.get("template") or "", h.get("ver") or 1,
+                             h.get("printer") or "", h.get("copies") or 1,
+                             h.get("user") or "", h.get("time") or "",
+                             h.get("status") or "",
+                             json.dumps(h.get("manual") or {}, ensure_ascii=False)))
+                c.execute("COMMIT")
+            except Exception:
+                c.execute("ROLLBACK")
+                raise
+
+
+_label_bak_day = [""]
+
+
+def _label_backup():
+    """每天首次写入时复制 label.db 到 backup/label-YYYYMMDD.db，保留最近 7 份（与 Node 版同语义）"""
+    day = time.strftime("%Y%m%d")
+    if _label_bak_day[0] == day:
+        return
+    _label_bak_day[0] = day
+    try:
+        if os.path.exists(LABEL_DB_PATH):
+            shutil.copy2(LABEL_DB_PATH, os.path.join(LABEL_BAK_DIR, "label-%s.db" % day))
+            all_bak = sorted(f for f in os.listdir(LABEL_BAK_DIR)
+                             if re.match(r"^label-\d{8}\.db$", f))
+            while len(all_bak) > 7:
+                os.unlink(os.path.join(LABEL_BAK_DIR, all_bak.pop(0)))
+    except Exception:
+        pass                                        # 备份失败不影响主流程
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -429,12 +700,18 @@ class Handler(SimpleHTTPRequestHandler):
             return self._upload_list(qs)
         if re.search(r"/api/carrier/route$", path):
             return self._carrier_route(qs)
+        if re.search(r"/api/carrier/refresh_route$", path):
+            return self._carrier_refresh_route(qs)
         if re.search(r"/api/carrier/label$", path):
             return self._carrier_label(qs)
         if re.search(r"/api/carrier/label_ot$", path):
             return self._carrier_label_ot_get(qs)
         if re.search(r"/api/addrpool$", path):
             return self._addrpool_list()
+        if re.search(r"/api/label/health$", path):
+            return self._label_health()
+        if re.search(r"/api/label/db$", path):
+            return self._label_db_get()
         return super().do_GET()  # 静态文件
 
     def do_POST(self):
@@ -459,6 +736,8 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.search(r"/api/orders/(\d+)$", urlparse(self.path).path)
         if m:
             return self._update_order(int(m.group(1)))
+        if re.search(r"/api/label/db$", urlparse(self.path).path):
+            return self._label_db_put()
         self._json(404, {"error": "not found"})
 
     def do_DELETE(self):
@@ -475,6 +754,35 @@ class Handler(SimpleHTTPRequestHandler):
     # ---------- 业务 ----------
     # （2026-10-08 撤 _signback_addr：顺丰回单返回到方地址为固定值（顺丰账号侧已设定），
     #   平台侧不配置、不下发、不提示；接口无调用方，属死代码）
+
+    def _label_health(self):
+        """GET /api/label/health（Label 并入，2026-10-12；与原 Node :8092 /api/health 同语义）"""
+        try:
+            with _label_connect() as c:
+                cnt = lambda t: c.execute("SELECT COUNT(*) AS n FROM " + t).fetchone()["n"]
+                out = {"ok": True, "engine": "sqlite", "port": PORT,
+                       "templates": cnt("templates"), "customers": cnt("customers"),
+                       "history": cnt("history")}
+            self._json(200, out)
+        except Exception as e:
+            self._json(500, {"ok": False, "error": str(e)})
+
+    def _label_db_get(self):
+        """GET /api/label/db → 整库 JSON（前端 syncDB 对账/播种）"""
+        try:
+            self._json(200, _label_read())
+        except Exception as e:
+            self._json(500, {"ok": False, "error": str(e)})
+
+    def _label_db_put(self):
+        """PUT /api/label/db → 每日备份 + 整库事务清写"""
+        try:
+            d = self._body()
+            _label_backup()
+            _label_write(d)
+            self._json(200, {"ok": True})
+        except Exception as e:
+            self._json(400, {"ok": False, "error": str(e)})
 
     def _addrpool_list(self):
         """GET /api/addrpool → 共享地址池列表（最新在前）"""
@@ -607,11 +915,54 @@ class Handler(SimpleHTTPRequestHandler):
         waybill = re.sub(r"[^\w-]", "", qs.get("waybill_no", [""])[0])[:40]
         if not carrier or not waybill:
             return self._json(400, {"error": "carrier 和 waybill_no 必填"})
+        # 2026-10-24 顺丰 API 要求 checkPhoneNo：从 DB 取收件人手机后4位
+        p4 = (qs.get("phone4", [""])[0]).strip()
+        if not p4:
+            with db() as c:
+                r = c.execute("SELECT phone, emp_phone FROM orders WHERE waybill_no=?", (waybill,)).fetchone()
+                if r:
+                    p4 = _phone_last4(r["phone"] or r["emp_phone"])
         try:
-            res = carrier_query_route(carrier, waybill)
+            res = carrier_query_route(carrier, waybill, check_phone_no=p4)
         except Exception as e:
             return self._json(400, {"error": str(e)})
         self._json(200, res)
+
+    def _carrier_refresh_route(self, qs):
+        """GET /api/carrier/refresh_route?waybill_no=xxx → 手动刷新指定运单的路由状态（2026-10-22 用户规则「SF5141480295413 已经在派送了， 但是页面显示还是待揽收」）"""
+        if carrier_query_route is None:
+            return self._json(500, {"error": "carriers 包缺失，请部署 carriers/ 目录"})
+        waybill = re.sub(r"[^\w-]", "", qs.get("waybill_no", [""])[0])[:40]
+        if not waybill:
+            return self._json(400, {"error": "waybill_no 必填"})
+        with db() as c:
+            r = c.execute("SELECT id, carrier, waybill_no, route_status, phone, emp_phone FROM orders WHERE waybill_no=?", (waybill,)).fetchone()
+        if not r:
+            return self._json(404, {"error": "运单不存在"})
+        try:
+            res = carrier_query_route(r["carrier"], waybill, check_phone_no=_row_phone4(r))
+            st = res.get("route_status") or None
+            det = res.get("detail") or []
+            latest_txt = None
+            if det:
+                last = det[-1]
+                t = str(last.get("acceptTime") or "")[5:16]
+                latest_txt = (t + " " + str(last.get("remark") or last.get("acceptAddress") or "")).strip()
+            with db() as c:
+                if latest_txt:
+                    sgt = _sign_time(st or r["route_status"], r["route_status"], latest_txt)   # 签收时间（2026-10-22）
+                    if sgt:
+                        c.execute("UPDATE orders SET route_status=?, route_latest=?, signed_at=?, route_checked_at=datetime('now','localtime') WHERE id=?",
+                                  (st or r["route_status"], latest_txt, sgt, r["id"]))
+                    else:
+                        c.execute("UPDATE orders SET route_status=?, route_latest=?, route_checked_at=datetime('now','localtime') WHERE id=?",
+                                  (st or r["route_status"], latest_txt, r["id"]))
+                else:
+                    c.execute("UPDATE orders SET route_status=?, route_checked_at=datetime('now','localtime') WHERE id=?",
+                              (st or r["route_status"], r["id"]))
+            self._json(200, {"ok": True, "route_status": st or r["route_status"], "route_latest": latest_txt})
+        except Exception as e:
+            return self._json(400, {"error": str(e)})
 
     def _label_pdf_b64(self, carrier, waybill, back=False):
         """单运单取官方面单 PDF base64（内嵌 base64 / url+token 两形态；失败抛承运商原始错误）
@@ -795,8 +1146,8 @@ class Handler(SimpleHTTPRequestHandler):
         d = self._body()
         with db() as c:
             cur = c.execute(
-                "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone,merge_group)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO orders (so,province,city,district,street,company,name,phone,carrier,note,ship_date,priority,order_type,so_no,po,buyer,emp_name,emp_phone,merge_group,is_owner,abnormal)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (d.get("so", ""), d.get("province", ""), d.get("city", ""),
                  d.get("district", ""), d.get("street", ""), d.get("company", ""),
                  d.get("name", ""),
@@ -804,7 +1155,8 @@ class Handler(SimpleHTTPRequestHandler):
                  d.get("ship_date", ""), d.get("priority", "一般"),
                  d.get("order_type", "发货单"), d.get("so_no", ""),
                  d.get("po", ""), d.get("buyer", ""),
-                 d.get("emp_name", ""), d.get("emp_phone", ""), d.get("merge_group", "")))
+                 d.get("emp_name", ""), d.get("emp_phone", ""), d.get("merge_group", ""),
+                 d.get("is_owner", ""), d.get("abnormal", "")))
             # DN 发货单收件地址自动入池（2026-09-24）：addr_key 去重 OR IGNORE 零副作用，
             # 地址簿恒覆盖全部 DN 收件地址（历史单已一次性回填）；外协/其他单仍走录入页勾选
             if d.get("order_type", "发货单") == "发货单":
@@ -827,7 +1179,8 @@ class Handler(SimpleHTTPRequestHandler):
         for k in ("so", "province", "city", "district", "street", "company", "name",
                   "phone", "carrier", "note", "ship_date", "status",
                   "waybill_no", "route_status", "priority", "order_type", "so_no",
-                  "order_resp", "po", "buyer", "emp_name", "emp_phone", "merge_group"):
+                  "order_resp", "po", "buyer", "emp_name", "emp_phone", "merge_group",
+                  "is_owner", "abnormal"):
             if k in d:
                 fields.append(f"{k}=?")
                 vals.append(str(d[k]))
@@ -837,6 +1190,15 @@ class Handler(SimpleHTTPRequestHandler):
             fields.append(f"{STATUS_TS[d['status']]}=datetime('now','localtime')")
         vals.append(oid)
         with db() as c:
+            old = c.execute("SELECT waybill_no, route_status FROM orders WHERE id=?", (oid,)).fetchone()
+            if old and "waybill_no" in d and d["waybill_no"] and not old["waybill_no"]:
+                # 下单时间：运单号首次写入（下单成功回写；2026-10-22 清单导出需要）
+                fields.append("printed_at=COALESCE(printed_at, datetime('now','localtime'))")
+            if old and "route_status" in d \
+               and re.search(r"签收|回单|已送达", d["route_status"] or "") \
+               and not re.search(r"签收|回单|已送达", old["route_status"] or ""):
+                # 签收时间：人工置达/置回单路径（专车「> 送达？」等；2026-10-22）
+                fields.append("signed_at=COALESCE(NULLIF(signed_at, ''), datetime('now','localtime'))")
             c.execute(f"UPDATE orders SET {', '.join(fields)} WHERE id=?", vals)
             r = c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
         if not r:
@@ -846,7 +1208,8 @@ class Handler(SimpleHTTPRequestHandler):
     def _stats(self):
         """看板统计（2026-09-16 用户规则修正：以"揽收"为发货判定——
         已发货 = 运单存在且路由状态≠待揽收；未揽收（含未下单）才算待发货/超时。
-        旧口径用 status/shipped_at，下单揽收后 status 仍 pending，超时/昨日发货全错）"""
+        旧口径用 status/shipped_at，下单揽收后 status 仍 pending，超时/昨日发货全错；
+        2026-10-21 用户规则「今日待发货恢复到之前的逻辑」：恢复 ship_date=今天 口径）"""
         shipped = "waybill_no<>'' AND COALESCE(route_status,'')<>'待揽收'"
         unshipped = "(waybill_no='' OR COALESCE(route_status,'')='待揽收')"
         with db() as c:

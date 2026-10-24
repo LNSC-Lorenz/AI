@@ -16,7 +16,7 @@ def place_order(order, cfg=None):
     return _real_place_order(order, cfg)
 
 
-def query_route(waybill_no, cfg=None):
+def query_route(waybill_no, cfg=None, check_phone_no=""):
     cfg = cfg or base.get_cfg("KY")
     if not base.configured(cfg):
         raise base.CarrierError("跨越未配置密钥，无法查询轨迹")

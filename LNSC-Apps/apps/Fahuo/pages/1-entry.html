@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LNSC 全链发货平台 | LNSC Full-Chain Delivery System</title>
-<link rel="stylesheet" href="../shared/style.css">
+<link rel="stylesheet" href="../shared/style.css?v=20261013fq">
 <link rel="icon" type="image/svg+xml" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../shared/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -31,8 +31,9 @@
     </div>
     <div class="mode">
       <div class="mode-num">- 5 -</div>
-      <a class="mode-btn" href="5-trace.html">追溯</a>
+      <a class="mode-btn" href="6-label.html">标签</a>
     </div>
+    <!-- 追溯页已移除（2026-10-12 用户规则「移除追溯的页面和功能」） -->
   </aside>
 
   <!-- 中间：主内容 -->
@@ -52,7 +53,9 @@
         <span class="tb-clock"><b id="tbTime">--:--:--</b><i id="tbDate">----/--/--</i></span>
         <button class="btn icon-btn" type="button" title="警告" aria-label="警告"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
         <span class="api-dot" id="apiDot" title="API 状态检测中…"></span>
+        <!-- 右上标签图标按钮已撤（2026-10-12 用户规则：入口终定=左侧导航「标签」块） -->
         <button class="btn icon-btn" type="button" title="设置" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        <button class="btn icon-btn" type="button" title="HELP/操作说明" aria-label="HELP/操作说明" onclick="location.href='7-help.html'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
         <button class="btn icon-btn" type="button" title="关于" aria-label="关于"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
       </div>
     </header>
@@ -117,24 +120,51 @@
             <div class="type-dn-row">
               <!-- DN 取消 10 位限制（2026-09-20 用户规则：多 DN 合并发货同一运单）：
                    多个 DN 连输或逗号分隔，按 82600+5位 自动拆分多行 -->
-              <label class="fld"><span>DN *</span><input id="soInput" class="line-input" type="text" inputmode="numeric"
-                     title="多个 DN 可连输或逗号分隔：按 82600+5位 自动拆分多行，下单合并同一运单"></label>
+              <label class="fld"><span>DN</span><input id="soInput" class="line-input" type="text" inputmode="numeric"
+                     title="多个 DN 可连输或逗号分隔：按 82600+5位 自动拆分多行，下单合并同一运单"><b class="req">*</b></label>
+            </div>
+            <div class="type-dn-row type-dn-row-2col">
               <!-- SO 取消写入限制（2026-10-08 用户规则：取消录单时候 SO 的写入限制）：
                    去掉 maxlength=10 与 inputmode=numeric —— SO 可任意文本、任意长度（仍为选填）；
                    前后端均不校验 SO 格式（入库原样存 so_no，仅下单页运单备注按值拼接） -->
               <label class="fld"><span>SO</span><input id="soNoInput" class="line-input" type="text"></label>
+              <label class="fld"><select id="isOwnerInput" class="line-input">
+                <option value="">请选择SO负责人</option>
+                <option value="Linglin Zheng (Sonya)">Linglin Zheng (Sonya)</option>
+                <option value="Yuxiang Zhu (Lynn)">Yuxiang Zhu (Lynn)</option>
+                <option value="Xia Yang (Sherry)">Xia Yang (Sherry)</option>
+                <option value="Shanshan Tian (Elaine)">Shanshan Tian (Elaine)</option>
+                <option value="Lili Zhou (Cassie)">Lili Zhou (Cassie)</option>
+                <option value="Jing Ding (Sophia)">Jing Ding (Sophia)</option>
+                <option value="Wen Shen (Sally)">Wen Shen (Sally)</option>
+                <option value="Jiayan Wu (Linda)">Jiayan Wu (Linda)</option>
+              </select></label>
+            </div>
+            <div class="type-dn-row toggle-row toggle-row-down">
+              <label class="chk-wrap"><input type="checkbox" id="tglAbnormal" class="pool-check pool-check-sm">异常</label>
+              <span class="abn-sub" id="abnSub">
+                <span class="abn-bracket">[</span><label class="chk-wrap"><input type="checkbox" id="tglAllowShip" class="pool-check pool-check-sm" name="abnShip" disabled>可以发货</label>
+                <label class="chk-wrap"><input type="checkbox" id="tglNoShip" class="pool-check pool-check-sm" name="abnShip" disabled>暂不发货</label><span class="abn-bracket">]</span>
+              </span>
+              <label class="chk-wrap"><input type="checkbox" id="tglShowAbnormal" class="pool-check pool-check-sm">显示异常行</label>
             </div>
           </div>
           <!-- 外协单：PO + 采购员 + 公司电话 -->
           <div class="type-mode" id="modeOut" hidden>
-            <label class="fld"><span>PO *</span><input id="poInput" class="line-input" type="text" inputmode="numeric"></label>
-            <label class="fld"><span>采购员 *</span><input id="buyerInput" class="line-input" type="text"></label>
+            <label class="fld"><span>DN</span><input id="poInput" class="line-input" type="text" inputmode="numeric" title="外协单 PO 号"><b class="req">*</b></label>
+            <label class="fld"><span>采购员</span><select id="buyerInput" class="line-input">
+              <option value="">请选择采购员</option>
+              <option value="Lan Wu (Lansing)">Lan Wu (Lansing)</option>
+              <option value="Yun Liu">Yun Liu</option>
+              <option value="Weidan Gu (Nora)">Weidan Gu (Nora)</option>
+              <option value="Tao Zhang (Neil)">Tao Zhang (Neil)</option>
+            </select><b class="req">*</b></label>
             <div class="buyer-phone"><span>公司电话</span><b>0519 6822-8088</b></div>
           </div>
           <!-- 其他：员工快递（员工姓名 + 电话） -->
           <div class="type-mode" id="modeOther" hidden>
-            <label class="fld"><span>员工姓名 *</span><input id="empNameInput" class="line-input" type="text"></label>
-            <label class="fld"><span>员工电话 *</span><input id="empPhoneInput" class="line-input" type="text" inputmode="numeric" maxlength="11"></label>
+            <label class="fld"><span>员工姓名</span><input id="empNameInput" class="line-input" type="text"><b class="req">*</b></label>
+            <label class="fld"><span>员工电话</span><input id="empPhoneInput" class="line-input" type="text" inputmode="numeric" maxlength="11"><b class="req">*</b></label>
           </div>
           <input type="file" id="upFileInput" hidden multiple>
           <button id="btnUpload" class="btn upload-btn" type="button">上传文件</button>
@@ -229,6 +259,6 @@
 <script src="../shared/lib/tesseract.min.js"></script>
 <script src="../shared/region.js"></script>
 <script src="../shared/topbar.js"></script>
-<script src="1-entry.js"></script>
+<script src="1-entry.js?v=20261013fk"></script>
 </body>
 </html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>标签设计器 · SAP Label Designer</title>
+  <link rel="icon" type="image/svg+xml" href="assets/lechler-c-logo-symbol-mark-cmyk-00.svg">
+  <link rel="icon" type="image/png" href="assets/lechler-c-logo-symbol-mark-cmyk-00.png">
+  <!-- 只加载设计器样式：本页没有外壳，designer.css 自带 html{font-size} 兜底基准字号 -->
+  <link rel="stylesheet" href="css/designer.css">
+</head>
+<body>
+  <!-- 独立 / 可嵌入（iframe）的标签设计器；无页眉、侧边栏、页脚。
+       挂载契约：<div id="label-designer">，脚本自动注入 .ld-toolbar / .ld-corow /
+       .ld-grid 三栏（组件｜设计界面+打印预览｜属性）并驱动 .ld-modal 覆盖层。 -->
+  <div id="label-designer" class="label-designer"></div>
+
+  <!-- 覆盖层：提示 + 弹窗（宿主缺省时脚本也会按需创建） -->
+  <div id="ld-toast" class="ld-toast" hidden></div>
+
+  <div id="ld-modal" class="ld-modal" hidden>
+    <div class="ld-modal-box">
+      <div class="ld-modal-head">
+        <span id="ld-modal-title">预览</span>
+        <div class="ld-modal-head-actions">
+          <button id="ld-modal-action" class="btn-sm" hidden></button>
+          <button id="ld-modal-close" class="ld-close" title="关闭">✕</button>
+        </div>
+      </div>
+      <div class="ld-modal-body" id="ld-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 共享内核（数据 + 渲染引擎）→ 设计器 -->
+  <script src="js/label-core.js"></script>
+  <script src="js/designer.js"></script>
+</body>
+</html>

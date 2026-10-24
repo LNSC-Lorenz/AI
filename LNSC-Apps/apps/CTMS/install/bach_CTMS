@@ -90,12 +90,27 @@ else
 fi
 
 # ---------- 2. 前端文件 → /var/www/lnsc-apps/apps/ctms ----------
+# 目录结构（2026-10 重组为标准 HTML5 布局）：css/ js/ lib/ assets/ data/
 if [ "$SAME_DIR" -eq 0 ]; then
   log "拷贝前端文件 → $APP_DIR"
   mkdir -p "$APP_DIR"
-  cp -f "$SRC_DIR/index.html" "$SRC_DIR/styles.css" "$SRC_DIR/app.js" "$SRC_DIR/db.js" \
-        "$SRC_DIR/user_info.js" "$SRC_DIR/xlsx.full.min.js" \
-        "$SRC_DIR/车间工具库存管理-信息表.xlsx" "$APP_DIR/"
+  cp -f "$SRC_DIR/index.html" "$APP_DIR/"
+  cp -rf "$SRC_DIR/css" "$SRC_DIR/js" "$SRC_DIR/lib" "$SRC_DIR/assets" "$APP_DIR/"
+  # 旧版扁平布局迁移：信息表（含上传备份）移入 data/；其余旧扁平文件删除
+  mkdir -p "$APP_DIR/data"
+  if [ -f "$APP_DIR/车间工具库存管理-信息表.xlsx" ] && [ ! -f "$APP_DIR/data/车间工具库存管理-信息表.xlsx" ]; then
+    mv -f "$APP_DIR/车间工具库存管理-信息表.xlsx" "$APP_DIR/data/"
+    log "旧版信息表已迁移到 data/"
+  fi
+  mv -f "$APP_DIR"/车间工具库存管理-信息表-备份*.xlsx "$APP_DIR/data/" 2>/dev/null || true
+  rm -f "$APP_DIR/styles.css" "$APP_DIR/app.js" "$APP_DIR/db.js" "$APP_DIR/user_info.js" \
+        "$APP_DIR/xlsx.full.min.js" \
+        "$APP_DIR/lechler-c-logo-symbol-mark-cmyk-00.png" "$APP_DIR/lechler-c-logo-symbol-mark-cmyk-00.svg" \
+        "$APP_DIR/车间工具库存管理-信息表.xlsx"
+  # 信息表：服务器已有（上传入口维护）则保留；没有才用仓库内的
+  if [ ! -f "$APP_DIR/data/车间工具库存管理-信息表.xlsx" ]; then
+    cp -f "$SRC_DIR/data/车间工具库存管理-信息表.xlsx" "$APP_DIR/data/"
+  fi
 else
   log "源目录即工作目录，跳过前端拷贝"
 fi
@@ -105,6 +120,8 @@ log "拷贝后端文件 → $SRV_DIR"
 mkdir -p "$SRV_DIR"
 cp -f "$SRC_DIR/server.js" "$SRC_DIR/user_info.txt" "$SRV_DIR/"
 [ -f "$SRC_DIR/initial_inventory.js" ] && cp -f "$SRC_DIR/initial_inventory.js" "$SRV_DIR/" || true
+# SAP RFC 脚本（可选能力，venv + .env 部署见 rfc/README.md）
+[ -d "$SRC_DIR/rfc" ] && cp -rf "$SRC_DIR/rfc" "$SRV_DIR/" || true
 # 数据库：已存在则保留（库存数据优先）；没有则用仓库内的（或留空由 initial_inventory.js seed）
 if [ ! -f "$SRV_DIR/toolinventory-server.db" ] && [ -f "$SRC_DIR/toolinventory-server.db" ]; then
   cp -f "$SRC_DIR/toolinventory-server.db" "$SRV_DIR/"

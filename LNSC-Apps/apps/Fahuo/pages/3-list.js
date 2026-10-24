@@ -5,6 +5,8 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+/* HTML 转义（2026-10-22：DN 列姓名 badge 用 innerHTML 渲染需转义） */
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 /* 备注列只显示收件区纯备注：剥离入库时拼接的发件方结构化标签 */
 const cleanNote = n => (n || "")
   .replace(/PO：\S+|采购员：\S+|发件人：\S+(?:\s+\d+)?|附件：\S+/g, "").trim();
@@ -55,6 +57,23 @@ const preHtml = (s, pre) => {
 };
 const dnHtml = dn => preHtml(dn, "82600");
 const soHtml = so => preHtml(so, "32600");
+const poHtml = po => preHtml(po, "98260");   /* PO：98260 前缀上标（与录单/下单页一致） */
+/* DN 列第二行 badge 组：▼ 要求发货日期 + ▶ 承运商下单日期 + 姓名（黑底白字同款；最多跨 3 列；
+   2026-10-23 用户规则「下单与清单里的 DN列 的第二行 的姓名…调为跨3列， 添加2个显示块， 第一个是要求发货日期，第二个是实际承运商的下单日期」） */
+const ymdShort = s => { const m = String(s || "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1].slice(2) + "-" + m[2] + "-" + m[3] : ""; };
+function dnSecondRow(o, owner) {
+  const b = [];
+  const sd = ymdShort(o.ship_date);
+  if (sd) b.push('<span class="dn-badge" title="要求发货日期">▼ ' + sd + "</span>");
+  const pd = ymdShort(o.printed_at);
+  if (pd) b.push('<span class="dn-badge" title="承运商下单日期">▶ ' + pd + "</span>");
+  if (owner) b.push('<span class="dn-owner">' + esc(owner) + "</span>");
+  return b.length ? '<div class="dn-badges">' + b.join("") + "</div>" : "";
+}
+/* 外协单 PO/采购员：优先独立字段，旧数据（标签塞在 note 里的）回退标签反解（同 2-order.js） */
+const poOf    = o => o.po    || ((o.note || "").match(/PO：(\S+)/) || [])[1] || "";
+const buyerOf = o => o.buyer || ((o.note || "").match(/采购员：(\S+)/) || [])[1] || "";
+const senderOf = o => o.emp_name || ((o.note || "").match(/发件人：(\S+)/) || [])[1] || "";   /* 其他（员工快递）发件人 */
 
 /* 姓名+电话两行（2026-09-15 用户规则：电话换行显示在姓名下） */
 function fillNameCell(td, o) {
@@ -69,11 +88,22 @@ function addrLines(o) {
   for (const x of [o.province, o.city, o.district]) if (x && p[p.length - 1] !== x) p.push(x);
   return [p.join(""), o.street || ""];
 }
+/* 地址列（2026-10-22 用户规则「清单页面里的街道， 如果超过13个汉字， 那在地址列， 与省市区显示在一行。且公司显示在第二行；
+   如果超出13个字，那就换行显示，且公司显示在第三行」）：
+   街道≤13字 → 省市区+街道 第一行、公司第二行；街道>13字 → 省市区第一行、街道第二行、公司第三行（同录单页 18 字规则版式） */
 function fillAddrCell(td, o) {
-  const [l1, l2] = addrLines(o);
-  const d1 = document.createElement("div"); d1.textContent = l1 || (o.address || "");
-  td.appendChild(d1);
-  if (l2) { const d2 = document.createElement("div"); d2.textContent = l2; td.appendChild(d2); }
+  const [region, street] = addrLines(o);
+  const company = o.company || "";
+  const d1 = document.createElement("div");
+  if (street && street.length > 13) {
+    d1.textContent = region || (o.address || "");
+    td.appendChild(d1);
+    const d2 = document.createElement("div"); d2.textContent = street; td.appendChild(d2);
+  } else {
+    d1.textContent = (region + street) || (o.address || "");
+    td.appendChild(d1);
+  }
+  if (company) { const dc = document.createElement("div"); dc.textContent = company; td.appendChild(dc); }
 }
 
 /* ----- 发货照片（2026-09-16）：共享盘 \\\\10.86.180.24\\…\\01_ShippingPhotos_Send（年/月/日递进），
@@ -100,6 +130,131 @@ function fillPhotoCell(td, o) {
     s.addEventListener("click", () => openShipPhotos(o.so, files));
   }
   td.appendChild(s);
+  /* 上传文件图标（同一行并排；2026-10-15 用户规则系列 v=aw/ax/ay/br/cc，2026-10-22 用户规则
+     「清单里查看上传文件的图标和功能没有了」重建——JS 曾在旧版覆盖中丢失，CSS 类 .file-ic/.pm-file-* 保留）：
+     显示该 DN 在 Upload/<DN>/ 的附件数量，>0 变深可点 → 预览弹窗（内含「+ 上传」） */
+  const n = uploadCounts[o.so || ""] || 0;
+  const f = document.createElement("span");
+  f.className = "photo-ic file-ic" + (n ? " has" : "");
+  f.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round">'
+    + '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>'
+    + '<polyline points="14 2 14 8 20 8"/></svg>'
+    + (n ? '<b class="file-n">' + n + "</b>" : "");
+  if (n) {
+    f.title = `上传文件 ${n} 个（点击查看）`;
+    f.addEventListener("click", () => openUploadFiles(o.so));
+  } else {
+    f.title = "上传文件（无；点击照片图标旁的图标查看）";
+  }
+  td.appendChild(f);
+}
+
+/* ----- 录单上传文件（Upload/<DN>/）：计数一次全取（GET /api/upload 不带 dn → {counts:{dn:n}}） ----- */
+let uploadCounts = {};
+async function fetchUploadCounts() {
+  if (!API_BASE) return;   /* 离线模式无上传服务，全部灰图标 */
+  try {
+    const r = await fetch(API_BASE + "/upload?t=" + Date.now(), { signal: AbortSignal.timeout(5000) });
+    if (r.ok) uploadCounts = (await r.json()).counts || {};
+  } catch (e) { /* 不阻塞清单 */ }
+}
+
+/* 上传文件预览弹窗：文件卡片列表（图片直显 / PDF iframe / Excel SheetJS / Word docx-preview），
+   文件名=下载链接（2026-10-20 v=cc）；头部「+ 上传」上传到 Upload/<DN>/ 后刷新列表与图标（v=ax） */
+const UP_IMG_EXTS = ["png", "jpg", "jpeg", "gif", "bmp", "webp"];
+async function openUploadFiles(dn) {
+  const mask = document.createElement("div");
+  mask.className = "pm-mask";
+  const box = document.createElement("div");
+  box.className = "pm-box";
+  mask.appendChild(box);
+  mask.addEventListener("click", e => { if (e.target === mask) mask.remove(); });
+  const head = document.createElement("div");
+  head.className = "pm-head";
+  const ttl = document.createElement("b");
+  ttl.textContent = "上传文件：" + dn;
+  const sp = document.createElement("span"); sp.className = "spacer";
+  const upBtn = document.createElement("button");
+  upBtn.className = "btn"; upBtn.type = "button"; upBtn.textContent = "+ 上传";
+  const cls = document.createElement("button");
+  cls.className = "btn"; cls.type = "button"; cls.textContent = "✕";
+  cls.addEventListener("click", () => mask.remove());
+  head.append(ttl, sp, upBtn, cls);
+  const body = document.createElement("div");
+  box.append(head, body);
+  document.body.appendChild(mask);
+  upBtn.addEventListener("click", () => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.multiple = true;
+    inp.addEventListener("change", async () => {
+      for (const file of inp.files) {
+        try {
+          await fetch(`${API_BASE}/upload?dn=${encodeURIComponent(dn)}&name=${encodeURIComponent(file.name)}`,
+            { method: "POST", body: await file.arrayBuffer() });
+        } catch (e) { /* 单文件失败不阻塞其余 */ }
+      }
+      await fetchUploadCounts();          /* 刷新计数 */
+      renderRows(viewList);               /* 刷新清单行图标 */
+      await loadFiles();                  /* 刷新弹窗列表（v=ax：上传后自动刷新） */
+    });
+    inp.click();
+  });
+  async function loadFiles() {
+    body.innerHTML = "";
+    let files = [];
+    try {
+      const r = await fetch(`${API_BASE}/upload?dn=${encodeURIComponent(dn)}`);
+      if (r.ok) files = (await r.json()).files || [];
+    } catch (e) { /* 空列表兜底 */ }
+    if (!files.length) { body.innerHTML = '<div class="pm-empty">暂无上传文件</div>'; return; }
+    files.forEach(fn => body.appendChild(upFileCard(dn, fn)));
+  }
+  await loadFiles();
+}
+
+/* 单个文件卡片：文件名下载链接 + 按格式预览 */
+function upFileCard(dn, fn) {
+  const ext = (fn.split(".").pop() || "").toLowerCase();
+  const url = `../Upload/${dn}/${encodeURIComponent(fn)}`;   /* Upload/ 在应用根（pages/ 上一级） */
+  const card = document.createElement("div");
+  card.className = "pm-file-card";
+  const name = document.createElement("a");
+  name.className = "pm-file-link pm-file-name";
+  name.textContent = fn; name.href = url; name.download = fn;
+  card.appendChild(name);
+  if (UP_IMG_EXTS.includes(ext)) {
+    const im = document.createElement("img");
+    im.src = url; im.alt = fn;
+    card.appendChild(im);
+  } else if (ext === "pdf") {
+    const fr = document.createElement("iframe");
+    fr.className = "pm-frame"; fr.src = url;
+    card.appendChild(fr);
+  } else if (["xlsx", "xls", "csv"].includes(ext) || ext === "docx") {
+    const doc = document.createElement("div");
+    doc.className = "pm-doc";
+    const inner = document.createElement("div");
+    inner.className = "pm-doc-inner";
+    doc.appendChild(inner);
+    card.appendChild(doc);
+    fetch(url).then(r => r.arrayBuffer()).then(buf => {
+      if (ext === "docx") return docx.renderAsync(buf, inner);
+      const wb = XLSX.read(buf, { type: "array" });
+      inner.innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+    }).catch(() => { inner.textContent = "预览失败：" + fn; });
+    addDocWheelZoom(doc, inner);   /* 滚轮缩放 0.2×–3×（2026-10-20 v=br） */
+  }
+  return card;
+}
+/* Excel/Word 预览鼠标滚轮缩放（0.2×–3×；2026-10-20 用户规则） */
+function addDocWheelZoom(doc, inner) {
+  let scale = 1;
+  doc.addEventListener("wheel", e => {
+    e.preventDefault();
+    scale = Math.min(3, Math.max(0.2, scale + (e.deltaY < 0 ? 0.1 : -0.1)));
+    inner.style.transform = `scale(${scale})`;
+  }, { passive: false });
 }
 
 /* 发货照片预览弹窗：整列大图，点图新开页看原图；点遮罩/关闭退出 */
@@ -202,7 +357,9 @@ function openLightbox(srcs, idx) {
   show(idx);
 }
 
-/* ----- 渲染（11 列：备注列在最后；2026-09-16 用户规则） ----- */
+/* ----- 渲染（10 列：备注列在最后；2026-09-16 用户规则；
+   回单日期列 2026-10-15 已并入下单状态列、从数组移除——残留单元格会撑出第 11 格导致整表列不对齐；
+   姓名跨列用视觉溢出（nm-span），不用 colspan，避免格子数与 colgroup 不一致） ----- */
 function renderRows(list) {
   const body = $("listBody");
   body.innerHTML = "";
@@ -214,7 +371,6 @@ function renderRows(list) {
      o.waybill_no || "—",
      o.waybill_no ? "已下单" : "待下单", o.route_status || "—",
      null,                                   /* 发货照片列（第9列，无列标题） */
-     dayOf(o.returned_at) || "—",
      cleanNote(o.note)                       /* 备注列（最后列；2026-09-16 用户规则） */
     ].forEach((v, i) => {
       const td = document.createElement("td");
@@ -222,9 +378,26 @@ function renderRows(list) {
         td.textContent = o.order_type || "发货单";
       }
       else if (i === 3) fillAddrCell(td, o);   /* 地址列（第4列）：两行 */
-      else if (i === 0) td.innerHTML = dnHtml(o.so);   /* DN 列：前缀上标 */
+      else if (i === 0) {                            /* DN 列：第一行号码（.dn-num 限宽省略），第二行 IS负责人/采购员 badge
+                                                        （回单格式，与录单/下单页同款；2026-10-22 用户规则
+                                                        「DN/PO的第二行的姓名格式同步到清单页面里的 DN / PO 列」）；
+                                                        外协单显示 PO 号（98260 上标；2026-10-22 用户规则「清单页面里的 外协单 没有显示DN」）；
+                                                        其他类型显示发件人姓名（2026-10-22 用户规则「清单页面里，如果是其它类型的发货， DN列显示发件人姓名」） */
+        const ot0 = o.order_type || "发货单";
+        const num = ot0 === "外协单" ? poHtml(poOf(o) || "—") : dnHtml(o.so);
+        /* 第二行 badge 组：▼ 要求发货日期 / ▶ 下单日期 / 姓名（发货单=IS负责人、外协单=采购员、其他=发件人），最多跨 3 列 */
+        const owner = ot0 === "外协单" ? buyerOf(o)
+                    : ot0 === "其他"   ? senderOf(o)
+                    : (o.is_owner || "");
+        td.innerHTML = '<span class="dn-num">' + num + "</span>" + dnSecondRow(o, owner);
+      }
       else if (i === 1) td.innerHTML = soHtml(o.so_no || "—");   /* SO 列：32600 前缀上标 */
-      else if (i === 4) fillNameCell(td, o);   /* 姓名列（第5列）：姓名+电话两行 */
+      else if (i === 4) {                        /* 姓名列（第5列）：姓名+电话两行；未下单（单号空）时允许跨列显示
+                                                    （2026-10-22 用户规则「姓名没有跨列显示」——视觉溢出到单号空位；
+                                                    有单号保持省略，避免与运单号相撞） */
+        fillNameCell(td, o);
+        if (!o.waybill_no) td.classList.add("nm-span");
+      }
       else if (i === 5) {                        /* 单号列（第6列）：运单号 + 最新路由同格第二行
                                                     （与号码同一高度块；宽度 capped 到备注列右缘，
                                                     超出缓慢跑马灯；2026-09-16 用户版式） */
@@ -259,7 +432,43 @@ function renderRows(list) {
           td.appendChild(r);
         }
       }
+      else if (i === 6) {                          /* 下单状态列（第7列）：已下单/待下单；下方回单日期徽章
+                                                        （「回单 ₂₆ 10-19」格式，黑底白字加粗微圆角；
+                                                        2026-10-23 用户规则「回单日期逻辑不对， 要显示回单签收的日期， 顺丰是有的， 德邦我不确定」——
+                                                        回单签收日期=回单返回运单（顺丰 type=3）轨迹签收节点，存档 order_resp.sign_back_date；
+                                                        人工置回单日 returned_at 优先；回单运单未签收有节点显示「回单 > <状态>」灰徽章（可点查路由，2026-10-24 规则，原「在途」二字弃用）；
+                                                        德邦无回单运单追踪，仅人工置回单后显示） */
+        td.textContent = v;
+        let sbr = {};
+        try { sbr = JSON.parse(o.order_resp || "{}") || {}; } catch (e) { /* 存档异常按无回单处理 */ }
+        const retDay = dayOf(o.returned_at) || (sbr.sign_back_date || "").slice(0, 10);
+        const rm = retDay.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (rm) {
+          const rb = document.createElement("div");
+          rb.className = "ret-badge";
+          rb.innerHTML = '回单 <sup>' + rm[1].slice(2) + "</sup> " + rm[2] + "-" + rm[3];
+          rb.title = (o.returned_at ? "人工置回单：" : "回单签收：") + retDay + "；点击查看回单路由";
+          rb.style.cursor = "pointer";   /* 可点：查看回单运单路由（2026-10-23 用户规则「当点击 回单 26 10-23 可以显示路由信息」） */
+          rb.addEventListener("click", e => { e.stopPropagation(); openSignBackRoute(o); });
+          td.appendChild(rb);
+        } else if (sbr.sign_back_status) {
+          const rb = document.createElement("div");
+          rb.className = "ret-badge ret-transit";
+          /* 显示回单运单真实状态（2026-10-24 用户规则「回单 显示 在途 二字 不合适， 可以改为 回单 > 运送中 ，同时可以点击查看路由信息」） */
+          rb.textContent = "回单 > " + sbr.sign_back_status;
+          rb.title = "回单运单：" + sbr.sign_back_status + "；点击查看回单路由";
+          rb.style.cursor = "pointer";
+          rb.addEventListener("click", e => { e.stopPropagation(); openSignBackRoute(o); });
+          td.appendChild(rb);
+        }
+      }
       else if (i === 8) fillPhotoCell(td, o);   /* 发货照片列（第9列）：有共享盘照片可点 */
+      else if (i === 9) {                          /* 备注列：单行不换行；悬浮 title 显示全部 + 悬浮时鼠标滑动查看全部
+                                                        （2026-10-23 用户规则「清单页面里的备注不要换行，可以悬浮显示全部，可以鼠标滑动显示全部」） */
+        td.textContent = v;
+        td.title = v;
+        td.classList.add("lm-note");
+      }
       else td.textContent = v;
       tr.appendChild(td);
     });
@@ -363,6 +572,7 @@ function applyView() {
   if (q) {
     list = list.filter(o =>
       [o.so, o.so_no, o.priority, o.order_type, o.address, o.name, o.phone, o.note, o.carrier,
+       o.is_owner, o.buyer,   /* DN 列第二行姓名 badge（IS负责人/采购员）也入搜索（2026-10-22 用户规则「清单页面里， 姓名也加入搜索」） */
        o.waybill_no, o.route_status, o.waybill_no ? "已下单" : "待下单",
        dayOf(o.returned_at)]
         .join(" ").toLowerCase().includes(q));
@@ -485,6 +695,43 @@ async function openSteps(o) {
   }
 }
 
+/* 点击回单日期徽章：显示回单运单路由（顺丰 type=3 回签单 SF106；2026-10-23 用户规则「当点击 回单 26 10-23 可以显示路由信息」）。
+   无回单运单（德邦无回单追踪/专车自提人工置回单）→ 回退显示主运单路由并提示 */
+async function openSignBackRoute(o) {
+  const sb = signBackNo(o);
+  const wb = sb || o.waybill_no || "";
+  stepsTitle.textContent = `${o.so || "#" + o.id} · ${o.carrier || "—"} · 回单路由 ${wb || "—"}`;
+  stepsBody.innerHTML = "";
+  if (sb) {
+    stepsBody.appendChild(stepEl("回单运单：顺丰自动反向 + 到付", "",
+      "回单运单号：" + sb + "（原运单 " + (o.waybill_no || "") + (o.so ? "，DN " + o.so : "") + "）"));
+  } else {
+    stepsBody.appendChild(stepEl("无回单运单追踪", "",
+      (o.returned_at ? "人工置回单：" + dayOf(o.returned_at) + "；" : "") +
+      "该单无回单运单（德邦无回单追踪/专车自提），以下为主运单路由"));
+  }
+  stepsMask.hidden = false;
+  if (!API_BASE || !o.carrier || !wb) return;
+  try {
+    const r = await fetch(`${API_BASE}/carrier/route?carrier=${encodeURIComponent(o.carrier)}` +
+                          `&waybill_no=${encodeURIComponent(wb)}`);
+    const d = await r.json().catch(() => ({}));
+    /* 注意：不回写 o.route_status——查的是回单运单，其状态不得污染主单路由状态 */
+    if (r.ok && Array.isArray(d.detail) && d.detail.length) {
+      d.detail.forEach(x => stepsBody.appendChild(
+        stepEl(x.acceptAddress || x.opcode || "轨迹节点", x.acceptTime || "", x.remark || "")));
+    } else if (r.ok) {
+      stepsBody.appendChild(stepEl("轨迹", "",
+        "暂无轨迹节点（当前状态：" + (d.route_status || "待揽收") + "）"));
+    } else {
+      stepsBody.appendChild(stepEl("轨迹", "",
+        "轨迹查询暂不可用：" + (d.error || ("HTTP " + r.status))));
+    }
+  } catch (e) {
+    stepsBody.appendChild(stepEl("轨迹", "", "轨迹查询失败：" + e.message));
+  }
+}
+
 $("stepsClose").addEventListener("click", () => { stepsMask.hidden = true; });
 stepsMask.addEventListener("click", e => { if (e.target === stepsMask) stepsMask.hidden = true; });
 
@@ -502,9 +749,10 @@ function toast(msg) {
 /* 纯文本表按列对齐：CJK 记 2 宽，空格补齐（PO-Closing 同款 dw/padR） */
 function dw(s) { let w = 0; for (const ch of String(s)) w += ch.codePointAt(0) > 0x2E7F ? 2 : 1; return w; }
 function padR(s, w) { s = String(s); return s + " ".repeat(Math.max(0, w - dw(s))); }
-const SHARE_HEAD = ["DN", "SO", "优先级", "类型", "地址", "姓名", "电话", "单号", "下单状态", "路由状态", "回单日期", "备注"];
+const SHARE_HEAD = ["DN", "SO", "优先级", "类型", "地址", "姓名", "电话", "单号", "下单时间", "签收时间", "下单状态", "路由状态", "回单日期", "备注"];
 const shareRowOf = o => [o.so || "", o.so_no || "", o.priority || "一般", o.order_type || "发货单",
                          o.address || "", o.name || "", o.phone || "", o.waybill_no || "",
+                         o.printed_at || "", o.signed_at || "",   /* 下单时间/签收时间（2026-10-22 用户规则「清单页面 在导出时候， 需要把快递的下单时间， 签收时间都导出」） */
                          o.waybill_no ? "已下单" : "待下单", o.route_status || "",
                          dayOf(o.returned_at), cleanNote(o.note)];
 function shareLinesF(rows, limit) {
@@ -631,6 +879,7 @@ $("btnLmExport").addEventListener("click", lmExport);
 (async () => {
   orders = await fetchOrders();
   await fetchShipPhotos();   /* 发货照片索引（共享盘扫描件；无索引不阻塞清单） */
+  await fetchUploadCounts();   /* 上传文件计数（Upload/<DN>/ 附件数；无服务不阻塞清单） */
   baseList = activeFilter ? orders.filter(activeFilter.fn) : orders;
   applyView();
 })();

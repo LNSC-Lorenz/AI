@@ -67,22 +67,43 @@ html { font-size: 13.5px; }
 .label-designer.ld-embedded .ld-toolbar { display: none; }
 
 /* ---------- 5. 右栏：公司代码卡片 + 属性面板（2026-10-10 线框：右栏上下两个独立圆角盒） ---------- */
-.label-designer .ld-right { display: flex; flex-direction: column; gap: 24px; }
-.label-designer .ld-right .ld-props-panel { flex: 1 1 auto; }
-.label-designer .ld-cocard { position: relative; padding: 20px 6px 12px; text-align: center; }
-.label-designer .ld-cocard-lbl {
-  position: absolute; top: -9px; left: 12px; background: #fff; padding: 0 6px;
+.label-designer .ld-right { display: flex; flex-direction: column; gap: 12px; }   /* 2026-10-12 用户要求：4 块上下间距调小（24→12） */
+.label-designer .ld-right .ld-props-panel { flex: 1 1 auto; position: relative; }   /* relative：浮动图例定位 */
+.label-designer .ld-cocard { position: relative; padding: 12px 6px 8px; text-align: center; }   /* 2026-10-12 用户要求：卡片高度减小（padding 20/12→12/8） */
+/* 卡片浮动图例（2026-10-12 线框：公司代码/尺寸/属性三卡统一为压边框图例式标题） */
+.label-designer .ld-card-lbl {
+  position: absolute; top: -9px; left: 12px; background: #fff; padding: 0 6px; z-index: 1;
   font-size: 12.5px; font-weight: 700; color: var(--ld-brand);
 }
 .label-designer .ld-cocard-code {
   width: 100%; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
   background: transparent; text-align: center; padding: 0 0 2px;
-  font-family: Consolas, monospace; font-size: 54px; font-weight: 800; color: var(--ld-brand);
-  letter-spacing: 0;
+  font-family: Consolas, monospace; font-size: 34px; font-weight: 800; color: var(--ld-brand);
+  letter-spacing: 0; line-height: 1.1;   /* 高度减小：54→34px */
 }
 .label-designer .ld-cocard-code:focus { outline: none; box-shadow: none; border-bottom-color: var(--ld-brand); }
 .label-designer .ld-cocard-code::placeholder { color: #b9ccd1; font-size: 14px; font-weight: 400; font-family: var(--font); }
-.label-designer .ld-cocard-name { margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--ld-ink); min-height: 20px; }
+.label-designer .ld-cocard-name { margin-top: 2px; font-size: 13px; font-weight: 700; color: var(--ld-brand); min-height: 18px; }   /* 高度减小；线框：与数字同品牌青色 */
+/* 尺寸卡片（2026-10-12 右栏新线框：宽/高步进器，下划线输入 + ▲▼） */
+.label-designer .ld-sizecard { position: relative; display: flex; align-items: center; justify-content: space-evenly; gap: 8px; padding: 14px 10px 10px; }   /* 线框：图例式标题，两组步进器均布 */
+.label-designer .ld-spin { display: flex; align-items: center; gap: 3px; flex: 1 1 0; min-width: 0; }
+.label-designer .ld-spin input {
+  width: 100%; min-width: 0; border: 0; border-bottom: 2px solid var(--ld-brand); background: transparent;
+  text-align: center; font-size: 14px; font-weight: 700; color: var(--ld-ink); padding: 2px 0; font-family: inherit;
+}
+.label-designer .ld-spin input:focus { outline: none; }
+.label-designer .ld-spin input::-webkit-outer-spin-button, .label-designer .ld-spin input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.label-designer .ld-spin-btns { display: flex; flex-direction: column; gap: 2px; }
+.label-designer .ld-spin-btns button { border: 0; background: none; color: var(--ld-brand); font-size: 12px; line-height: 1; padding: 1px 3px; cursor: pointer; }   /* 箭头调大（8→12px） */
+.label-designer .ld-spin-btns button:hover { color: var(--ld-brand-dark); }
+/* 右栏底部「打印」按钮（线框：描边全宽大按钮，悬停实心） */
+.label-designer .ld-print-btn {
+  width: 100%; padding: 10px 0; border: 2px solid var(--ld-brand); border-radius: 6px; background: #fff;
+  color: var(--ld-brand); font-size: 15px; font-weight: 700; letter-spacing: 4px; cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px;   /* 2026-10-12 用户要求：加打印机图标 */
+}
+.label-designer .ld-print-btn svg { width: 22px; height: 22px; display: block; }   /* 2026-10-12 用户要求：打印图标再加大（17→22px） */
+.label-designer .ld-print-btn:hover { background: var(--ld-brand); color: #fff; }
 
 /* ---------- 6. 三栏栅格 ----------
    新 UI（2026-10-08）：三栏各自为独立的 2px 主题色圆角盒（圆角 6px，见 .panel / .ld-mid），
@@ -130,7 +151,7 @@ html { font-size: 13.5px; }
   border: 1px solid var(--ld-brand); background: #fff; border-radius: 6px; padding: 10px 5px 9px;
   font-size: 13px; font-family: inherit; color: var(--ld-brand); cursor: pointer;
 }
-.label-designer .pal-row button svg { width: 30px; height: 30px; display: block; }
+.label-designer .pal-row button svg { width: 40px; height: 40px; display: block; }   /* 2026-10-12 用户要求：左侧图标再加大（30→40px） */
 .label-designer .pal-row button span { line-height: 1.2; font-weight: 700; }
 .label-designer .pal-row button:hover { background: var(--ld-brand-soft); }
 .label-designer .pal-row button i { font-style: normal; font-size: 12px; color: var(--ld-muted); font-family: Consolas, monospace; line-height: 1.1; }
@@ -232,7 +253,7 @@ html { font-size: 13.5px; }
 /* ---------- 15. 属性面板 ---------- */
 .label-designer .props-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .label-designer .props-head .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #fff; background: var(--ld-brand); border-radius: 1px; padding: 3px 8px; font-weight: 700; }
-.label-designer .props-acts { display: flex; gap: 4px; }
+.label-designer .props-acts { display: flex; gap: 4px; margin-left: auto; }   /* tag 移除后按钮组保持右对齐 */
 .label-designer .props-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .label-designer .props-grid .field { margin-bottom: 0; }
 .label-designer .chk { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ld-muted); grid-column: 1 / -1; }
