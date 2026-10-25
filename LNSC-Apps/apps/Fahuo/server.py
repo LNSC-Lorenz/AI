@@ -11,7 +11,7 @@ LNSC 全链发货平台 - SQLite API 服务
 接口：
     GET    /api/orders?date=YYYY-MM-DD   发货单列表（默认当天）
     POST   /api/orders                   新建发货单
-    POST   /api/orders/manual-waybills   系统外运单批量补录（单事务、不调用承运商下单）
+    POST   /api/orders/manual-waybills   系统外运单独立新增（单事务、不关联旧单、不调用承运商下单）
     PUT    /api/orders/<id>              更新（状态/备注等）
     DELETE /api/orders/<id>              删除
     GET    /api/stats                    右侧看板统计
@@ -1177,74 +1177,65 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(201, row_to_json(r))
 
     def _manual_waybills(self):
-        """POST /api/orders/manual-waybills：系统外运单批量补录。
+        """POST /api/orders/manual-waybills：批量新增独立的系统外运单记录。
 
-        只写订单资料，不调用承运商下单；一个事务整批成功或失败，且不得覆盖已有运单。
-        请求：{items:[{id, carrier, waybill_no, route_status?}]}，最多 100 条。
+        不读取、关联或更新已录订单，不调用承运商下单；一个事务整批成功或失败。
+        请求：{items:[{so?,so_no?,company?,name?,phone?,address?,note?,carrier,waybill_no,route_status?}]}。
+        最多 100 条；明确拒绝 id，避免客户端把补录误作已有订单更新。
         """
         d = self._body()
         items = d.get("items")
         if not isinstance(items, list) or not items or len(items) > 100:
             return self._json(400, {"error": "items 必须为 1–100 条的数组"})
         allowed_status = {"待揽收", "已揽收", "运送中", "派送中", "已签收", "已送达"}
-        clean, ids = [], set()
+        clean = []
         try:
             for i, item in enumerate(items, 1):
                 if not isinstance(item, dict):
                     raise ValueError(f"第 {i} 条格式错误")
-                oid = int(item.get("id"))
-                carrier = str(item.get("carrier") or "").strip()
-                waybill = str(item.get("waybill_no") or "").strip()
-                route_status = str(item.get("route_status") or "待揽收").strip()
-                if oid <= 0 or oid in ids:
-                    raise ValueError(f"第 {i} 条订单 ID 无效或重复")
-                if not carrier or len(carrier) > 30:
-                    raise ValueError(f"第 {i} 条承运商必填且不能超过 30 字")
-                if not waybill or len(waybill) > 100 or re.search(r"[\x00-\x1f]", waybill):
-                    raise ValueError(f"第 {i} 条运单号必填、不能超过 100 字且不能含控制字符")
+                if "id" in item:
+                    raise ValueError(f"第 {i} 条不得包含订单 ID；系统外运单只能独立新增")
+
+                def text(field, limit, required=False):
+                    value = str(item.get(field) or "").strip()
+                    if required and not value:
+                        raise ValueError(f"第 {i} 条{field}为必填项")
+                    if len(value) > limit or re.search(r"[\x00-\x1f]", value):
+                        raise ValueError(f"第 {i} 条{field}超长或含控制字符")
+                    return value
+
+                route_status = text("route_status", 20) or "待揽收"
                 if route_status not in allowed_status:
                     raise ValueError(f"第 {i} 条路由状态无效")
-                ids.add(oid)
-                clean.append((oid, carrier, waybill, route_status))
+                clean.append({
+                    "so": text("so", 100), "so_no": text("so_no", 100),
+                    "company": text("company", 200),
+                    "name": text("name", 100), "phone": text("phone", 50),
+                    "address": text("address", 500), "note": text("note", 1000),
+                    "carrier": text("carrier", 30, True),
+                    "waybill_no": text("waybill_no", 100, True),
+                    "route_status": route_status})
         except (TypeError, ValueError) as e:
-            return self._json(400, {"error": str(e) or "订单 ID 无效"})
+            return self._json(400, {"error": str(e)})
 
-        try:
-            with db() as c:
-                rows = {}
-                for oid, _, _, _ in clean:
-                    r = c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()
-                    if not r:
-                        raise ValueError(f"订单 ID {oid} 不存在，请刷新后重试")
-                    if r["waybill_no"]:
-                        raise RuntimeError(f"订单 {r['so'] or oid} 已有运单 {r['waybill_no']}，未覆盖任何订单")
-                    rows[oid] = r
-                updated = []
-                for oid, carrier, waybill, route_status in clean:
-                    old = rows[oid]
-                    try:
-                        resp = json.loads(old["order_resp"] or "{}")
-                        if not isinstance(resp, dict):
-                            resp = {}
-                    except (TypeError, ValueError):
-                        resp = {}
-                    resp.update({"waybill_no": waybill, "route_status": route_status,
-                                 "manual_entry": {"source": "系统外手工补录",
-                                                  "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")}})
-                    c.execute("UPDATE orders SET carrier=?, waybill_no=?, route_status=?, order_resp=?,"
-                              " printed_at=COALESCE(printed_at, datetime('now','localtime')),"
-                              " signed_at=CASE WHEN ? IN ('已签收','已送达')"
-                              " THEN COALESCE(NULLIF(signed_at,''), datetime('now','localtime'))"
-                              " ELSE signed_at END WHERE id=?",
-                              (carrier, waybill, route_status,
-                               json.dumps(resp, ensure_ascii=False), route_status, oid))
-                    updated.append(row_to_json(c.execute("SELECT * FROM orders WHERE id=?", (oid,)).fetchone()))
-            _audit(f"MANUAL-WAYBILLS count={len(updated)} ids={','.join(str(x[0]) for x in clean)}")
-            self._json(200, {"orders": updated, "count": len(updated)})
-        except RuntimeError as e:
-            self._json(409, {"error": str(e)})
-        except ValueError as e:
-            self._json(400, {"error": str(e)})
+        with db() as c:
+            created = []
+            for item in clean:
+                now = time.strftime("%Y-%m-%d %H:%M:%S")
+                resp = {"waybill_no": item["waybill_no"], "route_status": item["route_status"],
+                        "manual_entry": {"source": "系统外手工补录", "created_at": now}}
+                cur = c.execute(
+                    "INSERT INTO orders (so,so_no,company,street,name,phone,carrier,note,waybill_no,"
+                    " route_status,order_resp,status,printed_at,signed_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,'printed',?,?)",
+                    (item["so"], item["so_no"], item["company"], item["address"], item["name"], item["phone"],
+                     item["carrier"], item["note"], item["waybill_no"], item["route_status"],
+                     json.dumps(resp, ensure_ascii=False), now,
+                     now if item["route_status"] in ("已签收", "已送达") else ""))
+                created.append(row_to_json(c.execute(
+                    "SELECT * FROM orders WHERE id=?", (cur.lastrowid,)).fetchone()))
+        _audit(f"MANUAL-WAYBILLS-CREATE count={len(created)} ids={','.join(str(o['id']) for o in created)}")
+        self._json(201, {"orders": created, "count": len(created)})
 
     def _update_order(self, oid):
         d = self._body()

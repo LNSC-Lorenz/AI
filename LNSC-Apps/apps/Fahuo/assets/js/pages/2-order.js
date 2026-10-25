@@ -524,6 +524,17 @@ pvMask.addEventListener("click", e => { if (e.target === pvMask) { pvMask.hidden
 const LIST_HEADS = { "发货单": ["DN", "SO"], "外协单": ["DN", ""], "其他": ["发件人", "收件城市"] };   /* 外协单：采购员列移除，姓名并入 DN 格第二行 badge（2026-10-22 用户规则「外协单 列表 里的采购员列移除， 采购员姓名显示在DN的第二行， 格式与其它DN一致」） */
 const LIST_WINDOW_MS = 7 * 864e5;   /* 待下单只显示近 7 天录单 */
 function inListWindow(o) {
+  /* 专车仅在人工置“已送达”后按完成日过滤：当天保留，下一自然日起从下单列表隐藏。
+     未送达专车仍走下方“已下单全部显示”，不按录单/发货日期自动移除；
+     signed_at 由服务端人工关单时写入；无完成时间的存量已送达单按历史完成处理，避免永久滞留。 */
+  if (o.carrier === "专车" && o.route_status === "已送达") {
+    const m = String(o.signed_at || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!m) return false;
+    const now = new Date();
+    const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") +
+                  "-" + String(now.getDate()).padStart(2, "0");
+    return m[1] >= today;
+  }
   /* 已签收/回单：只在签收当天显示，隔天从下单列表移除（2026-09-17 用户规则。
      签收日期取 route_latest 节点时间 "MM-dd HH:mm …"（签收节点即最新节点） */
   if (/签收|回单/.test(o.route_status || "") || o.status === "returned") {
@@ -770,9 +781,11 @@ async function closeSpecialOrder(o, note) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ route_status: nextStatus, close_note: note || "" })
     });
-    if (!r.ok) { alert("关闭失败：" + (await r.text()).slice(0, 80)); return; }
+    const saved = await r.json().catch(() => ({}));
+    if (!r.ok) { alert("关闭失败：" + (saved.error || ("HTTP " + r.status))); return; }
     o.route_status = nextStatus;
     o.close_note = note || "";
+    o.signed_at = saved.signed_at || o.signed_at || "";   /* 专车次日移出下单列表所用的完成时间 */
     renderPrintList();   /* 重新渲染列表以刷新状态 */
   } catch (e) { alert("关闭接口不可达：" + e.message); }
 }

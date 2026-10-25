@@ -107,6 +107,7 @@
 
 ## 5. 部署和运行时资料边界
 
+- 所有部署统一使用 `apps/SSH/deploy.ps1` 及 `apps.conf`、`excludes.conf`，不得用手工 `scp` 单文件覆盖替代标准流程；纯前端改动使用 `-NoRestart`。
 - 只同步 README 文件结构中明确的运行文件及新增加的必需文件。
 - 不同步测试/探针、数据库、`.db-wal/.db-shm`、`oid.seq`、`carriers.env`、`Upload/`、`ShippingPhotos/`、`shipphotos.json`、`label/data/` 和 `__pycache__/`。
 - 静态 HTML/CSS/JS 改动通常只需刷新浏览器；`server.py` 改动必须重启 `fahuo-api`，配置改动按安装脚本要求重启。

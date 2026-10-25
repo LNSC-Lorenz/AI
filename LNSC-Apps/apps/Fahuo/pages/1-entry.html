@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LNSC 全链发货平台 | LNSC Full-Chain Delivery System</title>
 <link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261024d">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261024l">
 <link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -142,12 +142,14 @@
               </select></label>
             </div>
             <div class="type-dn-row toggle-row toggle-row-down">
-              <label class="chk-wrap"><input type="checkbox" id="tglAbnormal" class="pool-check pool-check-sm">异常</label>
-              <span class="abn-sub" id="abnSub">
-                <label class="chk-wrap"><input type="checkbox" id="tglAllowShip" class="pool-check pool-check-sm" name="abnShip" disabled>可以发货</label>
-                <label class="chk-wrap"><input type="checkbox" id="tglNoShip" class="pool-check pool-check-sm" name="abnShip" disabled>暂不发货</label>
+              <span class="abn-settings">
+                <label class="chk-wrap"><input type="checkbox" id="tglAbnormal" class="pool-check pool-check-sm">异常</label>
+                <span class="abn-sub" id="abnSub">
+                  <label class="chk-wrap"><input type="checkbox" id="tglAllowShip" class="pool-check pool-check-sm" name="abnShip" disabled>可以发货</label>
+                  <label class="chk-wrap"><input type="checkbox" id="tglNoShip" class="pool-check pool-check-sm" name="abnShip" disabled>暂不发货</label>
+                </span>
               </span>
-              <label class="chk-wrap"><input type="checkbox" id="tglShowAbnormal" class="pool-check pool-check-sm">显示异常行</label>
+              <label class="chk-wrap abn-filter"><input type="checkbox" id="tglShowAbnormal" class="pool-check pool-check-sm">显示异常行</label>
             </div>
           </div>
           <!-- 外协单：PO + 采购员 + 公司电话 -->
@@ -261,6 +263,6 @@
 <script src="../assets/js/region.js"></script>
 <script src="../assets/js/topbar.js"></script>
 <script src="../assets/js/note-copy.js?v=20261024a"></script>
-<script src="../assets/js/pages/1-entry.js?v=20261024a"></script>
+<script src="../assets/js/pages/1-entry.js?v=20261024d"></script>
 </body>
 </html>

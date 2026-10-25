@@ -203,29 +203,35 @@ if (typeof document !== "undefined") {
     btnUpload.classList.remove("done");
     btnUpload.textContent = "";
     clearInterval(btnUpload._rollT); btnUpload._rollT = null;   /* 清旧翻滚定时器 */
+    clearTimeout(btnUpload._rollSwapT); btnUpload._rollSwapT = null;
     if (!fileName) { btnUpload.textContent = "上传文件"; upFileName.textContent = ""; return; }
     btnUpload.classList.add("done");
     const s = document.createElement("span");
     s.textContent = count > 1 ? `已上传 ${count}个` : "已上传";   /* 多文件显示数量 */
     btnUpload.append(s);
     if (count > 1 && files && files.length) {
-      /* 多文件：框高不变，文件名每 2.4s 上滚一行循环翻滚，当前行带 × 可删 */
+      /* 多文件：始终只渲染一行，整行淡出后替换文件名，避免切换时露出上下半行。 */
       const roll = document.createElement("div"); roll.className = "up-roll";
       const inner = document.createElement("div"); inner.className = "up-roll-in";
-      files.forEach(fn => {
-        const d = document.createElement("div");
-        const t = document.createElement("span");
-        t.className = "up-fn";
-        t.textContent = fn;
-        d.append(t, mkRemoveX(fn));
-        inner.appendChild(d);
-      });
+      const row = document.createElement("div");
+      const text = document.createElement("span"); text.className = "up-fn";
+      let idx = 0;
+      let remove = mkRemoveX(files[idx]);
+      text.textContent = files[idx];
+      row.append(text, remove);
+      inner.appendChild(row);
       roll.appendChild(inner);
       btnUpload.append(roll);
-      let idx = 0;
       btnUpload._rollT = setInterval(() => {
-        idx = (idx + 1) % files.length;
-        inner.style.transform = `translateY(-${idx * 1.5}em)`;
+        inner.classList.add("switching");
+        btnUpload._rollSwapT = setTimeout(() => {
+          idx = (idx + 1) % files.length;
+          text.textContent = files[idx];
+          const nextRemove = mkRemoveX(files[idx]);
+          remove.replaceWith(nextRemove);
+          remove = nextRemove;
+          inner.classList.remove("switching");
+        }, 180);
       }, 2400);
     } else {
       const n = document.createElement("span"); n.className = "up-name"; n.textContent = fileName;
@@ -591,6 +597,13 @@ if (typeof document !== "undefined") {
   const dnHtml = dn => preHtml(dn, "82600");
   const soHtml = so => preHtml(so, "32600");
   const poHtml = po => preHtml(po, "98260");   /* PO：98260 前缀上标（2026-10-21 用户规则「PO的显示个与DN一致， 98260为上标」） */
+  /* 每次新增、载入或编辑行后，按最新异常状态重算清单筛选。 */
+  function applyListFilters() {
+    const abnormalOnly = document.getElementById("tglShowAbnormal").checked;
+    orderBody.querySelectorAll("tr").forEach(tr => {
+      tr.style.display = !abnormalOnly || tr.classList.contains("row-abnormal") ? "" : "none";
+    });
+  }
   function fillRowCells(tr, v, o) {
     tr.innerHTML = "";
     tr.classList.toggle("row-urgent", !!o && o.priority === "紧急");   /* 紧急行加粗红字（2026-09-20 用户规则） */
@@ -622,6 +635,7 @@ if (typeof document !== "undefined") {
       tr.appendChild(td);
     });
     updateWarn();   /* 警告灯联动（编辑保存后优先级可能变更） */
+    applyListFilters();
   }
   function addRow(v, o) {
     const tr = document.createElement("tr");
@@ -634,6 +648,7 @@ if (typeof document !== "undefined") {
       }
     }
     orderBody.appendChild(tr);
+    applyListFilters();                   /* 新行插入后按当前异常筛选条件更新可见性 */
     updateWarn();                         /* 警告灯联动（新增/载入行后） */
   }
 
@@ -981,18 +996,11 @@ if (typeof document !== "undefined") {
         }
       });
     });
-    /* 显示异常行 筛选（2026-10-22 用户规则「添加显示异常行的勾选」） */
-    const tglShowAbn = document.getElementById("tglShowAbnormal");
-    if (tglShowAbn) {
-      tglShowAbn.addEventListener("change", () => {
-        const showAll = !tglShowAbn.checked;
-        orderBody.querySelectorAll("tr").forEach(tr => {
-          const isAbn = tr.classList.contains("row-abnormal");
-          tr.style.display = showAll || isAbn ? "" : "none";
-        });
-      });
-    }
   }
+
+  /* 清单仅保留“显示异常行”筛选。 */
+  const tglShowAbn = document.getElementById("tglShowAbnormal");
+  if (tglShowAbn) tglShowAbn.addEventListener("change", applyListFilters);
 
   /* 统计卡点击 → 跳转清单模式并按该口径筛选（与其他页面一致） */
   const FLOWS = ["shipped_yesterday", "pending_today", "overdue", "planned", "returned_today"];

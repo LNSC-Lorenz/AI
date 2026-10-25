@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>清单模式 | LNSC 全链发货平台</title>
 <link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261024f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261024u">
 <link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -65,14 +65,16 @@
       <div class="lm-search">
         <div class="prio-btns lm-type">
           <button class="btn lm-add-waybill" id="btnManualWaybill" type="button"
-                  title="手工补录系统外运单（支持模糊搜索和批量添加）" aria-label="手工补录系统外运单">＋</button>
+                  title="手工补录系统外运单（独立新增，不关联已录订单）" aria-label="手工补录系统外运单">＋</button>
           <button class="btn otype" type="button" data-t="发货单">发货单</button>
           <button class="btn otype" type="button" data-t="外协单">外协单</button>
           <button class="btn otype" type="button" data-t="其他">其他</button>
+          <button class="btn otype-filter" id="btnLmPickupFilter" type="button" aria-pressed="false" title="仅显示自提记录">自提</button>
         </div>
         <!-- 优先级筛选组移除（2026-09-20 用户规则：优先级分类只留在录单页；紧急行整行加粗红字） -->
         <div class="lm-search-field">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <div class="lm-name-chips" id="lmNameChips" role="group" aria-label="当前类型姓名快捷筛选" hidden></div>
           <input id="lmSearch" type="search" autocomplete="off" aria-label="搜索当前清单"
                  placeholder="搜索 DN / 地址 / 姓名 / 电话 / 备注 / 承运商 / 单号 / 状态…">
         </div>
@@ -152,7 +154,7 @@
   </div>
 </div>
 
-<!-- 系统外运单手工补录：模糊搜索、多选后逐单填写，批量事务保存 -->
+<!-- 系统外运单手工补录：空白明细独立新增，批量事务保存，不关联已录订单 -->
 <div class="steps-mask" id="manualWaybillMask" hidden>
   <div class="steps-modal mw-modal" role="dialog" aria-modal="true" aria-labelledby="manualWaybillTitle">
     <div class="steps-head">
@@ -160,36 +162,39 @@
       <button class="steps-close" id="manualWaybillClose" type="button" title="关闭" aria-label="关闭">×</button>
     </div>
     <div class="mw-body">
-      <p class="mw-tip">只维护系统外已产生的运单，不调用承运商下单。已有运单的订单不会出现在候选中；批量保存时任意一条失败，整批均不写入。</p>
+      <p class="mw-tip">这里只新增系统外运单的独立清单记录，不搜索、选择或修改系统内已录订单，也不调用承运商下单。批量保存时任意一条失败，整批均不写入。</p>
       <div class="mw-defaults">
         <label class="mw-field">默认承运商
-          <input id="mwDefaultCarrier" list="mwCarrierOptions" maxlength="30" value="顺丰" autocomplete="off">
+          <select id="mwDefaultCarrier" aria-label="默认承运商">
+            <!-- 常见快递；保留原有简称，避免影响既有补录记录。 -->
+            <option>顺丰</option><option>京东</option><option>EMS</option>
+            <option>中国邮政</option><option>中通</option><option>圆通</option>
+            <option>韵达</option><option>申通</option><option>极兔</option>
+            <option>菜鸟</option><option>德邦</option><option>跨越</option>
+            <option>百世</option><option>宅急送</option>
+            <!-- 常见快运、零担及大宗物流。 -->
+            <option>顺丰快运</option><option>京东快运</option><option>德邦物流</option>
+            <option>中通快运</option><option>韵达快运</option><option>百世快运</option>
+            <option>安能物流</option><option>壹米滴答</option><option>顺心捷达</option>
+            <option>天地华宇</option><option>佳吉快运</option><option>中铁快运</option>
+            <option>盛丰物流</option><option>盛辉物流</option><option>日日顺物流</option>
+            <option value="__custom__">其他（手动输入）</option>
+          </select>
+          <input id="mwDefaultCarrierCustom" maxlength="30" placeholder="请输入其他承运商" aria-label="其他默认承运商" autocomplete="off" hidden>
         </label>
-        <datalist id="mwCarrierOptions">
-          <option value="顺丰"></option><option value="德邦"></option><option value="跨越"></option>
-          <option value="京东"></option><option value="中通"></option><option value="圆通"></option>
-          <option value="韵达"></option><option value="申通"></option><option value="EMS"></option>
-        </datalist>
         <label class="mw-field">默认路由状态
           <select id="mwDefaultRouteStatus">
-            <option>待揽收</option><option>已揽收</option><option>运送中</option>
-            <option>派送中</option><option>已签收</option><option>已送达</option>
+            <option>已签收</option>
           </select>
         </label>
-        <button class="btn" id="mwApplyDefaults" type="button">应用到全部已选</button>
-      </div>
-      <div class="mw-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-        <input id="mwSearch" type="search" autocomplete="off" aria-label="模糊搜索可补录订单"
-               placeholder="模糊搜索 DN / SO / 姓名 / 电话 / 地址 / 负责人 / 备注…">
+        <button class="btn" id="mwApplyDefaults" type="button">应用到全部明细</button>
       </div>
       <div class="mw-panes">
         <section class="mw-pane">
-          <div class="mw-pane-title" id="mwResultTitle">可补录订单（点击添加，可多选）</div>
-          <div class="mw-results" id="mwResults"></div>
-        </section>
-        <section class="mw-pane">
-          <div class="mw-pane-title" id="mwSelectedTitle">已选 0 单（逐单填写运单信息）</div>
+          <div class="mw-pane-title mw-entry-head">
+            <span id="mwEntryTitle">待补录 0 条（均为独立新增）</span>
+            <button class="btn" id="mwAdd" type="button">＋ 添加外部运单</button>
+          </div>
           <div class="mw-entries" id="mwEntries"></div>
         </section>
       </div>
@@ -204,9 +209,11 @@
 
 <script src="../assets/js/stats.js"></script>
 <script src="../assets/js/topbar.js"></script>
+<script src="../assets/vendor/jszip.min.js"></script>
 <script src="../assets/vendor/docx-preview.min.js"></script>
 <script src="../assets/vendor/xlsx.full.min.js"></script>
 <script src="../assets/js/note-copy.js?v=20261024a"></script>
-<script src="../assets/js/pages/3-list.js?v=20261024b"></script>
+<script src="../assets/js/pages/3-list.js?v=20261024v"></script>
 </body>
 </html>
+>

@@ -27,6 +27,7 @@ powershell apps/ssh/deploy.ps1 all             # 部署 apps.conf 里全部应�
 ```
 
 - **只增/覆盖，不删除**：服务器上本地没有的文件保留（数据安全）
+- **中文文件名兼容**：Windows 下优先使用 Git 自带的 GNU tar/gzip，避免系统 bsdtar 遇到中文文件名时崩溃；无 Git 时回退系统 tar
 - **数据/密钥零覆盖**：`excludes.conf` 拦截 `fahuo.db*`、`oid.seq`、`Upload/`、
   `carriers.env`、`.db_logistic_seq`、`.git` 等，永远不会传上服务器
 - 配置 `apps.conf` 里 `服务名` 留空的应用：只部署文件，不重启

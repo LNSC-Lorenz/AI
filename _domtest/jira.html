@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Jira 使用方法</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 210mm; height: 297mm;
+    font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    color: #1a202c;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    overflow: hidden;
+  }
+  .page {
+    width: 100%; height: 100%;
+    padding: 14mm 15mm;
+    display: flex; flex-direction: column;
+  }
+  header {
+    border-bottom: 3px solid #0052CC;
+    padding-bottom: 8px; margin-bottom: 12px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+  }
+  h1 { font-size: 20pt; margin: 0; color: #0052CC; letter-spacing: .5px; }
+  .sub { font-size: 9pt; color: #5a6b7f; }
+  h2 {
+    font-size: 11.5pt; margin: 10px 0 5px;
+    color: #003a8c; border-left: 4px solid #0052CC; padding-left: 8px;
+  }
+  .cols { column-count: 2; column-gap: 18px; }
+  ol, ul { margin: 3px 0 6px; padding-left: 18px; }
+  li { margin: 2px 0; }
+  code, .k {
+    background: #eef2f7; border: 1px solid #d7e0ec; border-radius: 3px;
+    padding: 0 4px; font-family: Consolas, "Courier New", monospace;
+    font-size: 9pt; color: #1b4f8f; white-space: nowrap;
+  }
+  .tip {
+    background: #eaf3ff; border: 1px solid #b6d4ff; border-radius: 4px;
+    padding: 6px 9px; font-size: 9.5pt; margin-top: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+  th, td { border: 1px solid #c9d4e0; padding: 3px 7px; font-size: 9.5pt; text-align: left; }
+  th { background: #0052CC; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f4f7fb; }
+  footer {
+    margin-top: auto; border-top: 1px solid #c9d4e0;
+    padding-top: 6px; font-size: 8pt; color: #7a8699;
+    display: flex; justify-content: space-between;
+  }
+  .grid { display: flex; gap: 16px; }
+  .grid > div { flex: 1; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Jira 使用方法速查</h1>
+        <div class="sub">Atlassian Jira（敏捷 / 看板 / 缺陷跟踪） · 快速上手</div>
+      </div>
+      <div class="sub">日期：2026-10-25</div>
+    </header>
+
+    <div class="grid">
+      <div>
+        <h2>一、基本操作</h2>
+        <ol>
+          <li>登录：访问团队 Jira 地址（如 <span class="k">jira.example.com</span>），用公司账号登录。</li>
+          <li>选择项目：顶部切换「项目」，进入对应的项目看板。</li>
+          <li>创建任务：点击右上角 <span class="k">Create</span> → 选择 Issue Type（Story / Bug / Task）→ 填写 Summary、Description、Assignee、Sprint。</li>
+          <li>流转状态：拖动看板卡片或点击任务，按工作流（To Do → In Progress → Done）推进。</li>
+        </ol>
+        <h2>二、常用搜索（JQL）</h2>
+        <ul>
+          <li>我的任务：<span class="k">assignee = currentUser() AND status != Done</span></li>
+          <li>某迭代的 Bug：<span class="k">sprint = "Sprint 12" AND type = Bug</span></li>
+          <li>最近 3 天创建：<span class="k">created &lt; -3d</span></li>
+          <li>优先级高：<span class="k">priority = High ORDER BY created DESC</span></li>
+        </ul>
+        <h2>三、常用快捷键</h2>
+        <ul>
+          <li><span class="k">c</span> 创建任务 · <span class="k">r</span> 快速创建</li>
+          <li><span class="k">/</span> 打开命令面板 · <span class="k">?</span> 显示快捷键</li>
+          <li><span class="k">a</span> 分配给自己 · <span class="k">j</span> 跳转</li>
+        </ul>
+      </div>
+
+      <div>
+        <h2>四、缺陷（Bug）处理流程</h2>
+        <ol>
+          <li>复现并记录：步骤、期望结果、实际结果、环境、截图。</li>
+          <li>指派并定级：Assignee + Priority（Blocker / Critical / Major / Minor）。</li>
+          <li>关联：使用 <span class="k">is related to / blocks / clones</span> 关联 Story 或其它 Bug。</li>
+          <li>修复验证：开发改完 → QA 验证 → 状态改 Resolved / Closed。</li>
+        </ol>
+        <h2>五、任务字段说明</h2>
+        <table>
+          <tr><th>字段</th><th>含义</th></tr>
+          <tr><td>Summary</td><td>任务标题（一句话）</td></tr>
+          <tr><td>Description</td><td>详细描述 / 验收标准</td></tr>
+          <tr><td>Assignee</td><td>经办人</td></tr>
+          <tr><td>Reporter</td><td>报告人</td></tr>
+          <tr><td>Sprint</td><td>所属迭代</td></tr>
+          <tr><td>Priority</td><td>优先级</td></tr>
+          <tr><td>Status</td><td>当前状态</td></tr>
+        </table>
+        <div class="tip">💡 提示：把常用过滤器 <span class="k">保存 (Save as)</span> 为「我的待办 / 我的 Bug」，可一键回到工作区。</div>
+      </div>
+    </div>
+
+    <footer>
+      <span>Atlassian Jira 使用速查 · 单页版</span>
+      <span>生成于 2026-10-25</span>
+    </footer>
+  </div>
+</body>
+</html>

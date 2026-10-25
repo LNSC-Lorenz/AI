@@ -167,7 +167,7 @@ async function openUploadFiles(dn) {
   const mask = document.createElement("div");
   mask.className = "pm-mask";
   const box = document.createElement("div");
-  box.className = "pm-box";
+  box.className = "pm-box pm-upload-box";
   mask.appendChild(box);
   mask.addEventListener("click", e => { if (e.target === mask) mask.remove(); });
   const head = document.createElement("div");
@@ -243,18 +243,42 @@ function upFileCard(dn, fn) {
       const wb = XLSX.read(buf, { type: "array" });
       inner.innerHTML = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
     }).catch(() => { inner.textContent = "预览失败：" + fn; });
-    addDocWheelZoom(doc, inner);   /* 滚轮缩放 0.2×–3×（2026-10-20 v=br） */
+    addDocPreviewInteractions(doc, inner);
   }
   return card;
 }
-/* Excel/Word 预览鼠标滚轮缩放（0.2×–3×；2026-10-20 用户规则） */
-function addDocWheelZoom(doc, inner) {
-  let scale = 1;
+/* Excel/Word 预览：滚轮缩放 0.2×–3×，按住鼠标左键拖动滚动位置 */
+function addDocPreviewInteractions(doc, inner) {
+  let scale = 1, drag = null;
+  doc.title = "按住鼠标左键拖动，滚轮缩放";
+  doc.style.cursor = "grab";
+  doc.style.userSelect = "none";
   doc.addEventListener("wheel", e => {
     e.preventDefault();
     scale = Math.min(3, Math.max(0.2, scale + (e.deltaY < 0 ? 0.1 : -0.1)));
     inner.style.transform = `scale(${scale})`;
   }, { passive: false });
+  doc.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || e.pointerType !== "mouse" || e.target.closest("a, button")) return;
+    e.preventDefault();
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: doc.scrollLeft, top: doc.scrollTop };
+    doc.setPointerCapture(e.pointerId);
+    doc.style.cursor = "grabbing";
+  });
+  doc.addEventListener("pointermove", e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    doc.scrollLeft = drag.left - (e.clientX - drag.x);
+    doc.scrollTop = drag.top - (e.clientY - drag.y);
+  });
+  const stopDrag = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    if (doc.hasPointerCapture(drag.id)) doc.releasePointerCapture(drag.id);
+    drag = null;
+    doc.style.cursor = "grab";
+  };
+  doc.addEventListener("pointerup", stopDrag);
+  doc.addEventListener("pointercancel", stopDrag);
+  doc.addEventListener("lostpointercapture", stopDrag);
 }
 
 /* 发货照片预览弹窗：整列大图，点图新开页看原图；点遮罩/关闭退出 */
@@ -557,38 +581,228 @@ setInterval(() => {
   });
 }, 3000);
 
-/* ----- 视图过滤：类型按钮组（单选） + 搜索（在统计口径基础集合内）；
+/* ----- 视图过滤：类型与自提四个按钮统一单选 + 搜索（在统计口径基础集合内）；
    优先级筛选组移除（2026-09-20 用户规则：分类只留在录单页，紧急行整行加粗红字） ----- */
 let activeType = "";
+let pickupOnly = false;
+let pickedNameQuery = "";
+
+/* 只取我方人员，不把对方联系人/接收方 name 作为快捷筛选候选。 */
+function ownNameOf(o) {
+  const type = o.order_type || "发货单";
+  if (type === "外协单") return buyerOf(o);
+  if (type === "其他") return senderOf(o);   /* 员工 emp_name，兼容旧备注发件人 */
+  return o.is_owner || "";                 /* 发货单 SO 负责人 */
+}
+
+/* 四类筛选显示去重的我方姓名；每页只容纳完整标签，左右箭头切换剩余姓名。
+   选中姓名与手工关键词是两个独立条件，可继续输入进行 AND 筛选。 */
+let nameChipPage = 0;
+let nameChipPages = [];
+let nameChipExpanded = false;
+
+function setNameChipExpanded(expanded) {
+  const box = $("lmNameChips");
+  const panel = $("lmNameChipPopover");
+  const toggle = box.querySelector(".lm-name-chip-expand");
+  nameChipExpanded = Boolean(expanded && !box.hidden);
+  if (panel) panel.hidden = !nameChipExpanded;
+  if (toggle) {
+    toggle.textContent = "▾";
+    toggle.title = nameChipExpanded ? "收起全部姓名" : "展开全部姓名";
+    toggle.setAttribute("aria-label", toggle.title);
+    toggle.setAttribute("aria-expanded", String(nameChipExpanded));
+  }
+}
+
+function renderNameChipPage() {
+  const box = $("lmNameChips");
+  nameChipPage = Math.max(0, Math.min(nameChipPage, nameChipPages.length - 1));
+  const visible = new Set(nameChipPages[nameChipPage] || []);
+  box.querySelectorAll(".lm-name-chip").forEach(b => { b.hidden = !visible.has(b.dataset.name); });
+  box.dataset.page = String(nameChipPage + 1);
+}
+
+function updateNameChips(force = false) {
+  const box = $("lmNameChips");
+  const kind = activeType || (pickupOnly ? "自提" : "");
+  const sourceLabel = ({ "发货单": "SO负责人", "外协单": "采购员", "其他": "员工" })[kind] || "我方人员";
+  const names = kind
+    ? [...new Set(baseList
+        .filter(o => activeType
+          ? (o.order_type || "发货单") === activeType
+          : o.carrier === "自提")
+        .map(o => String(ownNameOf(o) || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "zh-CN"))
+    : [];
+  const signature = JSON.stringify([names, pickedNameQuery, kind]);
+  if (!force && box.dataset.signature === signature) return;
+  const sameKind = box.dataset.kind === kind;
+  const anchor = sameKind
+    ? pickedNameQuery || box.querySelector(".lm-name-chip:not([hidden])")?.dataset.name || ""
+    : "";
+  box.dataset.signature = signature;
+  box.dataset.kind = kind;
+  box.hidden = !names.length;
+  if (!sameKind || !names.length) nameChipExpanded = false;
+  box.setAttribute("aria-label", `${kind || "当前类型"}${sourceLabel}快捷筛选`);
+
+  const makeChip = name => {
+    const selected = pickedNameQuery === name;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lm-name-chip" + (selected ? " active" : "");
+    button.dataset.name = name;
+    button.setAttribute("aria-pressed", String(selected));
+    button.title = selected ? `取消${sourceLabel} ${name} 筛选` : `按${sourceLabel} ${name} 筛选`;
+    const label = document.createElement("span");
+    label.textContent = name;
+    const remove = document.createElement("span");
+    remove.className = "lm-name-chip-remove";
+    remove.textContent = "×";
+    remove.hidden = !selected;
+    remove.setAttribute("aria-hidden", "true");
+    button.append(label, remove);
+    button.addEventListener("click", () => {
+      pickedNameQuery = selected ? "" : name;
+      nameChipExpanded = false;
+      applyView();
+    });
+    return button;
+  };
+  const expand = document.createElement("button");
+  expand.type = "button";
+  expand.className = "lm-name-chip-nav lm-name-chip-expand";
+  expand.setAttribute("aria-controls", "lmNameChipPopover");
+  expand.addEventListener("click", () => setNameChipExpanded(!nameChipExpanded));
+  const frag = document.createDocumentFragment();
+  names.forEach(name => frag.appendChild(makeChip(name)));
+  frag.appendChild(expand);
+  box.replaceChildren(frag);
+
+  let panel = $("lmNameChipPopover");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "lmNameChipPopover";
+    panel.className = "lm-name-chip-popover";
+    panel.hidden = true;
+    box.parentElement.appendChild(panel);
+  }
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", `全部${kind || "当前类型"}${sourceLabel}姓名`);
+  const panelFrag = document.createDocumentFragment();
+  names.forEach(name => panelFrag.appendChild(makeChip(name)));
+  panel.replaceChildren(panelFrag);
+
+  const chips = [...box.querySelectorAll(".lm-name-chip")];
+  const widths = chips.map(b => Math.ceil(b.getBoundingClientRect().width));
+  const gap = parseFloat(getComputedStyle(box).gap) || 0;
+  const available = box.clientWidth;
+  const expandSpace = Math.ceil(expand.getBoundingClientRect().width + gap);
+  const paginate = limit => {
+    const pages = [];
+    let page = [], used = 0;
+    names.forEach((name, i) => {
+      let addition = (page.length ? gap : 0) + widths[i];
+      if (page.length && used + addition > limit) {
+        pages.push(page);
+        page = [];
+        used = 0;
+        addition = widths[i];
+      }
+      page.push(name);
+      used += addition;
+    });
+    if (page.length) pages.push(page);
+    return pages;
+  };
+  nameChipPages = paginate(Math.max(1, available - expandSpace));
+  const anchoredPage = nameChipPages.findIndex(page => page.includes(anchor));
+  nameChipPage = anchoredPage >= 0 ? anchoredPage : Math.min(nameChipPage, Math.max(0, nameChipPages.length - 1));
+  if (!sameKind) nameChipPage = 0;
+  renderNameChipPage();
+  setNameChipExpanded(nameChipExpanded);
+}
+
+/* 工具栏宽度或字体变化后重新按完整标签分页。 */
+let nameChipResizeFrame = 0;
+const scheduleNameChipLayout = () => {
+  cancelAnimationFrame(nameChipResizeFrame);
+  nameChipResizeFrame = requestAnimationFrame(() => {
+    if (!$("lmNameChips").hidden) updateNameChips(true);
+  });
+};
+const nameChipResizeObserver = typeof ResizeObserver === "function"
+  ? new ResizeObserver(scheduleNameChipLayout) : null;
+if (nameChipResizeObserver) nameChipResizeObserver.observe($("lmNameChips").parentElement);
+else window.addEventListener("resize", scheduleNameChipLayout);
+if (document.fonts?.ready) document.fonts.ready.then(scheduleNameChipLayout);
+const nameChipSearchField = $("lmNameChips").parentElement;
+document.addEventListener("click", e => {
+  if (nameChipExpanded && !nameChipSearchField.contains(e.target)) setNameChipExpanded(false);
+});
+nameChipSearchField.addEventListener("keydown", e => {
+  if (e.key === "Escape" && nameChipExpanded) {
+    e.preventDefault();
+    setNameChipExpanded(false);
+    nameChipSearchField.querySelector(".lm-name-chip-expand")?.focus();
+  }
+});
+
+function clearPickedNameQuery() {
+  const input = $("lmSearch");
+  if (pickedNameQuery && input.value === pickedNameQuery) input.value = "";
+  pickedNameQuery = "";
+}
 
 function applyView() {
+  updateNameChips();
   let list = baseList;
   if (activeType) {
     list = list.filter(o => (o.order_type || "发货单") === activeType);
   }
-  const q = $("lmSearch").value.trim().toLowerCase();
-  if (q) {
-    list = list.filter(o =>
-      [o.so, o.so_no, o.priority, o.order_type, o.address, o.name, o.phone, o.note, o.carrier,
-       o.is_owner, o.buyer,   /* DN 列第二行姓名 badge（IS负责人/采购员）也入搜索（2026-10-22 用户规则「清单页面里， 姓名也加入搜索」） */
-       o.waybill_no, o.route_status, o.waybill_no ? "已下单" : "待下单",
-       dayOf(o.returned_at)]
-        .join(" ").toLowerCase().includes(q));
+  if (pickupOnly) list = list.filter(o => o.carrier === "自提");
+  const queries = [pickedNameQuery, $("lmSearch").value]
+    .map(q => q.trim().toLowerCase()).filter(Boolean);
+  if (queries.length) {
+    list = list.filter(o => {
+      const text = [o.so, o.so_no, o.priority, o.order_type, o.address, o.name, o.phone, o.note, o.carrier,
+        o.is_owner, buyerOf(o), senderOf(o),   /* IS负责人/采购员/员工发件人均入搜索，标签点选与普通搜索同口径 */
+        o.waybill_no, o.route_status, o.waybill_no ? "已下单" : "待下单",
+        dayOf(o.returned_at)].join(" ").toLowerCase();
+      return queries.every(q => text.includes(q));   /* 姓名标签与继续输入的关键词叠加筛选 */
+    });
   }
   viewList = list;   /* 分享/导出按当前可见集合（2026-09-16 分享四件套） */
   renderRows(list);
 }
 
-document.querySelectorAll(".lm-type .otype").forEach(b => {
+const typeFilterButtons = document.querySelectorAll(".lm-type .otype");
+typeFilterButtons.forEach(b => {
   b.addEventListener("click", () => {
+    clearPickedNameQuery();
     const was = b.classList.contains("active");
-    document.querySelectorAll(".lm-type .otype").forEach(x => x.classList.remove("active"));
-    activeType = was ? "" : b.dataset.t;   /* 单选互斥；再点取消=全部；与优先级组合 */
+    typeFilterButtons.forEach(x => x.classList.remove("active"));
+    activeType = was ? "" : b.dataset.t;   /* 再点当前项取消，恢复全部 */
     if (activeType) b.classList.add("active");
+    pickupOnly = false;                    /* 类型与自提互斥，不叠加 */
+    $("btnLmPickupFilter").classList.remove("active");
+    $("btnLmPickupFilter").setAttribute("aria-pressed", "false");
     applyView();
   });
 });
-$("lmSearch").addEventListener("input", applyView);
+$("btnLmPickupFilter").addEventListener("click", () => {
+  clearPickedNameQuery();
+  pickupOnly = !pickupOnly;
+  if (pickupOnly) {
+    activeType = "";
+    typeFilterButtons.forEach(x => x.classList.remove("active"));
+  }
+  $("btnLmPickupFilter").classList.toggle("active", pickupOnly);
+  $("btnLmPickupFilter").setAttribute("aria-pressed", String(pickupOnly));
+  applyView();
+});
+$("lmSearch").addEventListener("input", applyView);   /* 输入只增加关键词，不清除已选姓名 */
 
 /* ----- 运单步骤弹窗：点击单号打开（与下单页同款；2026-09-16 用户要求）；
    第一步固定显示下单返回值，其后为承运商轨迹节点 ----- */
@@ -712,8 +926,11 @@ async function openSignBackRoute(o) {
   stepsMask.hidden = false;
   if (!API_BASE || !o.carrier || !wb) return;
   try {
+    /* 回单 SF106 不存在于 orders.waybill_no，后端无法据它反查主订单电话；
+       与自动回单刷新一致，显式带原订单收/寄件电话后四位，避免顺丰到付回单误报 20028。 */
+    const phone4 = String(o.phone || o.emp_phone || "").replace(/\D/g, "").slice(-4);
     const r = await fetch(`${API_BASE}/carrier/route?carrier=${encodeURIComponent(o.carrier)}` +
-                          `&waybill_no=${encodeURIComponent(wb)}`);
+                          `&waybill_no=${encodeURIComponent(wb)}&phone4=${encodeURIComponent(phone4)}`);
     const d = await r.json().catch(() => ({}));
     /* 注意：不回写 o.route_status——查的是回单运单，其状态不得污染主单路由状态 */
     if (r.ok && Array.isArray(d.detail) && d.detail.length) {
@@ -734,124 +951,136 @@ async function openSignBackRoute(o) {
 $("stepsClose").addEventListener("click", () => { stepsMask.hidden = true; });
 stepsMask.addEventListener("click", e => { if (e.target === stepsMask) stepsMask.hidden = true; });
 
-/* ----- 系统外运单手工补录：模糊搜索 + 多选逐单填写 + 服务端事务批量保存 ----- */
+/* ----- 系统外运单手工补录：只新增独立记录，不搜索、关联或更新已录订单 ----- */
 const manualMask = $("manualWaybillMask");
-const manualSelected = new Map();   /* id -> {order, carrier, waybill_no, route_status} */
-const MW_ROUTE_STATUSES = ["待揽收", "已揽收", "运送中", "派送中", "已签收", "已送达"];
+const manualEntries = new Map();   /* 本地草稿序号 -> 新记录；序号不是订单 ID，也不会发送给后端 */
+const MW_ROUTE_STATUSES = ["待揽收", "已揽收", "运送中", "派送中", "已签收"];
 let manualSaving = false;
+let manualSeq = 0;
 
-function mwOrderText(o) {
-  return [o.so, o.so_no, o.name, o.phone, o.address, o.is_owner, o.buyer,
-          o.emp_name, o.emp_phone, o.order_type, o.carrier, o.note]
-    .join(" ").toLowerCase();
+function mwInput(item, key, labelText, className, placeholder, maxLength) {
+  const label = document.createElement("label"); label.className = "mw-input " + className;
+  const caption = document.createElement("span"); caption.textContent = labelText;
+  const input = document.createElement("input");
+  input.value = item[key]; input.placeholder = placeholder || ""; input.maxLength = maxLength;
+  input.autocomplete = "off"; input.setAttribute("aria-label", labelText);
+  input.addEventListener("input", () => {
+    item[key] = input.value; input.classList.remove("invalid"); $("mwMessage").textContent = "";
+  });
+  label.append(caption, input);
+  return label;
 }
-function mwRenderResults() {
-  const box = $("mwResults");
-  box.innerHTML = "";
-  const terms = $("mwSearch").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const candidates = orders.filter(o => !o.waybill_no &&
-    terms.every(t => mwOrderText(o).includes(t)));
-  $("mwResultTitle").textContent = `可补录订单 ${candidates.length} 单（点击添加，可多选）`;
-  if (!candidates.length) {
-    box.innerHTML = '<div class="mw-empty">没有匹配的可补录订单<br>已有运单的订单不会重复显示</div>';
+const MW_CUSTOM_CARRIER = "__custom__";
+function mwDefaultCarrierValue() {
+  const select = $("mwDefaultCarrier");
+  return (select.value === MW_CUSTOM_CARRIER ? $("mwDefaultCarrierCustom").value : select.value).trim();
+}
+function mwCarrierInput(item) {
+  const label = mwInput(item, "carrier", "承运商（必填）", "mw-carrier", "请输入其他承运商", 30);
+  const input = label.querySelector("input");
+  const select = document.createElement("select"); select.setAttribute("aria-label", "承运商（必填）");
+  Array.from($("mwDefaultCarrier").options).forEach(option => select.add(new Option(option.text, option.value)));
+  select.value = Array.from(select.options).some(option => option.value === item.carrier) ? item.carrier : MW_CUSTOM_CARRIER;
+  input.hidden = select.value !== MW_CUSTOM_CARRIER;
+  input.setAttribute("aria-label", "其他承运商（手动输入）");
+  label.insertBefore(select, input);
+  select.addEventListener("change", () => {
+    const custom = select.value === MW_CUSTOM_CARRIER;
+    select.classList.remove("invalid"); input.classList.remove("invalid"); input.hidden = !custom;
+    item.carrier = custom ? "" : select.value; input.value = custom ? "" : item.carrier;
+    $("mwMessage").textContent = "";
+    if (custom) input.focus();
+  });
+  return label;
+}
+function mwAddEntry() {
+  if (manualSaving) return;
+  if (manualEntries.size >= 100) {
+    $("mwMessage").textContent = "每批最多补录 100 条，请先保存本批。";
     return;
   }
-  candidates.slice(0, 50).forEach(o => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "mw-result";
-    b.disabled = manualSelected.has(o.id);
-    const main = document.createElement("div"); main.className = "mw-result-main";
-    const dn = document.createElement("b"); dn.textContent = o.so || ("#" + o.id);
-    const so = document.createElement("span"); so.textContent = o.so_no ? "SO " + o.so_no : "";
-    const name = document.createElement("span"); name.textContent = o.name || o.emp_name || "—";
-    main.append(dn, so, name);
-    const sub = document.createElement("div"); sub.className = "mw-result-sub";
-    sub.textContent = [o.phone, o.address].filter(Boolean).join(" · ") || "无地址信息";
-    b.append(main, sub);
-    b.addEventListener("click", () => {
-      manualSelected.set(o.id, { order: o,
-        carrier: $("mwDefaultCarrier").value.trim() || o.carrier || "顺丰",
-        waybill_no: "", route_status: $("mwDefaultRouteStatus").value });
-      $("mwMessage").textContent = "";
-      mwRenderResults(); mwRenderEntries();
-      const last = $("mwEntries").lastElementChild;
-      if (last) { last.scrollIntoView({ block: "nearest" }); last.querySelector(".mw-waybill").focus(); }
-    });
-    box.appendChild(b);
-  });
-  if (candidates.length > 50) {
-    const more = document.createElement("div"); more.className = "mw-empty";
-    more.textContent = `仅显示前 50 单，请输入关键词缩小范围（共 ${candidates.length} 单）`;
-    box.appendChild(more);
-  }
+  const key = ++manualSeq;
+  manualEntries.set(key, { so: "", so_no: "", company: "", name: "", phone: "", address: "", note: "",
+    carrier: mwDefaultCarrierValue() || "顺丰", waybill_no: "",
+    route_status: $("mwDefaultRouteStatus").value });
+  $("mwMessage").textContent = ""; mwRenderEntries();
+  const row = $("mwEntries").querySelector(`[data-key="${key}"]`);
+  if (row) { row.scrollIntoView({ block: "nearest" }); row.querySelector(".mw-so input").focus(); }
 }
 function mwRenderEntries() {
   const box = $("mwEntries"); box.innerHTML = "";
-  $("mwSelectedTitle").textContent = `已选 ${manualSelected.size} 单（逐单填写运单信息）`;
-  $("mwSave").textContent = manualSelected.size ? `批量保存 (${manualSelected.size})` : "批量保存";
-  $("mwSave").disabled = !manualSelected.size || !API_BASE || manualSaving;
-  if (!manualSelected.size) {
-    box.innerHTML = '<div class="mw-empty">从左侧点击订单添加<br>可连续选择多单后统一批量保存</div>';
+  $("mwEntryTitle").textContent = `待补录 ${manualEntries.size} 条（均为独立新增，不关联已录订单）`;
+  $("mwSave").textContent = manualEntries.size ? `批量保存 (${manualEntries.size})` : "批量保存";
+  $("mwSave").disabled = !manualEntries.size || !API_BASE || manualSaving;
+  $("mwAdd").disabled = manualSaving || manualEntries.size >= 100;
+  if (!manualEntries.size) {
+    box.innerHTML = '<div class="mw-empty">点击上方“＋ 添加外部运单”开始<br>可连续添加多条后统一批量保存</div>';
     return;
   }
-  manualSelected.forEach((item, id) => {
-    const o = item.order;
-    const row = document.createElement("div"); row.className = "mw-entry"; row.dataset.id = id;
-    const info = document.createElement("div"); info.className = "mw-entry-order";
-    const dn = document.createElement("b"); dn.textContent = o.so || ("#" + o.id);
-    const sub = document.createElement("span");
-    sub.textContent = [o.so_no && "SO " + o.so_no, o.name || o.emp_name].filter(Boolean).join(" · ");
-    sub.title = o.address || ""; info.append(dn, sub);
-    const carrier = document.createElement("input");
-    carrier.value = item.carrier; carrier.maxLength = 30; carrier.required = true;
-    carrier.setAttribute("list", "mwCarrierOptions"); carrier.setAttribute("aria-label", "承运商");
-    const waybill = document.createElement("input");
-    waybill.className = "mw-waybill"; waybill.value = item.waybill_no; waybill.maxLength = 100;
-    waybill.placeholder = "运单号（必填）"; waybill.setAttribute("aria-label", "运单号");
+  manualEntries.forEach((item, key) => {
+    const row = document.createElement("div"); row.className = "mw-entry"; row.dataset.key = key;
+    const main = document.createElement("div"); main.className = "mw-entry-main";
+    main.append(
+      mwInput(item, "so", "DN", "mw-so", "DN", 100),
+      mwInput(item, "so_no", "SO", "mw-so-no", "SO", 100),
+      mwInput(item, "company", "公司", "mw-company", "收件公司（可选）", 200),
+      mwInput(item, "name", "姓名", "mw-name", "收件人姓名", 100),
+      mwInput(item, "phone", "电话", "mw-phone", "收件人电话", 50),
+      mwInput(item, "note", "备注", "mw-note", "备注（可选）", 1000));
+
+    const transport = document.createElement("div"); transport.className = "mw-entry-transport";
+    transport.append(
+      mwInput(item, "address", "地址", "mw-address", "收件地址", 500),
+      mwCarrierInput(item),
+      mwInput(item, "waybill_no", "运单号（必填）", "mw-waybill", "运单号", 100));
+    const statusLabel = document.createElement("label"); statusLabel.className = "mw-input mw-route";
+    const statusCaption = document.createElement("span"); statusCaption.textContent = "路由状态";
     const status = document.createElement("select"); status.setAttribute("aria-label", "路由状态");
     MW_ROUTE_STATUSES.forEach(s => status.add(new Option(s, s)));
     status.value = item.route_status;
-    carrier.addEventListener("input", () => { item.carrier = carrier.value; });
-    waybill.addEventListener("input", () => {
-      item.waybill_no = waybill.value; waybill.classList.remove("invalid"); $("mwMessage").textContent = "";
-    });
     status.addEventListener("change", () => { item.route_status = status.value; });
+    statusLabel.append(statusCaption, status);
     const remove = document.createElement("button");
     remove.type = "button"; remove.className = "mw-remove"; remove.textContent = "×";
     remove.title = "移出本批"; remove.setAttribute("aria-label", "移出本批");
-    remove.addEventListener("click", () => {
-      manualSelected.delete(id); mwRenderResults(); mwRenderEntries();
-    });
-    row.append(info, carrier, waybill, status, remove); box.appendChild(row);
+    remove.disabled = manualSaving;
+    remove.addEventListener("click", () => { manualEntries.delete(key); mwRenderEntries(); });
+    transport.append(statusLabel, remove);
+    row.append(main, transport); box.appendChild(row);
   });
 }
 function openManualWaybill() {
   if (manualSaving) return;
-  manualSelected.clear(); $("mwSearch").value = ""; $("mwMessage").textContent = "";
-  $("mwDefaultRouteStatus").value = "待揽收";
+  manualEntries.clear(); $("mwMessage").textContent = "";
+  $("mwDefaultRouteStatus").value = "已签收";
   if (!API_BASE) $("mwMessage").textContent = "API 当前离线，无法保存；请恢复服务后重试。";
-  mwRenderResults(); mwRenderEntries(); manualMask.hidden = false;
-  setTimeout(() => $("mwSearch").focus(), 0);
+  manualMask.hidden = false; mwAddEntry();
 }
 function closeManualWaybill() { if (!manualSaving) manualMask.hidden = true; }
 
 async function saveManualWaybills() {
-  if (manualSaving || !manualSelected.size || !API_BASE) return;
+  if (manualSaving || !manualEntries.size || !API_BASE) return;
   const items = [];
-  for (const [id, item] of manualSelected) {
+  for (const [key, item] of manualEntries) {
     const carrier = item.carrier.trim(), waybill = item.waybill_no.trim();
-    const row = $("mwEntries").querySelector(`[data-id="${id}"]`);
-    const wbInput = row && row.querySelector(".mw-waybill");
+    const row = $("mwEntries").querySelector(`[data-key="${key}"]`);
+    const carrierInput = row && (row.querySelector(".mw-carrier input:not([hidden])") || row.querySelector(".mw-carrier select"));
+    const waybillInput = row && row.querySelector(".mw-waybill input");
     if (!carrier || !waybill) {
-      if (wbInput) { wbInput.classList.toggle("invalid", !waybill); if (!waybill) wbInput.focus(); }
-      $("mwMessage").textContent = `订单 ${item.order.so || id}：承运商和运单号均为必填项。`;
+      if (carrierInput) carrierInput.classList.toggle("invalid", !carrier);
+      if (waybillInput) waybillInput.classList.toggle("invalid", !waybill);
+      const firstMissing = !carrier ? carrierInput : waybillInput;
+      if (firstMissing) firstMissing.focus();
+      $("mwMessage").textContent = `第 ${items.length + 1} 条：承运商和运单号均为必填项。`;
       return;
     }
-    items.push({ id, carrier, waybill_no: waybill, route_status: item.route_status });
+    items.push({ so: item.so.trim(), so_no: item.so_no.trim(), company: item.company.trim(),
+      name: item.name.trim(), phone: item.phone.trim(), address: item.address.trim(), note: item.note.trim(),
+      carrier, waybill_no: waybill, route_status: item.route_status });
   }
   manualSaving = true; manualMask.setAttribute("aria-busy", "true");
-  $("mwMessage").textContent = ""; $("mwSave").disabled = true;
-  $("mwSave").textContent = `正在保存 ${items.length} 单…`;
+  $("mwMessage").textContent = ""; mwRenderEntries();
+  $("mwSave").textContent = `正在保存 ${items.length} 条…`;
   try {
     const r = await fetch(API_BASE + "/orders/manual-waybills", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -859,13 +1088,15 @@ async function saveManualWaybills() {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || ("HTTP " + r.status));
-    const changed = new Map((d.orders || []).map(o => [o.id, o]));
-    orders = orders.map(o => changed.get(o.id) || o);
+    if (!Array.isArray(d.orders) || d.orders.length !== items.length) {
+      throw new Error("服务端返回的新记录数量不一致，请刷新清单核对");
+    }
+    orders = d.orders.concat(orders);   /* 返回的都是新 ID；只追加，绝不替换已有订单 */
     baseList = activeFilter ? orders.filter(activeFilter.fn) : orders;
     applyView();
     manualSaving = false; manualMask.removeAttribute("aria-busy");
     closeManualWaybill();
-    toast(`已补录 ${d.count || items.length} 条系统外运单`);
+    toast(`已新增 ${d.count || items.length} 条独立系统外运单`);
   } catch (e) {
     $("mwMessage").textContent = "保存失败：" + e.message + "；服务端采用整批事务，请刷新核对后重试。";
   } finally {
@@ -876,13 +1107,18 @@ async function saveManualWaybills() {
 $("btnManualWaybill").addEventListener("click", openManualWaybill);
 $("manualWaybillClose").addEventListener("click", closeManualWaybill);
 $("mwCancel").addEventListener("click", closeManualWaybill);
-$("mwSearch").addEventListener("input", mwRenderResults);
+$("mwAdd").addEventListener("click", mwAddEntry);
 $("mwSave").addEventListener("click", saveManualWaybills);
+$("mwDefaultCarrier").addEventListener("change", () => {
+  const custom = $("mwDefaultCarrier").value === MW_CUSTOM_CARRIER;
+  $("mwDefaultCarrierCustom").hidden = !custom;
+  if (custom) { $("mwDefaultCarrierCustom").value = ""; $("mwDefaultCarrierCustom").focus(); }
+});
 $("mwApplyDefaults").addEventListener("click", () => {
-  const carrier = $("mwDefaultCarrier").value.trim();
+  const carrier = mwDefaultCarrierValue();
   if (!carrier) { $("mwMessage").textContent = "请先填写默认承运商。"; return; }
-  if (!manualSelected.size) { $("mwMessage").textContent = "请先从左侧添加订单。"; return; }
-  manualSelected.forEach(item => {
+  if (!manualEntries.size) { $("mwMessage").textContent = "请先添加外部运单明细。"; return; }
+  manualEntries.forEach(item => {
     item.carrier = carrier; item.route_status = $("mwDefaultRouteStatus").value;
   });
   $("mwMessage").textContent = ""; mwRenderEntries();

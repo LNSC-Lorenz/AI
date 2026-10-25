@@ -43,6 +43,23 @@ function Get-Excludes([string]$appName) {
   return ,$list
 }
 
+# ---------- tar: prefer Git GNU tar (Windows bsdtar can crash on Chinese filenames) ----------
+$tarExe = "tar"
+$tarOptions = @()
+$tarCreate = "-czf"
+$git = Get-Command git -ErrorAction SilentlyContinue
+if ($git) {
+  $gitRoot = Split-Path (Split-Path $git.Source -Parent) -Parent
+  $gnuTar = Join-Path $gitRoot "usr/bin/tar.exe"
+  $gnuGzip = (Join-Path $gitRoot "usr/bin/gzip.exe").Replace('\', '/')
+  if ((Test-Path $gnuTar) -and (Test-Path $gnuGzip)) {
+    $tarExe = $gnuTar
+    # --force-local prevents C: being treated as a remote host; use Git's gzip explicitly.
+    $tarOptions = @("--force-local", "--use-compress-program=`"$gnuGzip`"")
+    $tarCreate = "-cf"
+  }
+}
+
 # ---------- targets ----------
 $targets = @()
 if ($App -eq "all") { $targets = @($map.Keys) } else { $targets = @($App) }
@@ -58,7 +75,7 @@ foreach ($name in $targets) {
   $excludes = Get-Excludes $name
 
   Write-Host "==> [$name] packing $local (data/secrets excluded)"
-  tar -czf $tgz @excludes -C $local .
+  & $tarExe @tarOptions $tarCreate $tgz @excludes -C $local .
   if ($LASTEXITCODE -ne 0) { throw "tar pack failed" }
 
   Write-Host "==> [$name] uploading to $SSH_HOST"
