@@ -13,7 +13,8 @@ let personName = '';
 let currentCurState = null;
 let fallbackInventory = 0;
 let personIdTimerHandle = null;
-let dbHasData = false;
+// Excel “新品库存/旧品库存”列扫描结果（供上传后的差异确认提示使用）
+let excelStockScan = { rows: 0, withQty: 0, newColFound: false, oldColFound: false, sheets: [] };
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(hideLoading, 5000);
 
     try {
-        try { dbHasData = (await dbService.getAllInventoryStates()).length > 0; } catch (e) { }
         initializeData();
         renderMainView();
         try {
@@ -147,6 +147,38 @@ function toStockNum(v) {
     return isNaN(n) ? null : Math.max(0, Math.round(n));
 }
 
+// 在“表头行”里按关键字定位列索引（忽略空白字符）；找不到返回 -1。
+// 注意：不能用 Object.keys(sheet_to_json(sheet)[0]) —— SheetJS 默认省略空单元格，
+// 若第一行数据的该列为空，就会误判“整张表没有这一列”（2026-10 库存不上报故障根因）。
+function findHeaderCol(headerRow, keyword) {
+    if (!headerRow) return -1;
+    for (let i = 0; i < headerRow.length; i++) {
+        const h = headerRow[i] == null ? '' : String(headerRow[i]).replace(/\s/g, '');
+        if (h && h.includes(keyword)) return i;
+    }
+    return -1;
+}
+
+// 按表头定位到的列索引，逐行取“新品/旧品库存”单元格，按唯一识别号建索引。
+// 单元格为空 → null（语义：该列不动）；0 是有效值。
+function buildStockCellMap(rawRows, uidColIdx, newColIdx, oldColIdx) {
+    const map = {};
+    if (uidColIdx < 0) return map;
+    for (let r = 1; r < rawRows.length; r++) {
+        const row = rawRows[r];
+        if (!row) continue;
+        const uid = row[uidColIdx] == null ? '' : String(row[uidColIdx]).trim();
+        if (!uid) continue;
+        const key = uid.toLowerCase();
+        if (map[key]) continue;
+        map[key] = {
+            newStock: newColIdx >= 0 ? toStockNum(row[newColIdx]) : null,
+            oldStock: oldColIdx >= 0 ? toStockNum(row[oldColIdx]) : null
+        };
+    }
+    return map;
+}
+
 async function loadExcelData() {
     try {
         const response = await fetch('data/车间工具库存管理-信息表.xlsx', { cache: 'no-store' });
@@ -158,17 +190,36 @@ async function loadExcelData() {
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
         excelData = [];
+        excelStockScan = { rows: 0, withQty: 0, newColFound: false, oldColFound: false, sheets: [] };
         const sheetNames = workbook.SheetNames;
 
         for (let sheetIndex = 0; sheetIndex < Math.min(5, sheetNames.length); sheetIndex++) {
             const sheet = workbook.Sheets[sheetNames[sheetIndex]];
             const rows = XLSX.utils.sheet_to_json(sheet);
-            // M/N 列（新品库存/旧品库存）：表头按包含匹配，防止列位变动或表头带空格
-            const headerKeys = rows.length ? Object.keys(rows[0]) : [];
-            const newStockKey = headerKeys.find(k => k && k.includes('新品库存'));
-            const oldStockKey = headerKeys.find(k => k && k.includes('旧品库存'));
+
+            // 新品库存/旧品库存：先用“表头行”定位列索引，再按索引逐行读数。
+            // 既不依赖列顺序，也不会因为“第一行数据该列为空”就把整列判成不存在。
+            const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: null });
+            const headerRow = rawRows[0] || [];
+            const newColIdx = findHeaderCol(headerRow, '新品库存');
+            const oldColIdx = findHeaderCol(headerRow, '旧品库存');
+            const uidColIdx = findHeaderCol(headerRow, '唯一识别号');
+            const stockCells = buildStockCellMap(rawRows, uidColIdx, newColIdx, oldColIdx);
+            const sheetQtyRows = Object.keys(stockCells)
+                .filter(k => stockCells[k].newStock != null || stockCells[k].oldStock != null).length;
+            excelStockScan.sheets.push({
+                sheet: sheetNames[sheetIndex],
+                newCol: newColIdx >= 0 ? String(headerRow[newColIdx] || '').trim() : '',
+                oldCol: oldColIdx >= 0 ? String(headerRow[oldColIdx] || '').trim() : '',
+                rowsWithQty: sheetQtyRows
+            });
+            if (newColIdx >= 0) excelStockScan.newColFound = true;
+            if (oldColIdx >= 0) excelStockScan.oldColFound = true;
+            excelStockScan.withQty += sheetQtyRows;
 
             rows.forEach(row => {
+                const rowId = (row['唯一识别号'] || '').toString().trim();
+                const cell = rowId ? stockCells[rowId.toLowerCase()] : null;
                 const item = {
                     cabinetNumber: sheetIndex + 1,
                     drawerNumber: parseInt(row['抽屉号']) || 0,
@@ -185,8 +236,8 @@ async function loadExcelData() {
                     sapNumber: (row['SAP号'] || '').toString().trim(),
                     unitPrice: parseFloat(row['单价']) || null,
                     toolBrand: row['刀具品牌'] || '',
-                    excelNewStock: newStockKey ? toStockNum(row[newStockKey]) : null,
-                    excelOldStock: oldStockKey ? toStockNum(row[oldStockKey]) : null,
+                    excelNewStock: cell && cell.newStock != null ? cell.newStock : null,
+                    excelOldStock: cell && cell.oldStock != null ? cell.oldStock : null,
                     curState: null
                 };
                 if (item.drawerNumber > 0) {
@@ -194,6 +245,7 @@ async function loadExcelData() {
                 }
             });
         }
+        excelStockScan.rows = excelData.length;
 
         // Read SAP号, 单价, 刀具品牌 from raw header rows (matches WPF logic)
         for (let sheetIndex = 0; sheetIndex < Math.min(5, sheetNames.length); sheetIndex++) {
@@ -252,65 +304,11 @@ async function loadExcelData() {
             console.warn('ensureStatesBulk failed:', e);
         }
 
-        // Excel M/N column initialization (matches WPF ReadExcelInfoAsync init logic)
-        // Skipped if DB already has data (e.g. imported from toolinventory.db)
-        try {
-            if (dbHasData) throw { skip: true };
-            const initMap = {};
-            for (let sheetIndex = 0; sheetIndex < Math.min(5, sheetNames.length); sheetIndex++) {
-                const sheet = workbook.Sheets[sheetNames[sheetIndex]];
-                const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                if (!rawRows || rawRows.length < 2) continue;
-
-                // Find column indices containing "M" and "N" headers for new/old stock
-                const headerRow = rawRows[0] || [];
-                const mColIdx = headerRow.findIndex(h => h && h.toString().includes('M'));
-                const nColIdx = headerRow.findIndex(h => h && h.toString().includes('N'));
-
-                if (mColIdx < 0 && nColIdx < 0) continue;
-
-                for (let r = 1; r < rawRows.length; r++) {
-                    const row = rawRows[r];
-                    if (!row) continue;
-
-                    // Find the uniqueIdentifier in this row
-                    let foundId = null;
-                    for (let c = 0; c < row.length; c++) {
-                        if (row[c] == null) continue;
-                        const s = row[c].toString().trim();
-                        if (uniqueIds.some(uid => uid.toLowerCase() === s.toLowerCase())) {
-                            foundId = s;
-                            break;
-                        }
-                    }
-                    if (!foundId || initMap[foundId.toLowerCase()]) continue;
-
-                    let newVal = null, oldVal = null;
-                    if (mColIdx >= 0 && row[mColIdx] != null) {
-                        const nv = parseInt(row[mColIdx]);
-                        if (!isNaN(nv)) newVal = nv;
-                    }
-                    if (nColIdx >= 0 && row[nColIdx] != null) {
-                        const ov = parseInt(row[nColIdx]);
-                        if (!isNaN(ov)) oldVal = ov;
-                    }
-
-                    if (newVal != null || oldVal != null) {
-                        initMap[foundId.toLowerCase()] = { id: foundId, newInit: newVal, oldInit: oldVal };
-                    }
-                }
-            }
-
-            // Reset DB for items with init values from Excel
-            for (const key of Object.keys(initMap)) {
-                const entry = initMap[key];
-                const matName = (excelData.find(x => x.uniqueIdentifier && x.uniqueIdentifier.toLowerCase() === key && x.materialName) || {}).materialName || '';
-                await dbService.resetInventory(entry.id, entry.newInit || 0, entry.oldInit || 0, '初始化', matName);
-                stockLookup[entry.id] = (entry.newInit || 0) + (entry.oldInit || 0);
-            }
-        } catch (e) {
-            if (!e || !e.skip) console.warn('Excel init columns (M/N) processing failed:', e);
-        }
+        // 说明（2026-10-26 移除“自动初始化”）：这里原有一段逻辑——当 dbHasData 判定失败（一次
+        // /api/states 请求异常即可）时，用 Excel 的 M/N 列直接覆盖库存，并调用 /api/reset，
+        // 而 /api/reset 会删除该物料的全部出入库历史。2026-09-09 14:07 就因此把 484 项
+        // 一次性写成 0/0，并清空了它们的流水。库存初始化/校正现在只走
+        // 【上传Excel】→ 差异清单 → 确认更新 这条显式路径（见 syncCountsFromExcel）。
 
         // Prefetch all stocks with a single request; 失败时库存显示为0但布局正常
         let allStates = [];
@@ -669,16 +667,22 @@ function escapeHtml(s) {
 }
 
 // 确认对话框（与 showMessage 同风格，确定/取消 两按钮），resolve true=确认
-function showConfirm(msg) {
+// opts.wide=true 加宽（用于差异清单表格）；opts.yesText/noText 自定义按钮文案
+function showConfirm(msg, opts) {
+    const o = opts || {};
     return new Promise(resolve => {
         const overlay = document.createElement('div');
         overlay.className = 'msg-overlay';
+        const boxStyle = o.wide ? ' style="width:min(920px,92vw);min-width:0;max-width:92vw;text-align:left;padding:22px 24px"' : '';
+        const bodyStyle = o.wide
+            ? 'margin-bottom:16px;font-size:15px;text-align:left;white-space:normal'
+            : 'margin-bottom:20px;font-size:16px;white-space:pre-line;text-align:left;max-height:50vh;overflow:auto';
         overlay.innerHTML = `
-        <div class="msg-box">
-            <p style="white-space:pre-line;text-align:left;max-height:50vh;overflow:auto">${msg}</p>
+        <div class="msg-box"${boxStyle}>
+            <div style="${bodyStyle}">${msg}</div>
             <div style="display:flex;gap:12px;justify-content:center">
-                <button data-act="yes">以Excel为准更新</button>
-                <button data-act="no">不更新</button>
+                <button data-act="yes">${o.yesText || '以Excel为准更新'}</button>
+                <button data-act="no">${o.noText || '不更新'}</button>
             </div>
         </div>`;
         overlay.querySelector('[data-act="yes"]').onclick = () => { overlay.remove(); resolve(true); };
@@ -687,12 +691,14 @@ function showConfirm(msg) {
     });
 }
 
-// 上传新表后：把 Excel M/N 列（新品/旧品库存）与软件实时数量比对，
-// 列出差异确认后以 Excel 为准更新（写入出入库历史，人员记为"Excel同步"）。
+// 上传新表后：把 Excel 的“新品库存/旧品库存”列与软件实时数量比对，
+// 列出全部差异，确认后以 Excel 为准更新（逐条写入出入库历史，人员记为"Excel同步"）。
 // 仅在上传这一主动动作时执行；日常打开页面不同步，避免旧 Excel 覆盖实时出入库结果。
+// 语义：某列留空 = 该列不动；填 0 = 清零（清零项在确认框里标红并排在最前）。
 async function syncCountsFromExcel() {
+    const scan = excelStockScan;
     const candidates = excelData.filter(x => x.uniqueIdentifier && (x.excelNewStock != null || x.excelOldStock != null));
-    if (!candidates.length) return { changed: 0, applied: false };
+    if (!candidates.length) return { changed: 0, applied: false, scan, zeroCount: 0 };
 
     const stockMap = await fetchAllStockMap();
     const diffs = [];
@@ -708,20 +714,23 @@ async function syncCountsFromExcel() {
         if (newTarget !== cur.newCount || oldTarget !== cur.oldCount) {
             diffs.push({
                 uid: x.uniqueIdentifier, name: x.materialName || '',
-                curNew: cur.newCount, curOld: cur.oldCount, newTarget, oldTarget
+                curNew: cur.newCount, curOld: cur.oldCount, newTarget, oldTarget,
+                toZero: (newTarget === 0 && cur.newCount > 0) || (oldTarget === 0 && cur.oldCount > 0)
             });
         }
     });
-    if (!diffs.length) return { changed: 0, applied: false };
+    if (!diffs.length) return { changed: 0, applied: false, scan, zeroCount: 0 };
 
-    const preview = diffs.slice(0, 10)
-        .map(d => `${escapeHtml(d.uid)} ${escapeHtml(d.name)}：新品 ${d.curNew}→${d.newTarget}，旧品 ${d.curOld}→${d.oldTarget}`)
-        .join('\n');
-    const ok = await showConfirm(
-        `新表中有 ${diffs.length} 项库存数量与软件不一致：\n${preview}` +
-        `${diffs.length > 10 ? `\n……（共 ${diffs.length} 项，仅列出前 10 项）` : ''}` +
-        `\n\n是否以Excel为准更新软件库存？（变更将写入出入库历史，人员记为"Excel同步"）`);
-    if (!ok) return { changed: diffs.length, applied: false };
+    // 清零项排在最前，便于操作人先看清风险
+    diffs.sort((a, b) => (b.toZero ? 1 : 0) - (a.toZero ? 1 : 0) || a.uid.localeCompare(b.uid));
+    const zeroCount = diffs.filter(d => d.toZero).length;
+
+    const ok = await showConfirm(buildDiffHtml(diffs, scan, zeroCount), {
+        wide: true,
+        yesText: `以Excel为准更新（${diffs.length} 项）`,
+        noText: '取消'
+    });
+    if (!ok) return { changed: diffs.length, applied: false, scan, zeroCount };
 
     let done = 0, failed = 0;
     for (const d of diffs) {
@@ -738,7 +747,52 @@ async function syncCountsFromExcel() {
             console.error('库存同步失败:', d.uid, e);
         }
     }
-    return { changed: diffs.length, applied: true, done, failed };
+    return { changed: diffs.length, applied: true, done, failed, scan, zeroCount };
+}
+
+// 组装差异清单 HTML：全部差异逐行列出（可滚动），清零项标红并置顶
+function buildDiffHtml(diffs, scan, zeroCount) {
+    const skipped = Math.max(0, (scan && scan.rows ? scan.rows : 0) - (scan && scan.withQty ? scan.withQty : 0));
+    const th = 'padding:6px 8px;text-align:left;font-weight:600;color:#333;border-bottom:1px solid #e0e0e0';
+    const cell = (cur, target) => {
+        if (cur === target) return `<td style="padding:6px 8px;color:#666">${cur}</td>`;
+        const zero = target === 0 && cur > 0;
+        const color = zero ? '#c62828' : '#1565c0';
+        return `<td style="padding:6px 8px;color:${color};font-weight:600">${cur} → ${target}${zero ? '（清零）' : ''}</td>`;
+    };
+    const rows = diffs.map(d => `
+                <tr style="background:${d.toZero ? '#fdecea' : '#fff'}">
+                    <td style="padding:6px 8px;font-family:Consolas,monospace">${escapeHtml(d.uid)}</td>
+                    <td style="padding:6px 8px;color:#333">${escapeHtml(d.name)}</td>
+                    ${cell(d.curNew, d.newTarget)}
+                    ${cell(d.curOld, d.oldTarget)}
+                </tr>`).join('');
+    return `
+        <div style="line-height:1.6;margin-bottom:10px">
+            新表共扫描 <b>${scan && scan.rows ? scan.rows : 0}</b> 行库位，其中
+            <b>${scan && scan.withQty ? scan.withQty : 0}</b> 行填了新品/旧品数量；
+            与软件实时库存比对出 <b>${diffs.length}</b> 项差异${zeroCount ? `，其中 <b style="color:#c62828">${zeroCount} 项会清零</b>` : ''}。
+        </div>
+        ${zeroCount ? `<div style="background:#fdecea;border:1px solid #f5c6cb;color:#c62828;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:10px;line-height:1.5">
+            ⚠ 标红行的数量在 Excel 里是 0，确认后软件库存会被清零。请先确认这些库位确实已盘为 0，再点“以Excel为准更新”。
+        </div>` : ''}
+        <div style="max-height:42vh;overflow:auto;border:1px solid #e0e0e0;border-radius:6px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                    <tr style="position:sticky;top:0;background:#f5f7fa">
+                        <th style="${th}">唯一识别号</th>
+                        <th style="${th}">物料名称</th>
+                        <th style="${th}">新品 现值→新值</th>
+                        <th style="${th}">旧品 现值→新值</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:10px;line-height:1.6">
+            Excel 中该列为空 = 不动（本次有 ${skipped} 行未填数量，按不动处理）。<br>
+            确认后逐条写入出入库历史（人员记为“Excel同步”）；点“取消”不修改任何数量。
+        </div>`;
 }
 
 async function uploadExcelFile(input) {
@@ -761,13 +815,19 @@ async function uploadExcelFile(input) {
         let syncMsg;
         try {
             const s = await syncCountsFromExcel();
+            const scanned = s.scan && s.scan.rows ? s.scan.rows : 0;
+            const withQty = s.scan && s.scan.withQty ? s.scan.withQty : 0;
             if (s.applied) {
                 await loadExcelData(); // 数量已变，重新拉取库存刷新界面
-                syncMsg = `库存同步：已按新表更新 ${s.done} 项${s.failed ? `，${s.failed} 项失败（详见控制台）` : ''}。`;
+                syncMsg = `库存同步：已按新表更新 ${s.done} 项${s.zeroCount ? `（含清零 ${s.zeroCount} 项）` : ''}${s.failed ? `，${s.failed} 项失败（详见控制台）` : ''}。`;
             } else if (s.changed > 0) {
-                syncMsg = '库存同步：已取消，数量保持软件现值。';
+                syncMsg = `库存同步：已取消，${s.changed} 项差异未应用，数量保持软件现值。`;
+            } else if (!s.scan || (!s.scan.newColFound && !s.scan.oldColFound)) {
+                syncMsg = `库存同步：新表里没找到“新品库存”/“旧品库存”列（已扫描 ${scanned} 行），未比对数量。请检查表头名称（需包含这 6 个字）。`;
+            } else if (!withQty) {
+                syncMsg = `库存同步：新表 ${scanned} 行中没有任何新品/旧品数量（全空），按“不动”处理，库存未变。`;
             } else {
-                syncMsg = '库存同步：新表数量与软件一致，无需更新。';
+                syncMsg = `库存同步：已扫描 ${scanned} 行（其中 ${withQty} 行填了数量），与软件一致，无需更新。`;
             }
         } catch (e) {
             console.error('库存同步失败:', e);
