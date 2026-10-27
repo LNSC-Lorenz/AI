@@ -207,8 +207,9 @@ function carrierCancel(d, res) {
     json(res, 200, { ok: true, cleared: wb });
   };
   if (carrier === "专车" || carrier === "自提") return clear();   /* 厂内单：无外部承运商 */
-  if (rs !== "待揽收") {
-    return json(res, 400, { error: "仅未揽收（路由状态=待揽收）可取消下单；当前路由状态：" + (rs || "—") });
+  /* 未揽收：顺丰 20023「暂无路由信息」与「待揽收」同义（2026-10-26） */
+  if (rs !== "待揽收" && rs !== "暂无路由信息") {
+    return json(res, 400, { error: "仅未揽收（待揽收/暂无路由信息）可取消下单；当前路由状态：" + (rs || "—") });
   }
   let orderId = "", logisticId = "";
   try {

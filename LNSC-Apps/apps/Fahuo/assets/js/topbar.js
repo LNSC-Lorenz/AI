@@ -68,7 +68,7 @@ function updateWarnBtn(orders) {
   btn.classList.toggle("warn-active", hasUrgentPending);
 }
 
-/* ----- 设置弹窗（全页面统一注入：承运商启用开关 + 数据维护） ----- */
+/* ----- 设置弹窗（全页面统一注入：承运商启用开关） ----- */
 (function () {
   const btn = document.querySelector('button[title="设置"]');
   if (!btn) return;
@@ -92,9 +92,6 @@ function updateWarnBtn(orders) {
       '<label class="set-row"><span>' + c + '</span>' +
       '<span class="ms-switch"><input type="checkbox" data-c="' + c + '"><i></i></span></label>'
     ).join("") +
-    '    <div class="set-sec" style="margin-top:16px">数据维护</div>' +
-    '    <div class="set-row"><span>清空订单表（功能已停用，防误清真实数据）</span>' +
-    '<button class="btn set-clear" type="button" disabled>立即清空</button></div>' +   /* 2026-09-16 用户规则：灰色禁用不可点 */
     '  </div>' +
     '</div>';
   document.body.appendChild(mask);
@@ -107,26 +104,6 @@ function updateWarnBtn(orders) {
       c[i.dataset.c] = i.checked;
       localStorage.setItem(KEY, JSON.stringify(c));
     });
-  });
-  /* 清除模拟数据：调服务端清空订单表 */
-  mask.querySelector(".set-clear").addEventListener("click", async () => {
-    if (!confirm("确定清除全部订单数据？\n（清空数据库 orders 表，不可恢复）")) return;
-    let lastStatus = 0, offline = 0;
-    for (const base of ["../api", `${location.protocol}//${location.hostname}:8091/api`]) {
-      try {
-        const r = await fetch(base + "/admin/clear-orders", { method: "POST", signal: AbortSignal.timeout(5000) });   /* 5s 超时防假死 */
-        if (r.ok) {
-          const d = await r.json();
-          alert("已清除 " + d.deleted + " 条数据");
-          location.reload();
-          return;
-        }
-        lastStatus = r.status;   /* 接口可达但拒绝（如 404 未部署） */
-      } catch (e) { offline++; /* 网络不可达，尝试下一个 */ }
-    }
-    alert(lastStatus
-      ? `清除失败（${lastStatus}）：服务器接口未部署或版本过旧\n请更新 server.py 并重启 fahuo-api`
-      : "清除失败：API 离线（本地预览模式无数据库可清）");
   });
   btn.addEventListener("click", () => { mask.hidden = false; });
   mask.addEventListener("click", e => { if (e.target === mask) mask.hidden = true; });
@@ -163,4 +140,107 @@ function updateWarnBtn(orders) {
   btn.addEventListener("click", () => { mask.hidden = false; });
   mask.addEventListener("click", e => { if (e.target === mask) mask.hidden = true; });
   mask.querySelector(".about-x").addEventListener("click", () => { mask.hidden = true; });
+})();
+/* ----- 提示弹窗（全页面统一注入；替代浏览器原生 alert；2026-10-26 用户要求） -----
+   用法：themeAlert("文本") / themeAlert("文本", { title: "提示", ok: "知道了" })
+        带图标的多条提示：themeAlert(msg, { rows: [ { icon: "lock", tone: "warn", text: "…" }, … ] })，有 rows 时按行渲染图标，msg 仅作纯文本兜底
+        icon 取内置集 lock / ban / warn / bulb / info / truck / check；tone 取 warn（红）/ hint（淡）/ ok（绿）
+   主题边框同运单弹窗；× / 知道了 / 点遮罩 / Enter / Esc 关闭，关闭后焦点回到原处；
+   同一时刻只保留一个（重复调用先收掉旧窗并 resolve 其 Promise），返回 Promise */
+(function () {
+  const mask = document.createElement("div");
+  mask.className = "steps-mask";
+  mask.id = "taMask";
+  mask.hidden = true;
+  mask.innerHTML =
+    '<div class="steps-modal ta-modal">' +
+    '  <div class="steps-head"><b id="taTitle">提示</b>' +
+    '    <button class="steps-close" id="taX" type="button" title="关闭">×</button></div>' +
+    '  <div class="ta-body" id="taBody"></div>' +
+    '  <div class="ta-btns"><button class="btn pass-ok" id="taOk" type="button">知道了</button></div>' +
+    '</div>';
+  document.body.appendChild(mask);
+  const titleEl = mask.querySelector("#taTitle");
+  const bodyEl = mask.querySelector("#taBody");
+  const okBtn = mask.querySelector("#taOk");
+  const xBtn = mask.querySelector("#taX");
+  let done = null;              /* 当前弹窗的 resolve（null = 未打开） */
+  let lastFocus = null;         /* 关闭后焦点回落（键盘 / 扫码枪流程不丢位置） */
+
+  function close() {
+    if (!done) return;
+    const fn = done;
+    done = null;
+    mask.hidden = true;
+    document.removeEventListener("keydown", onKey, true);
+    okBtn.onclick = xBtn.onclick = mask.onclick = null;
+    if (lastFocus && document.contains(lastFocus) && lastFocus.focus) lastFocus.focus();
+    fn();
+  }
+
+  function onKey(e) {           /* 捕获阶段拦截：弹窗打开时页面快捷键不响应 */
+    if (mask.hidden) return;
+    if (e.key === "Enter" || e.key === "Escape") {
+      e.preventDefault(); e.stopPropagation(); close();
+    }
+  }
+
+  /* 内置图标集（feather 风格线性图标，与顶栏按钮一致；仅此处常量参与 innerHTML） */
+  const ICONS = {
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    ban: '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+    warn: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>',
+    info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    truck: '<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+    check: '<circle cx="12" cy="12" r="10"/><polyline points="16 8 11 14 8 11"/>'
+  };
+  function iconSvg(name) {
+    const p = ICONS[name];
+    if (!p) return "";
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+  }
+
+  /* 多条提示：每条一行「图标 + 文本」，图标随语气着色（warn=红、hint=主题淡色、ok=绿） */
+  function renderRows(rows) {
+    bodyEl.textContent = "";
+    const wrap = document.createElement("div");
+    wrap.className = "ta-rows";
+    rows.forEach(r => {
+      r = r || {};
+      const row = document.createElement("div");
+      row.className = "ta-row" + (r.tone ? " ta-" + r.tone : "");
+      const ico = document.createElement("span");
+      ico.className = "ta-ico";
+      ico.innerHTML = iconSvg(r.icon);          /* 只拼内置常量，用户文本一律 textContent */
+      const tx = document.createElement("div");
+      tx.className = "ta-tx";
+      tx.textContent = String(r.text == null ? "" : r.text);
+      row.appendChild(ico);
+      row.appendChild(tx);
+      wrap.appendChild(row);
+    });
+    bodyEl.appendChild(wrap);
+  }
+
+  function themeAlert(msg, opt) {
+    opt = opt || {};
+    close();                    /* 已有弹窗：先收掉，避免叠窗与悬空 Promise */
+    titleEl.textContent = opt.title || "提示";
+    const rows = Array.isArray(opt.rows) ? opt.rows : null;
+    if (rows && rows.length) renderRows(rows);              /* 带图标的多条提示（图标集内置，文本仍走 textContent） */
+    else bodyEl.textContent = String(msg == null ? "" : msg);   /* 纯文本：消息含 DN/单号不解析 HTML */
+    okBtn.textContent = opt.ok || "知道了";
+    lastFocus = document.activeElement;
+    mask.hidden = false;
+    document.addEventListener("keydown", onKey, true);
+    okBtn.onclick = close;
+    xBtn.onclick = close;
+    mask.onclick = e => { if (e.target === mask) close(); };
+    setTimeout(() => { if (!mask.hidden) okBtn.focus(); }, 30);   /* 可直接回车关闭 */
+    return new Promise(res => { done = res; });
+  }
+
+  window.themeAlert = themeAlert;
 })();

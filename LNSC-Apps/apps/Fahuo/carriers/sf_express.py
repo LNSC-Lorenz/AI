@@ -200,8 +200,23 @@ def _real_place_order(order, cfg):
     # 修复（2026-09-24 官方《增值服务产品表》终定）：纸质回单 → isSignBack=1（签单返还唯一有效字段值）；
     #   拍照回传 → 增值服务 IN91（serviceList，value 固定 13=签回单拍照），不再借用 isSignBack=2/3。
     #   ⚠️ =3"组合值"同样静默无效（_sf_signback3_probe：接受但不返 type=3 运单）→ 勿用
-    if "纸质回单" in _rc:   # _rc 已于 cargo_print 处取（回单标识与服务下发同源）
+    if "纸质回单" in _rc or "签名" in _rc or "盖章" in _rc:   # _rc 已于 cargo_print 处取（回单标识与服务下发同源）
         body["isSignBack"] = 1    # 签单返还（纸质回单）；增值服务 IN03 下单时无需下发，纸质回单仅认此字段
+    # 签回单签名/盖章（2026-10-26 用户规则 + 官方《增值服务产品表》IN03 条目口径）：
+    #   IN03=签单返还的费用代码，下单**不下发 IN03**；签回单标识走扩展字段（attrName=扩展字段名称 /
+    #   attrVal=对应值，attr015 必须与 attr014 成对下发）：
+    #     attr014 = "singBackInfo"   签回单标识（固定值）
+    #     attr015 = "1" / "2" / "1,2"   1:签名 / 2:盖章 / 3:登记身份证号 / 4:收取身份证复印件（多个用英文逗号分隔）
+    #   平台只发 1（签名）与 2（盖章）：下单页「回签单 → 签名 / 盖章」勾选才出现该字段，两项可同勾
+    #   （attr015="1,2"）；都未勾不下发（不改变既有报文）
+    _sign_types = []
+    if "签名" in _rc:
+        _sign_types.append("1")
+    if "盖章" in _rc:
+        _sign_types.append("2")
+    if _sign_types:
+        body["extraInfoList"] = [{"attrName": "attr014", "attrVal": "singBackInfo"},
+                                 {"attrName": "attr015", "attrVal": ",".join(_sign_types)}]
     if "拍照回传" in _rc:
         body["serviceList"] = [{"name": "IN91", "value": "13"}]   # 拍照回传增值服务：13=签回单拍照（固定传值）
     data = _call(cfg, SERVICE_ORDER, body)
@@ -219,6 +234,8 @@ def _real_place_order(order, cfg):
            "remark": body.get("remark", "")}      # 实际下发备注存档（2026-09-24 方案A：回单标识核验）
     if "serviceList" in body:
         res["serviceList"] = body["serviceList"]  # 实际下发增值服务存档 order_resp（追溯 IN91 拍照回传等）
+    if "extraInfoList" in body:
+        res["extraInfoList"] = body["extraInfoList"]  # 实际下发扩展字段存档（签回单签名/盖章 attr014/attr015 追溯）
     # waybillType：1=母件 2=子件（才算件数）3=签单返还回单运单（不计件数！）
     # 2026-09-17 实锤：isSignBack=1 时顺丰多返一条 type=3 回单运单（SF1064 号段），
     # 此前被误判为子件 → 清单②角标/打印2页，用户报"选1显示2"
@@ -306,8 +323,13 @@ def _real_query_route(waybill_no, cfg, check_phone_no=""):
     if routes:
         status = (latest.get("firstStatusName") or latest.get("secondaryStatusName")
                   or latest.get("acceptAddress") or latest.get("remark") or "运输中")
+    elif reason_code == "20023" or reason_remark == "暂无路由信息":
+        # 20023「暂无路由信息」不是错误：新单尚无揽收扫描时顺丰固定返回此码，等同未揽收。
+        # 2026-10-26 用户报「已下单未揽收却不能取消」即因该码被原样写成路由状态，
+        # 取消下单/看板/清单都按「非待揽收」判定。20028 等真实错误仍原样显示。
+        status = "待揽收"
     elif reason_remark:
-        status = reason_remark   # e.g. "月结卡号不匹配" / "暂无路由信息"
+        status = reason_remark   # e.g. "月结卡号不匹配"
     else:
         status = "待揽收"
     return {

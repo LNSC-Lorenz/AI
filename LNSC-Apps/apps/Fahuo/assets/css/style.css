@@ -313,7 +313,7 @@ html { scrollbar-gutter: stable; }
 .about-support a, .about-support .chip { background: #f4f4f4; border: 1px solid var(--line-inner); padding: 4px 9px; color: var(--black); text-decoration: none; }
 .about-support a:hover { background: var(--black); color: var(--white); }
 
-/* 设置弹窗（topbar.js 统一注入：承运商开关 + 数据维护） */
+/* 设置弹窗（topbar.js 统一注入：承运商开关） */
 .set-box { width: 620px; }
 .set-sec { font-size: 12px; font-weight: 700; color: var(--gray); margin-bottom: 8px; }
 .set-row {
@@ -327,9 +327,6 @@ html { scrollbar-gutter: stable; }
   cursor: pointer;
 }
 .set-row .btn { cursor: pointer; }
-.set-clear { min-height: 32px; padding: 4px 14px; font-size: 13px; min-width: 0;
-  border-color: var(--line-inner); color: var(--gray); }   /* 「立即清空」灰色弱化（2026-09-16 用户规则） */
-.set-clear:disabled { opacity: .5; cursor: not-allowed; }   /* 已禁用不可点（2026-09-16 用户规则：功能停用） */
 
 /* 录单区：粘贴与解析面板分配剩余空间；类型栏保留异常工具条单排所需宽度。 */
 .entry-row {
@@ -847,6 +844,13 @@ html { scrollbar-gutter: stable; }
 /* 异常/允许发货 滑块按钮加长显示（2026-10-21 用户规则「滑块按钮加长显示」） */
 .toggle-row .ms-switch { width: 72px; }
 .toggle-row .ms-switch input:checked + i::after { left: 44px; }
+/* 下单页 DN 标题行：多选＋合并 两个滑动开关并排成组，整组靠右
+   （2026-10-27 用户要求「下单页面的 多选后面加一个 合并的滑动开关，先不加功能，只改UI」；
+     flex:none 防止标题或筛选条挤压开关，合并开关当前仅为界面占位） */
+.dn-switches { display: inline-flex; align-items: center; gap: 18px; flex: none; }
+/* 合并开关不可用（非外协单 / 未开多选）：置灰、点击无效（2026-10-27 外协单合并发货） */
+.ms-wrap.off { opacity: .38; cursor: not-allowed; }
+.ms-switch input:disabled { cursor: not-allowed; }
 
 /* 上段：DN 平铺滚动（触屏大按钮，5 列网格） */
 .pw-dn-list {
@@ -1059,6 +1063,32 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .pass-ok { background: var(--black); color: var(--white); }
 @keyframes passShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 .pass-body input.shake { animation: passShake .3s; border-bottom-color: #c62828; }
+/* 提示弹窗（topbar.js 注入 themeAlert()，替代浏览器原生 alert；2026-10-26 用户要求）：
+   外框沿用 .steps-mask / .steps-modal 主题边框，正文纯文本换行、超长可滚动 */
+.ta-modal { width: 420px; }
+.ta-body {
+  padding: 18px 18px 4px;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--black);
+  white-space: pre-wrap;   /* 多行提示按原换行显示 */
+  word-break: break-word;  /* 长单号 / 长 DN 不撑破弹窗 */
+}
+.ta-btns { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px 16px; }
+.ta-btns .btn { min-height: 34px; padding: 4px 20px; font-size: 14px; min-width: 0; }
+/* 带图标的多条提示（themeAlert({ rows })；图标集在 topbar.js，与顶栏按钮同为 feather 线性风格）：
+   图标与文案首行对齐，图标按语气着色——warn 红（禁止）/ hint 主题淡色（说明）/ ok 绿（成功） */
+.ta-rows { display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.ta-row { display: flex; gap: 10px; align-items: flex-start; }
+.ta-ico { flex: none; width: 20px; height: 20px; margin-top: 1px; color: var(--black); }
+.ta-ico svg { display: block; width: 20px; height: 20px; }
+.ta-tx { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; word-break: break-word; }
+.ta-row.ta-warn .ta-ico { color: #c62828; }      /* 禁止类：红，与取消下单 / 报错同色 */
+.ta-row.ta-warn .ta-tx { font-weight: 700; }     /* 关键限制加粗，一眼看到 */
+.ta-row.ta-hint .ta-ico { color: var(--black); opacity: .7; }
+.ta-row.ta-ok .ta-ico { color: #2e7d32; }
 /* 取消下单模式（选中"已下单且未揽收"行时按钮变为取消下单）：红底警示，去框线（2026-09-16 用户规则） */
 .pw-order-btn.cancel { background: #c62828; border: none; }
 .pw-order-btn.cancel:hover { background: #a31f1f; }
@@ -1822,6 +1852,19 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .lm-list .dn-badges { max-width: 400%; }  /* 清单 DN 列仅 5.5%：3 块总宽（2 日期+长姓名）超 3 列容量，320%≈17.6% 仍截断 → 400%≈22% 可容纳（2026-10-23 用户规则「还是有截断」；黑底 z-index:1 压盖右列第二行空位） */
 /* DN 列第一行号码：限宽省略——badge 格放开裁剪后，异常长 DN（如 261022>01>?）也不得溢出压 SO 列（2026-10-22 清单 DN 列同步 badge 后兜底） */
 .order-table td:first-child .dn-num { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+/* 清单姓名快捷筛选：姓名按钮 + 向右轻弹出的 ALL／本周／本月图标菜单；弹层与选项均无框线，以半透明白色底区分悬停和选中       */
+.lm-list .dn-owner-filter { border: 0; font-family: inherit; line-height: 1.5; cursor: pointer; }
+.lm-list .dn-owner-filter:hover, .lm-list .dn-owner-filter:focus-visible { background: var(--gray); }
+.lm-list .dn-owner-filter:focus-visible { outline: 2px solid var(--black); outline-offset: 2px; }
+.lm-list .dn-owner-filter.active { outline: 2px solid var(--gray); outline-offset: 1px; }
+.lm-owner-period-menu { position: fixed; z-index: 160; display: flex; gap: 3px; padding: 2px; border: 0; border-radius: 10px; background: var(--black); box-shadow: 0 6px 22px #0000001f; opacity: 0; transform: translateX(-7px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; }
+.lm-owner-period-menu.on { opacity: 1; transform: translateX(0); pointer-events: auto; }
+.lm-owner-period-option { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 26px; padding: 2px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--white); font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.lm-owner-period-option svg { width: 15px; height: 15px; flex: none; }
+.lm-owner-period-option:hover { background: rgb(255 255 255 / 12%); }
+.lm-owner-period-option.active { background: rgb(255 255 255 / 24%); color: var(--white); }
+.lm-owner-period-option:focus-visible { outline: 2px solid var(--white); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .lm-owner-period-menu { transition: none; } }
 .dn-owner { display: block; margin-top: 2px; padding: 1px 8px; background: var(--black); color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; width: fit-content; white-space: nowrap; position: relative; z-index: 1; }  /* DN/PO 第二行 IS负责人/采购员：回单格式、换行显示、长度长可跨列（2026-10-21 用户规则「不是显示在一行，还是换行显示，在第二行如果长度长了，可以跨列显示」）；z-index 压过右侧 SO 列文字 */
 /* 一票多件角标：实心圆圈白字，调大（2026-09-17 用户规则） */
 .wb-pieces {
@@ -1841,9 +1884,11 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .col-note   { width: 13.1%; }  /* 备注：再加宽（2026-10-23 用户规则「姓名列再窄1/4」余量），其它列不动 */
 .col-carrier{ width: 6%; }  /* 承运商：调窄 */
 .col-date   { width: 4.5%; }  /* 要求发货日期：再减窄（2026-10-23 用户规则「再调整一次」），余量给备注 */
-/* 日期列减窄配套：表头/数据格 12px + 减内距 → 表头不换行、ISO 日期 10 字符不省略（2026-10-23） */
-.order-table th.col-date { font-size: 12px; padding-left: 2px; padding-right: 2px; }
-#orderBody td:nth-child(8) { font-size: 12px; padding-left: 2px; padding-right: 2px; }
+/* 日期列：表头 + 数据格字号 15px（与其它列一致；2026-10-26 用户要求「要求发货日期 字体加大」），
+   列宽未动——1920 宽度下该列约 113px，15px 的「要求发货日期」(90px) 与 ISO 日期 (约 79px) 均可单行显示；
+   内距仍收紧 2px（沿用 2026-10-23 减窄配套） */
+.order-table th.col-date { font-size: 15px; padding-left: 2px; padding-right: 2px; }
+#orderBody td:nth-child(8) { font-size: 15px; padding-left: 2px; padding-right: 2px; }
 /* 姓名列再窄 1/4 配套：仅减内距，字号保持原样不改小（2026-10-23 用户规则「不要改字体大小，调整回去」） */
 #orderBody td:nth-child(5) { padding-left: 2px; padding-right: 2px; }
 .col-del    { width: 1.5%; }  /* 删除列（最后列；2026-09-16 用户要求：列宽 1.5%，内边距收紧适配 22px 图标） */

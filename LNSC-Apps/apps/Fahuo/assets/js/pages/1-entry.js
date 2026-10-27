@@ -719,8 +719,22 @@ if (typeof document !== "undefined") {
   orderBody.addEventListener("click", e => {
     const tr = e.target.closest("tr");
     if (!tr || !tr._order) return;
-    if (tr._order.waybill_no) {                 /* 已下单：禁止行内修改 */
-      alert("该单已下单（单号 " + tr._order.waybill_no + "），不允许再修改");
+    if (tr._order.waybill_no) {                 /* 已下单：禁止行内修改（主题弹窗，替代原生 alert；2026-10-26 用户要求） */
+      /* 两条提示各带图标（2026-10-26 用户要求「图标让文字更易识别」）：锁=已下单锁定，灯泡=怎么改。
+         text 同时作为纯文本兜底：topbar.js 为旧缓存（不认 rows）或 themeAlert 缺失时，仍能显示完整文案 */
+      const head = "该单已下单（单号 " + tr._order.waybill_no + "），不允许再修改。";
+      const hint = "如果该运单还没有被揽收，可以在下单页面，由仓库同事取消下单后，方可在录单页面修改或删除。";
+      const text = head + "\n\n" + hint;
+      if (window.themeAlert) {
+        window.themeAlert(text, {
+          rows: [
+            { icon: "lock", tone: "warn", text: head },
+            { icon: "bulb", tone: "hint", text: hint }
+          ]
+        });
+      } else {
+        alert(text);
+      }
       return;
     }
     if (editingRow === tr) { exitEdit(); resetForm(); return; }  /* 再点同一行：取消 */

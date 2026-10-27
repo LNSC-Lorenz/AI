@@ -28,6 +28,15 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&am
 const dnList = $("dnList"), printBody = $("printBody");
 let orders = [];
 let multiMode = false;   /* 多选模式（批量修改/批量下单） */
+/* 合并发货开关（2026-10-27 用户规则「对外协单 点击合并，实现合并发货功能」）：
+   只在外协单 + 多选时可用；收件地址/姓名/电话（及承运商）完全一致的多张 PO
+   只下一次承运商单、共用一张运单，运单备注列出全部 PO */
+let mergeMode = false;
+/* 未揽收：顺丰 20023「暂无路由信息」= 尚无揽收扫描，与「待揽收」同义（2026-10-26） */
+const UNPICKED_STATUS = ["待揽收", "暂无路由信息"];
+/* 已签收/回单：下单列表立即隐藏（2026-10-26 用户规则「如果已经签收了，那就立即移出。清单里可以查询即可」）。
+   只过滤下单页视图，不删除订单记录，清单页继续显示并可查询 */
+const isSignedRow = o => /签收|回单/.test(o.route_status || "") || o.status === "returned";
 
 /* 当前选中的订单（多选=全部，单选=1 条） */
 function selectedOrders() {
@@ -37,7 +46,7 @@ function selectedOrders() {
 }
 
 /* ----- 取消下单模式（2026-09-16 用户规则）：当前激活列表行 = 已下单且未揽收
-   （路由状态=待揽收，或专车/自提厂内单）时，下单按钮变为"取消下单"；
+   （路由状态=待揽收/暂无路由信息，或专车/自提厂内单）时，下单按钮变为"取消下单"；
    取消后单回待下单：可在录单页改数据，或在此改承运参数后重新下单 ----- */
 function cancelTargetOf() {
   const row = printBody.querySelector("tr.row-active");
@@ -45,7 +54,7 @@ function cancelTargetOf() {
   const o = orders[+row.dataset.idx];
   if (!o || !o.waybill_no) return null;
   const rs = o.route_status || "待揽收";
-  if (rs === "待揽收" || ["专车", "自提"].includes(o.carrier || "")) return o;
+  if (UNPICKED_STATUS.includes(rs) || ["专车", "自提"].includes(o.carrier || "")) return o;
   return null;
 }
 function refreshOrderBtn() {
@@ -67,8 +76,8 @@ function refreshOrderBtn() {
         /* 专车/自提：已送达/已提/已关闭 → 禁用，防止完成后重复下单 */
         if (["已送达", "已提", "已关闭"].includes(rs)) disabled = true;
       } else {
-        /* 普通承运商：非待揽收 → 禁用 */
-        if (rs !== "待揽收") disabled = true;
+        /* 普通承运商：未揽收（待揽收/暂无路由信息）以外的状态 → 禁用 */
+        if (!UNPICKED_STATUS.includes(rs)) disabled = true;
       }
     }
   });
@@ -147,6 +156,13 @@ function setCarrier(c) {
   const photoOk = c === "顺丰";
   $("cfgReceiptPhoto").disabled = !photoOk || settingsLocked;
   if (!photoOk) $("cfgReceiptPhoto").checked = false;
+  /* 签回单签名/盖章（2026-10-26 用户规则）：顺丰签单返还 IN03 的扩展字段 attr014=singBackInfo +
+     attr015（1=签名 / 2=盖章，可同时勾选，多个值英文逗号分隔），仅顺丰可勾（口径同 IN91），其他承运商禁用并强制取消勾选 */
+  const signOk = c === "顺丰";
+  ["cfgReceiptSign", "cfgReceiptStamp"].forEach(id => {
+    $(id).disabled = !signOk || settingsLocked;
+    if (!signOk) $(id).checked = false;
+  });
   if (TPL[c] === "billOT") {
     /* 厂内送货单（2026-09-21 新版式）：车型标签与编号占位随 专车/自提 切换（三处 f-waybill 同步） */
     $("billOT").querySelector(".f-ot-title").textContent = c;   /* 专车 / 自提 */
@@ -174,8 +190,10 @@ function setAll(cls, text) {
   document.querySelectorAll("#pwBill " + cls).forEach(el => { el.textContent = text; });
 }
 function fillBill(o) {
-  /* 回签单联动：发货单默认勾选纸质回单（2026-09-16 用户规则），其他类型不勾；拍照回传默认不勾 */
+  /* 回签单联动：发货单默认勾选纸质回单（2026-09-16 用户规则），其他类型不勾；签名/盖章/拍照回传默认不勾 */
   $("cfgReceiptPaper").checked = (o.order_type || "发货单") === "发货单";
+  $("cfgReceiptSign").checked = false;
+  $("cfgReceiptStamp").checked = false;
   $("cfgReceiptPhoto").checked = false;
   setAll(".f-name",  o.name  || "---");
   /* 丰密面单：手机号中间 4 位脱敏显示 */
@@ -252,13 +270,15 @@ let settingsLocked = false;
 function lockOrderSettings(locked) {
   settingsLocked = locked;
   ["cfgProduct", "cfgPay", "cfgInsure", "cfgCargo",
-   "cfgReceiptPaper", "cfgParcelsN", "cfgQtyN"]
+   "cfgReceiptPaper", "cfgReceiptSign", "cfgReceiptStamp", "cfgParcelsN", "cfgQtyN"]
     .forEach(id => { $(id).disabled = locked; });
   /* 件数方框/步进箭头（按钮无 id，按类批量；数量 1-6 方框已随 2026-09-18 版式移除） */
   document.querySelectorAll(".pc-num, .pc-step-btn")
     .forEach(b => { b.disabled = locked; });
-  /* 拍照回传：顺丰门控与锁定联合（顺丰 且 未锁定 才可勾） */
+  /* 拍照回传 / 签回单签名·盖章：顺丰门控与锁定联合（顺丰 且 未锁定 才可勾） */
   $("cfgReceiptPhoto").disabled = locked || currentCarrier !== "顺丰";
+  $("cfgReceiptSign").disabled = locked || currentCarrier !== "顺丰";
+  $("cfgReceiptStamp").disabled = locked || currentCarrier !== "顺丰";
 }
 
 /* 选中已下单行：承运商设置回显（2026-09-18 用户规则：列表选中某个已下单运单，承运商设置同步到设置区）——
@@ -287,6 +307,8 @@ function syncOrderSettings(o) {
   /* 回签单回显（覆盖 fillBill 开头的类型默认联动；仅快照单——老单无记录保持默认） */
   if (s.receipt) {
     $("cfgReceiptPaper").checked = s.receipt.includes("纸质回单");
+    $("cfgReceiptSign").checked = s.receipt.includes("签名") && !$("cfgReceiptSign").disabled;
+    $("cfgReceiptStamp").checked = s.receipt.includes("盖章") && !$("cfgReceiptStamp").disabled;
     $("cfgReceiptPhoto").checked = s.receipt.includes("拍照回传") && !$("cfgReceiptPhoto").disabled;
   }
   /* 件数/数量：快照或下单存档（rd.parcels/qty 自 2026-09-17 随承运商响应存档 order_resp） */
@@ -364,18 +386,45 @@ const poHtml = po => preHtml(po, "98260");   /* PO：98260 前缀上标（2026-1
 /* DN 列第二行 badge 组：▼ 要求发货日期 + ▶ 承运商下单日期 + 姓名（黑底白字同款；最多跨 3 列；
    2026-10-23 用户规则「下单与清单里的 DN列 的第二行 的姓名…调为跨3列， 添加2个显示块， 第一个是要求发货日期，第二个是实际承运商的下单日期」） */
 const ymdShort = s => { const m = String(s || "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1].slice(2) + "-" + m[2] + "-" + m[3] : ""; };
+/* 并单组（多 DN / 多 PO 合并发货）：同一 merge_group 的行共用一张运单 */
+function mergeSibsOf(o) {
+  const mg = (o.merge_group || "").trim();
+  return mg ? orders.filter(x => (x.merge_group || "").trim() === mg) : [o];
+}
+/* DN 第二行「并单×N」徽章（2026-10-27）：悬浮显示全组号码，一眼看出这张运单带了几票 */
+function mergeBadgeOf(o) {
+  if (!(o.merge_group || "").trim()) return "";
+  const rows = mergeSibsOf(o);
+  if (rows.length < 2) return "";
+  const nos = rows.map(x => (x.order_type === "外协单" ? poOf(x) : x.so)).filter(Boolean);
+  return '<span class="dn-badge" title="并单（共用运单）：' + esc(nos.join(" ")) + '">并单×' + rows.length + "</span>";
+}
 function dnSecondRow(o, owner) {
   const b = [];
   const sd = ymdShort(o.ship_date);
   if (sd) b.push('<span class="dn-badge" title="要求发货日期">▼ ' + sd + "</span>");
-  const pd = ymdShort(o.printed_at);
+  /* 承运商下单日期只在「已下单」（有运单号）时才有意义；取消下单后 printed_at 残留也不显示
+     （2026-10-26 用户规则「待下单 那怎么有下单日期」） */
+  const pd = o.waybill_no ? ymdShort(o.printed_at) : "";
   if (pd) b.push('<span class="dn-badge" title="承运商下单日期">▶ ' + pd + "</span>");
+  const mb = mergeBadgeOf(o);
+  if (mb) b.push(mb);
   if (owner) b.push('<span class="dn-owner">' + esc(owner) + "</span>");
   return b.length ? '<div class="dn-badges">' + b.join("") + "</div>" : "";
+}
+/* 打单列表第 1 列（DN 格）内容：发货单=DN、外协单=PO（98260 上标）+ 第二行 badge 组；
+   renderPrintList 与 updateRowCells 共用，下单/取消后并单徽章即时刷新（2026-10-27） */
+function dnCellHtml(o) {
+  if ((o.order_type || "发货单") === "外协单") {
+    return '<span class="dn-num">' + poHtml(poOf(o) || "—") + "</span>" + dnSecondRow(o, buyerOf(o));
+  }
+  return '<span class="dn-num">' + dnHtml(o.so) + "</span>" + dnSecondRow(o, o.is_owner || "");
 }
 const senderOf = o => o.emp_name || ((o.note || "").match(/发件人：(\S+)/) || [])[1] || "";
 const buyerOf  = o => o.buyer    || ((o.note || "").match(/采购员：(\S+)/) || [])[1] || "";
 const poOf     = o => o.po       || ((o.note || "").match(/PO：(\S+)/) || [])[1] || "";
+/* 提示文案里的单据号：发货单=DN、外协单=PO（此前外协单在弹窗里显示 #id，2026-10-27 合并发货一并修正） */
+const noOf     = o => (o.so || ((o.order_type || "发货单") === "外协单" ? poOf(o) : "")) || ("#" + o.id);
 const companyOf = o => {   /* 对方公司：地址末段含公司类后缀，否则用联系人（与 SAP 页同规则） */
   const segs = (o.address || "").split(" ");
   return /公司|大厦|园区|中心|广场|工厂|集团/.test(segs[segs.length - 1])
@@ -429,8 +478,29 @@ document.querySelectorAll(".dn-ft").forEach(b => {
     $("cfgReceiptPaper").checked = dnFilter === "发货单";
     renderDnList();
     renderPrintList();          /* 打单列表同步过滤 */
+    syncMergeGate();            /* 合并开关只在外协单可用（2026-10-27） */
   });
 });
+
+/* ----- 合并发货开关（2026-10-27 用户规则）：只在外协单 + 多选时可用，
+   其他页签/单选态置灰并给出原因，避免误以为“开了却没效果” ----- */
+function syncMergeGate() {
+  const el = $("mergeToggle");
+  if (!el) return;
+  const ok = multiMode && dnFilter === "外协单";
+  if (!ok) el.checked = false;      /* 离开可用场景自动关闭（避免状态残留） */
+  mergeMode = el.checked;
+  el.disabled = !ok;
+  const wrap = el.closest(".ms-wrap");
+  if (wrap) {
+    wrap.classList.toggle("off", !ok);
+    wrap.title = ok
+      ? "合并发货：所选外协单的收件地址、收件人姓名、电话一致时，多张 PO 只下一次单、共用一张运单"
+      : "「合并」只用于外协单多选：请切到外协单页签并打开「多选」";
+  }
+}
+$("mergeToggle").addEventListener("change", e => { mergeMode = e.target.checked; });
+syncMergeGate();   /* 初始态：发货单 + 未多选 → 置灰 */
 
 /* ----- 查看列：按 DN 拉取已上传文件（缓存），点击预览/打印 ----- */
 const uploadCache = {};   /* dn -> Promise<files[]> */
@@ -535,18 +605,10 @@ function inListWindow(o) {
                   "-" + String(now.getDate()).padStart(2, "0");
     return m[1] >= today;
   }
-  /* 已签收/回单：只在签收当天显示，隔天从下单列表移除（2026-09-17 用户规则。
-     签收日期取 route_latest 节点时间 "MM-dd HH:mm …"（签收节点即最新节点） */
-  if (/签收|回单/.test(o.route_status || "") || o.status === "returned") {
-    const m = String(o.route_latest || "").match(/^(\d{2})-(\d{2})/);
-    if (m) {
-      const now = new Date();
-      const signDay = new Date(now.getFullYear(), +m[1] - 1, +m[2]);
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return signDay >= today;   /* 签收日=今天才显示；早于今天移除 */
-    }
-    return true;                 /* 无节点时间：保守显示 */
-  }
+  /* 已签收/回单：立即从下单列表移出（2026-10-26 用户规则「如果已经签收了，那就立即移出。
+     清单里可以查询即可」）。原「签收当天保留、次日移除」作废；只隐藏下单页视图，不删单，
+     清单页仍显示全部记录并可查询。 */
+  if (isSignedRow(o)) return false;
   if (o.waybill_no) return true;                                  /* 已下单：全部显示 */
   const t = Date.parse((o.created_at || "").replace(" ", "T"));   /* 录单时间 */
   return isNaN(t) ? true : (Date.now() - t) <= LIST_WINDOW_MS;    /* 无创建时间不滤 */
@@ -579,18 +641,13 @@ function renderPrintList() {
         td.appendChild(cDiv);
         if (o.waybill_no) td.appendChild(wbLink(o));
         else { const wDiv = document.createElement("div"); wDiv.textContent = "—"; td.appendChild(wDiv); }
-      } else if (ci === 0 && ot === "发货单") {
-        /* DN 列：第一行号码（.dn-num 限宽省略），第二行 badge 组（▼ 要求发货日期 / ▶ 下单日期 / IS负责人，最多跨 3 列） */
-        const num = o.order_type === "外协单" ? poHtml(o.po || "—") : dnHtml(o.so);
-        const owner = o.order_type === "外协单" ? (o.buyer || "") : (o.is_owner || "");
-        td.innerHTML = '<span class="dn-num">' + num + "</span>" + dnSecondRow(o, owner);
+      } else if (ci === 0 && (ot === "发货单" || ot === "外协单")) {
+        /* DN 列：第一行号码（发货单=DN、外协单=PO，.dn-num 限宽省略），第二行 badge 组
+           （▼ 要求发货日期 / ▶ 下单日期 / 并单×N / 负责人，最多跨 3 列） */
+        td.innerHTML = dnCellHtml(o);
       } else if (ci === 1 && ot === "发货单") {
         td.innerHTML = soHtml(o.so_no || "—");   /* SO 列：32600 前缀上标 */
         td.title = o.so_no || "";                 /* 悬浮显示完整 SO（2026-10-21 用户规则「超过单元格宽度 当鼠标悬浮时候 需要提示显示所有的内容」） */
-      } else if (ci === 0 && ot === "外协单") {
-        /* DN 列（第1列）：外协单第一行 PO 号（98260 前缀上标，.dn-num 限宽省略），
-           第二行 badge 组（▼ 要求发货日期 / ▶ 下单日期 / 采购员，最多跨 3 列） */
-        td.innerHTML = '<span class="dn-num">' + poHtml(poOf(o) || "—") + "</span>" + dnSecondRow(o, buyerOf(o));
       } else if (ci === 4) {                        /* 路由状态列（第5列）：专车直送/待自提下方显示各自关单按钮 */
         const stDiv = document.createElement("div");
         stDiv.textContent = v;
@@ -725,6 +782,9 @@ function updateRowCells(o, i) {
   if (o.waybill_no) row.cells[3].appendChild(wbLink(o));
   else { const wDiv = document.createElement("div"); wDiv.textContent = "—"; row.cells[3].appendChild(wDiv); }
   row.cells[4].textContent = o.route_status || "—";
+  /* DN 单元格（索引 0）一并刷新：并单×N 徽章、▼/▶ 日期 badge 随下单/取消即时变化（2026-10-27） */
+  const ot = o.order_type || "发货单";
+  if (row.cells[0] && (ot === "发货单" || ot === "外协单")) row.cells[0].innerHTML = dnCellHtml(o);
 }
 
 /* 专车/自提关闭弹窗：关闭备注 + 关闭按钮（2026-10-24 自提复用专车关闭动作） */
@@ -799,6 +859,19 @@ $("cfgInsure").addEventListener("input", e => {
   setAll(".f-insure", v ? v + " 元" : "未保价");
 });
 $("cfgCargo").addEventListener("input", e => setAll(".f-cargo", e.target.value || "--"));
+/* 回签单联动（2026-10-26 用户规则）：签名/盖章属纸质签单返还，必须与纸质回单同用——
+   勾「签名」或「盖章」自动勾「纸质回单」；取消「纸质回单」同步取消两项（防出现无回单任务的下发组合） */
+["cfgReceiptSign", "cfgReceiptStamp"].forEach(id => {
+  $(id).addEventListener("change", e => {
+    if (e.target.checked) $("cfgReceiptPaper").checked = true;
+  });
+});
+$("cfgReceiptPaper").addEventListener("change", e => {
+  if (!e.target.checked) {
+    $("cfgReceiptSign").checked = false;
+    $("cfgReceiptStamp").checked = false;
+  }
+});
 setAll(".f-cargo", $("cfgCargo").value || "--");   /* 默认托寄物=喷嘴（全承运商）：初始化同步到面单 */
 /* 计数选择器工厂（2026-09-17 数量选项引入时抽象，件数/数量共用同一套交互）：
    1-6 方框单选（选中实心白字）；≥min 数字框输入时方框失效、以数字框为准、清空回 1；
@@ -921,6 +994,7 @@ $("msToggle").addEventListener("change", e => {
     const first = actives[0];
     if (first) fillBill(orders[+first.dataset.idx]);
   }
+  syncMergeGate();   /* 合并只在外协单多选时可用（2026-10-27） */
   refreshOrderBtn();
 });
 
@@ -946,6 +1020,26 @@ function validateOrder(o) {
   return errs.length ? label.trim() + "：" + errs.join("、") : "";
 }
 
+/* ----- 合并发货（2026-10-27 用户规则「对外协单 点击合并，实现合并发货功能」）：
+   严格口径——所选外协单的收件地址、收件人姓名、电话（及承运商）完全一致才允许合并；
+   合并时只下一次承运商单，组内各行写回同一运单号，运单备注列出全部 PO（PO：A B C） ----- */
+const mergeKeyOf = o => [
+  (o.carrier || currentCarrier || "").trim(),
+  (o.province || "").trim(), (o.city || "").trim(), (o.district || "").trim(), (o.street || "").trim(),
+  (o.name || "").trim(), (o.phone || "").trim()
+].join("\u0001");
+const addrText = o => [o.province, o.city, o.district, o.street].filter(Boolean).join("");
+/* 收件信息不一致时的拦截说明：按收件信息分组列出 PO，让用户直接看出哪几张不能一起合 */
+function mergeMismatchMsg(groups) {
+  const lines = [...groups.values()].map(rows => "· " +
+    rows.map(r => poOf(r) || ("#" + r.id)).join(" / ") +
+    "　" + ((r => (r.carrier || currentCarrier) + " " + (addrText(r) || "（地址为空）") +
+            " " + (r.name || "（无姓名）") + " " + (r.phone || "（无电话）"))(rows[0])));
+  return "「合并」要求所选外协单的收件地址、收件人姓名、电话完全一致，以下 PO 分属不同收件：\n\n" +
+    lines.join("\n") +
+    "\n\n请只勾选同一收件信息的 PO，或关闭「合并」开关分别下单。";
+}
+
 /* ----- 真实下单：调 /api/carrier/order（顺丰/德邦/专车自提厂内单，全生产环境）
    成败判定：必须拿到 waybill_no 才算成功；失败抛出承运商原始报错（原样展示） ----- */
 async function placeOrder(o, remarkOverride) {   /* remarkOverride：并单组（多 DN 合并发货）全 DN 备注（2026-09-20） */
@@ -962,9 +1056,12 @@ async function placeOrder(o, remarkOverride) {   /* remarkOverride：并单组�
       product: (cc === currentCarrier) ? $("cfgProduct").value : (PRODUCTS[cc] || [""])[0],   /* 产品类型随设置区 */
       pay: $("cfgPay").value,                          /* 付款方式随设置区（月结/现结/到付） */
       insured: $("cfgInsure").value.trim(),            /* 保价：不写=不保价，写了=声明价值(元) */
-      /* 回签单：纸质回单（德邦 backSignBill=1/R1；顺丰 isSignBack=1）；顺丰拍照回传=增值服务 IN91
+      /* 回签单：纸质回单（德邦 backSignBill=1/R1；顺丰 isSignBack=1）；签名/盖章（仅顺丰：扩展字段
+         attr014=singBackInfo + attr015=1/2/1,2，见 carriers/sf_express.py）；顺丰拍照回传=增值服务 IN91
          （serviceList value=13，2026-09-24 官方产品表终定+真单验证；拍照框仅顺丰可勾） */
       receipt: [$("cfgReceiptPaper").checked && "纸质回单",
+                ($("cfgReceiptSign").checked && !$("cfgReceiptSign").disabled && cc === "顺丰") && "签名",
+                ($("cfgReceiptStamp").checked && !$("cfgReceiptStamp").disabled && cc === "顺丰") && "盖章",
                 ($("cfgReceiptPhoto").checked && !$("cfgReceiptPhoto").disabled) && "拍照回传"
                ].filter(Boolean),
       parcels: currentParcels(),                       /* 件数：以界面当前选中为准（所见即所发，防变量残留；2026-09-17） */
@@ -1031,7 +1128,7 @@ $("btnOrder").addEventListener("click", async () => {
   if (cancelT) {
     if (!apiBase) { alert("当前离线，无法取消下单"); return; }
     if (!(await orderPassOk())) return;                   /* 取消下单：固定密码门（主题弹窗） */
-    if (!confirm("取消下单：" + (cancelT.so || ("#" + cancelT.id)) +
+    if (!confirm("取消下单：" + noOf(cancelT) +
                  "\n运单号 " + cancelT.waybill_no +
                  "\n\n取消后该单回到待下单：可在录单页改数据，或在此改承运参数后重新下单。\n确认取消？")) return;
     orderBusy = true;
@@ -1044,13 +1141,51 @@ $("btnOrder").addEventListener("click", async () => {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.ok) throw new Error(d.error || ("取消接口异常 HTTP " + r.status));
+      const wbCancelled = cancelT.waybill_no;   /* 并单组成员按同一运单号找（清空前留存） */
+      const mgCancelled = (cancelT.merge_group || "").trim();
+      /* 「合并」下单时打的 MGP 组是临时分组：取消后一并清掉，重新下单时由开关重新决定，
+         否则关掉开关也会被并单（发货单的录单并单组不在此列，保持原口径） */
+      const clearMg = /^MGP/.test(mgCancelled);
+      const sibs = mergeSibsOf(cancelT).filter(x => x !== cancelT && x.waybill_no && x.waybill_no === wbCancelled);
       cancelT.waybill_no = ""; cancelT.route_status = ""; cancelT.route_latest = "";
+      cancelT.printed_at = ""; cancelT.signed_at = "";   /* 下单/签收时间随运单号一起清（2026-10-26：待下单不该有下单日期） */
+      if (clearMg) {
+        cancelT.merge_group = "";
+        if (apiBase && cancelT.id) {
+          try {
+            await fetch(`${apiBase}/orders/${cancelT.id}`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ merge_group: "" })
+            });
+          } catch (e) { /* 写回失败不阻断（本单已取消） */ }
+        }
+      }
       /* order_resp 保留作审计追溯 */
       updateRowCells(cancelT, orders.indexOf(cancelT));
+      /* 并单组（多 DN / 多 PO 合并发货）：一张运单落在组内多行，取消后整组一起回待下单，
+         否则会留下仍挂着这张已取消运单的行（2026-10-27 外协单合并发货） */
+      for (const s of sibs) {
+        s.waybill_no = ""; s.route_status = ""; s.route_latest = "";
+        s.printed_at = ""; s.signed_at = "";
+        if (clearMg) s.merge_group = "";
+        const si = orders.indexOf(s);
+        if (apiBase && s.id) {
+          try {
+            const body = { waybill_no: "", route_status: "" };   /* 服务端同步清下单/签收时间 */
+            if (clearMg) body.merge_group = "";
+            await fetch(`${apiBase}/orders/${s.id}`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body)
+            });
+          } catch (e) { /* 写回失败不阻断（该运单已在承运商侧取消） */ }
+        }
+        updateRowCells(s, si);
+      }
       renderDnList();                                   /* 该单回到 DN 队列（可重新下单） */
       fillBill(cancelT);
       alert((d.note ? d.note + "\n" : "") +
-            "已取消下单，运单号 " + (d.cleared || "") + " 已清除\n该单已回到 DN 队列，可修改后重新下单");
+            "已取消下单，运单号 " + (d.cleared || "") + " 已清除\n该单已回到 DN 队列，可修改后重新下单" +
+            (sibs.length ? "\n并单组内另有 " + sibs.length + " 张单共用这张运单，已一起回到待下单" : ""));
     } catch (err) {
       alert("取消下单失败：" + err.message);
     } finally {
@@ -1061,6 +1196,26 @@ $("btnOrder").addEventListener("click", async () => {
 
   const sel = selectedOrders().filter(o => !o.waybill_no); /* 仅待下单 */
   if (!sel.length) { alert("请先选择待下单 DN"); return; }
+
+  /* 合并发货（2026-10-27 用户规则）：只对外协单生效；收件信息不一致立即拦截，
+     不进入密码门与下单流程（关掉「合并」即可各自单独下单） */
+  let mergeRows = null;   /* 本次要合成一张运单的 PO 行（null=不合并） */
+  if (mergeMode) {
+    if (!sel.every(o => (o.order_type || "发货单") === "外协单")) {
+      alert("「合并」只用于外协单。\n请切换到外协单页签后重试，或关闭「合并」开关。");
+      return;
+    }
+    if (sel.length > 1) {
+      const g = new Map();
+      sel.forEach(o => {
+        const k = mergeKeyOf(o);
+        if (!g.has(k)) g.set(k, []);
+        g.get(k).push(o);
+      });
+      if (g.size > 1) { alert(mergeMismatchMsg(g)); return; }
+      mergeRows = sel.slice();
+    }
+  }
   /* 免验证（2026-10-08 用户规则）：所选全部是「其他」（员工快递）→ 跳过密码门；
      含发货单/外协单的批次照弹（混选从严） */
   const allOther = sel.every(o => (o.order_type || "发货单") === "其他");
@@ -1081,10 +1236,21 @@ $("btnOrder").addEventListener("click", async () => {
   });
   const lines = Object.entries(groups).map(([c, arr]) =>
     `${c} × ${arr.length}（产品：${c === currentCarrier ? $("cfgProduct").value : PRODUCTS[c][0]}）`);
+  /* 合并发货：确认框里写清“几张 PO 合成 1 张运单”，避免 operator 误以为少发 */
+  const mergeNote = mergeRows
+    ? `\n\n合并发货：${mergeRows.length} 张 PO 合成 1 张运单（${mergeRows.map(poOf).filter(Boolean).join(" ")}）`
+    : "";
   /* 确认弹窗含件数（2026-09-17 用户反馈"选1显示2"：发几件必须一目了然） */
-  if (!confirm(`确认下单 ${sel.length} 单？\n\n${lines.join("\n")}\n\n` +
+  if (!confirm(`确认下单 ${sel.length} 单？\n\n${lines.join("\n")}${mergeNote}\n\n` +
                `付款：${$("cfgPay").value}　保价：${$("cfgInsure").value || "未保价"}` +
                `　件数：${currentParcels()}　数量：${currentQty()}`)) return;
+
+  /* 合并：给本次要合成的 PO 打同一并单组标记（下单成功后随每行 PUT 入库，
+     供取消下单整组回退、列表「并单×N」徽章使用） */
+  if (mergeRows) {
+    const mgId = "MGP" + Date.now();
+    mergeRows.forEach(o => { o.merge_group = mgId; });
+  }
 
   orderBusy = true; $("btnOrder").disabled = true;
   $("btnOrder").textContent = "下单中…";
@@ -1100,13 +1266,20 @@ $("btnOrder").addEventListener("click", async () => {
         if (mg) seenMg.add(mg);
         const cc = o.carrier || currentCarrier;
         if (!o.carrier) o.carrier = cc;              /* 承运商回写本地（录单未选承运商时） */
-        const tag = (o.so || ("#" + o.id)) + " " + cc + (mg ? `（并单×${groupRows.length}）` : "");
+        const tag = noOf(o) + " " + cc + (mg ? `（并单×${groupRows.length}）` : "");
         try {
-          /* 并单组：只下一次承运商单（备注带全部 DN），同一运单号写回组内每一行（2026-09-20 用户规则） */
-          const remarkOv = mg && (o.order_type || "发货单") === "发货单"
-            ? ["DN：" + groupRows.map(x => x.so).filter(Boolean).join(" "),
-               o.so_no ? "SO：" + o.so_no : ""].filter(x => !x.endsWith("：")).join(" ")
-            : undefined;
+          /* 并单组：只下一次承运商单（备注带全部号码），同一运单号写回组内每一行
+             （发货单=全 DN，2026-09-20；外协单=全 PO 合并发货，2026-10-27 用户规则） */
+          let remarkOv;
+          if (mg) {
+            if ((o.order_type || "发货单") === "外协单") {
+              const pos = groupRows.map(x => poOf(x)).filter(Boolean);
+              remarkOv = pos.length ? "PO：" + pos.join(" ") : undefined;
+            } else {
+              remarkOv = ["DN：" + groupRows.map(x => x.so).filter(Boolean).join(" "),
+                          o.so_no ? "SO：" + o.so_no : ""].filter(x => !x.endsWith("：")).join(" ");
+            }
+          }
           const res = await placeOrder(o, remarkOv); /* 真实下单：拿不到运单号即抛错 */
           for (const g of groupRows) {
             if (!g.carrier) g.carrier = cc;
@@ -1124,18 +1297,22 @@ $("btnOrder").addEventListener("click", async () => {
                 await fetch(`${apiBase}/orders/${g.id}`, {
                   method: "PUT", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ carrier: g.carrier, waybill_no: g.waybill_no,
-                                         route_status: g.route_status, order_resp: g.order_resp })
+                                         route_status: g.route_status, order_resp: g.order_resp,
+                                         merge_group: g.merge_group || "" })   /* 外协单合并发货并单组入库（2026-10-27） */
                 });
               } catch (e) { /* 写回失败不阻断（单已成） */ }
             }
             updateRowCells(g, gi);
             const gchip = dnList.querySelector(`.pw-chip[data-idx="${gi}"]`);
             if (gchip) gchip.remove();                      /* 已下单移出 DN 队列 */
-            okNotes.push("✓ " + (g.so || ("#" + g.id)) + " " + g.carrier + "　运单号 " + g.waybill_no);
+            okNotes.push("✓ " + noOf(g) + " " + g.carrier + "　运单号 " + g.waybill_no +
+                         (mg ? `（并单×${groupRows.length}，共用此运单）` : ""));
           }
           done.push(o);   /* 并单组只推首单：同一运单面单只打印一次 */
         } catch (err) {
           failed.push("✗ " + tag + "　" + err.message);   /* 承运商原始报错原样展示 */
+          /* 合并下单失败：撤掉本次临时并单组标记，避免重试时被强制并单（开关关闭也能各自下单） */
+          if (mg && /^MGP/.test(mg)) groupRows.forEach(g => { g.merge_group = ""; });
         }
       }
     }
@@ -1145,10 +1322,10 @@ $("btnOrder").addEventListener("click", async () => {
       const r = await printOfficialOrHtml(o, true);   /* 下单后：直接打印 */
       if (r === true) continue;
       if (typeof r === "string" && r.startsWith("PENDING:")) {   /* 德邦生成中：不补 HTML */
-        pendingNotes.push((o.so || ("#" + o.id)) + "：" + r.slice(8));
+        pendingNotes.push(noOf(o) + "：" + r.slice(8));
         continue;
       }
-      if (typeof r === "string") labelErrs.push((o.so || ("#" + o.id)) + "：" + r);
+      if (typeof r === "string") labelErrs.push(noOf(o) + "：" + r);
       htmlList.push(o);
     }
     if (htmlList.length) printBills(htmlList);
@@ -1480,6 +1657,43 @@ document.addEventListener("keydown", e => {
     scanBuf = (scanBuf + e.key).slice(-8);
   }
 });
+
+/* ----- 已签收单即时移出（2026-10-26 用户规则）：页面常开时静默同步一次路由状态，
+   新签收的行不用手动刷新页面就会离开下单列表；清单页照常可查。
+   每 5 分钟一轮，与后端 ROUTE_THROTTLE_S 一致：/api/orders 会顺带触发后台刷新，
+   但同一运单 5 分钟内不会重复查顺丰。只合并字段、不重排 orders，行索引保持稳定；
+   仅“是否已签收”发生变化时重绘，普通在途文案更新不打断当前选行。 ----- */
+const SIGNED_SYNC_MS = 5 * 60 * 1000;
+async function syncSignedRows() {
+  if (document.hidden || !apiBase) return;
+  const activeRow = printBody.querySelector("tr.row-active");
+  const activeId = activeRow ? (orders[+activeRow.dataset.idx] || {}).id : null;
+  const fresh = await fetchOrders().catch(() => null);
+  if (!Array.isArray(fresh)) return;
+  const byId = new Map(fresh.map(o => [o.id, o]));
+  let hiddenChanged = false;
+  orders.forEach(o => {
+    const f = byId.get(o.id);
+    if (!f) return;
+    const wasSigned = isSignedRow(o);
+    ["route_status", "route_latest", "signed_at", "status"].forEach(k => {
+      const v = f[k] || "";
+      if ((o[k] || "") !== v) o[k] = v;
+    });
+    if (wasSigned !== isSignedRow(o)) hiddenChanged = true;
+  });
+  if (!hiddenChanged) return;
+  renderPrintList();
+  /* 重绘后恢复原选中行（被移出的签收行自然不再选中） */
+  if (activeId != null) {
+    const keep = [...printBody.querySelectorAll("tr")]
+      .find(r => (orders[+r.dataset.idx] || {}).id === activeId);
+    if (keep) keep.classList.add("row-active");
+  }
+  refreshOrderBtn();   /* 选中行已移出时，按钮回到常规“下单”态 */
+}
+setInterval(syncSignedRows, SIGNED_SYNC_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) syncSignedRows(); });
 
 /* ----- 初始化 ----- */
 (async () => {

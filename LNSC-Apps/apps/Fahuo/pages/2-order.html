@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>下单模式 | LNSC 全链发货平台</title>
 <link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261024f">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261027b">
 <link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -233,9 +233,17 @@
               <button type="button" class="dn-ft" data-t="外协单">外协单</button>
               <button type="button" class="dn-ft" data-t="其他">其他</button>
             </div>
-            <label class="ms-wrap">多选
-              <span class="ms-switch"><input type="checkbox" id="msToggle"><i></i></span>
-            </label>
+            <div class="dn-switches">
+              <label class="ms-wrap">多选
+                <span class="ms-switch"><input type="checkbox" id="msToggle"><i></i></span>
+              </label>
+              <!-- 合并滑动开关（2026-10-27 用户规则「对外协单 点击合并，实现合并发货功能」）：
+                   仅外协单 + 多选时可用（其余页签/单选态由 syncMergeGate() 置灰），
+                   收件地址/姓名/电话一致的多张 PO 只下一次承运商单、共用一张运单 -->
+              <label class="ms-wrap" title="「合并」只用于外协单多选：请切到外协单页签并打开「多选」">合并
+                <span class="ms-switch"><input type="checkbox" id="mergeToggle"><i></i></span>
+              </label>
+            </div>
           </div>
           <div class="pw-dn-list scroll-dark" id="dnList"></div>
         </section>
@@ -277,6 +285,12 @@
               <div class="pw-r2">
                 <label>回签单</label>
                 <label><input type="checkbox" id="cfgReceiptPaper" class="pool-check" checked> 纸质回单</label>
+                <!-- 签回单签名/盖章（2026-10-26 用户规则）：顺丰签单返还（IN03，费用代码，下单不下发 IN03）
+                     的扩展字段 attr014=singBackInfo + attr015（1:签名 / 2:盖章 / 3:登记身份证号 / 4:收取身份证复印件，
+                     多个用英文逗号分隔，如同时勾签名+盖章 → attr015="1,2"）；
+                     仅选顺丰时可勾，且与「纸质回单」同用——勾签名/盖章自动勾纸质回单，取消纸质回单则同步取消两项 -->
+                <label title="签回单签名：顺丰签单返还扩展字段 attr014=singBackInfo、attr015=1（签名）；需与纸质回单同用"><input type="checkbox" id="cfgReceiptSign" class="pool-check"> 签名</label>
+                <label title="签回单盖章：顺丰签单返还扩展字段 attr014=singBackInfo、attr015=2（盖章）；需与纸质回单同用"><input type="checkbox" id="cfgReceiptStamp" class="pool-check"> 盖章</label>
                 <!-- 拍照回传（2026-09-17 用户规则）：顺丰增值服务 IN91（serviceList value=13 签回单拍照），仅选顺丰时可勾选；
                      2026-09-24 官方《增值服务产品表》终定 + _sf_in91_probe 真单验证：IN91 通道网关接受 -->
                 <label title="拍照回传：顺丰增值服务 IN91（下单 serviceList 下发，value=13 签回单拍照；可与纸质回单同勾）"><input type="checkbox" id="cfgReceiptPhoto" class="pool-check"> 拍照回传</label>
@@ -423,13 +437,13 @@
 </div>
 
 <script src="../assets/js/stats.js"></script>
-<script src="../assets/js/topbar.js"></script>
+<script src="../assets/js/topbar.js?v=20261026b"></script>
 <script src="../assets/vendor/jszip.min.js"></script>
 <script src="../assets/vendor/docx-preview.min.js"></script>
 <script src="../assets/vendor/xlsx.full.min.js"></script>
 <!-- 专车/自提面单：CODE128 条码 -->
 <script src="../assets/vendor/JsBarcode.all.min.js"></script>
 <script src="../assets/js/note-copy.js?v=20261024a"></script>
-<script src="../assets/js/pages/2-order.js?v=20261024h"></script>
+<script src="../assets/js/pages/2-order.js?v=20261027b"></script>
 </body>
 </html>

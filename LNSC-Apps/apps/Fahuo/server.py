@@ -148,6 +148,15 @@ def _route_is_final(st):
     return any(k in (st or "") for k in ("签收", "回单", "已送达", "已提"))
 
 
+# 未揽收状态（2026-10-26）：顺丰 20023「暂无路由信息」只表示尚无揽收扫描，与「待揽收」同义；
+# 仅这两个值允许取消下单，避免把路由异常原因（20028 等）误当成未揽收。
+NOT_PICKED_STATUSES = ("待揽收", "暂无路由信息")
+
+
+def _is_not_picked(status):
+    return (status or "") in NOT_PICKED_STATUSES
+
+
 def _phone_last4(phone):
     """提取手机号后4位（用于顺丰 API checkPhoneNo 参数）"""
     if not phone:
@@ -321,6 +330,7 @@ def _refresh_routes():
                         # 他方已在承运商后台取消：同步清空运单字段 → 回待下单（可重新下单）
                         _audit(f"ROUTE-CANCELED-SYNC id={r['id']} waybill={r['waybill_no']} err={e}")
                         c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='',"
+                                  " printed_at='', signed_at='',"
                                   " route_checked_at=datetime('now','localtime') WHERE id=?",
                                   (r["id"],))
                         continue
@@ -436,6 +446,10 @@ def init_db():
         pcols = [r[1] for r in c.execute("PRAGMA table_info(addr_pool)")]
         if "company" not in pcols:
             c.execute("ALTER TABLE addr_pool ADD COLUMN company TEXT DEFAULT ''")  # 公司独立列（2026-09-17）
+        # 2026-10-26 历史数据归位：顺丰 20023「暂无路由信息」只表示尚无揽收扫描，
+        # 曾按 reasonRemark 原样入库，使未揽收单在取消下单/看板/清单被判为已发货；
+        # 20028 等真实错误在 carrier 层仍原样保留，不受影响（幂等）。
+        c.execute("UPDATE orders SET route_status='待揽收' WHERE carrier='顺丰' AND route_status='暂无路由信息'")
 
 
 def row_to_json(r):
@@ -859,8 +873,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _carrier_cancel(self):
         """POST /api/carrier/cancel  {id}
-        仅未揽收可取消（路由状态=待揽收；专车/自提=厂内单无外部承运商，直接本地清除）。
-        承运商取消成功 → 清空 waybill_no/route_status/route_latest，单回到待下单：
+        仅未揽收可取消（待揽收；顺丰 20023「暂无路由信息」同义；专车/自提=厂内单无外部承运商，直接本地清除）。
+        承运商取消成功 → 清空 waybill_no/route_status/route_latest/printed_at/signed_at，单回到待下单：
         录单页可改数据、下单页可改承运参数后重新下单（重新下单走 next_oid，永不复用）。
         order_resp 保留作审计追溯。"""
         if carrier_cancel_order is None:
@@ -881,8 +895,8 @@ class Handler(SimpleHTTPRequestHandler):
         carrier = (o.get("carrier") or "").strip()
         rs = o.get("route_status") or ""
         if carrier not in ("专车", "自提"):
-            if rs != "待揽收":
-                return self._json(400, {"error": "仅未揽收（路由状态=待揽收）可取消下单；当前路由状态：%s"
+            if not _is_not_picked(rs):
+                return self._json(400, {"error": "仅未揽收（待揽收/暂无路由信息）可取消下单；当前路由状态：%s"
                                         % (rs or "—")})
             order_id, logistic_id = "", ""
             try:
@@ -901,13 +915,15 @@ class Handler(SimpleHTTPRequestHandler):
                     # 承运商侧早已取消：目标状态一致，直接同步回待下单（2026-09-16 用户规则）
                     _audit(f"CANCEL-ALREADY id={row_id} waybill={wb} err={e}")
                     with db() as c:
-                        c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='' WHERE id=?",
+                        c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='',"
+                                  " printed_at='', signed_at='' WHERE id=?",
                                   (row_id,))
                     return self._json(200, {"ok": True, "cleared": wb,
                                             "note": "承运商侧已是取消状态，已同步回待下单"})
                 return self._json(400, {"error": str(e)})
         with db() as c:
-            c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='' WHERE id=?",
+            c.execute("UPDATE orders SET waybill_no='', route_status='', route_latest='',"
+                      " printed_at='', signed_at='' WHERE id=?",
                       (row_id,))
         self._json(200, {"ok": True, "cleared": wb})
 
@@ -1257,7 +1273,13 @@ class Handler(SimpleHTTPRequestHandler):
             old = c.execute("SELECT waybill_no, route_status FROM orders WHERE id=?", (oid,)).fetchone()
             if old and "waybill_no" in d and d["waybill_no"] and not old["waybill_no"]:
                 # 下单时间：运单号首次写入（下单成功回写；2026-10-22 清单导出需要）
-                fields.append("printed_at=COALESCE(printed_at, datetime('now','localtime'))")
+                # COALESCE 只认 NULL：历史/取消下单后可能留空串，用 NULLIF 一并兜住（2026-10-26）
+                fields.append("printed_at=COALESCE(NULLIF(printed_at, ''), datetime('now','localtime'))")
+            if old and "waybill_no" in d and not str(d["waybill_no"] or "").strip() and old["waybill_no"]:
+                # 反向：运单号被清空（取消下单/改单号）→ 下单时间、签收时间一并清空，
+                # 否则待下单单在清单/下单页仍显示「▶ 承运商下单日期」（2026-10-26 用户反馈）
+                fields.append("printed_at=''")
+                fields.append("signed_at=''")
             if old and "route_status" in d \
                and re.search(r"签收|回单|已送达|已提", d["route_status"] or "") \
                and not re.search(r"签收|回单|已送达|已提", old["route_status"] or ""):

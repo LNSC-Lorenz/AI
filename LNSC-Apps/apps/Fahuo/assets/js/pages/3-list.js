@@ -65,9 +65,11 @@ function dnSecondRow(o, owner) {
   const b = [];
   const sd = ymdShort(o.ship_date);
   if (sd) b.push('<span class="dn-badge" title="要求发货日期">▼ ' + sd + "</span>");
-  const pd = ymdShort(o.printed_at);
+  /* 承运商下单日期只在「已下单」（有运单号）时才有意义；取消下单后 printed_at 残留也不显示
+     （2026-10-26 用户规则「待下单 那怎么有下单日期」） */
+  const pd = o.waybill_no ? ymdShort(o.printed_at) : "";
   if (pd) b.push('<span class="dn-badge" title="承运商下单日期">▶ ' + pd + "</span>");
-  if (owner) b.push('<span class="dn-owner">' + esc(owner) + "</span>");
+  if (owner) b.push('<button type="button" class="dn-owner dn-owner-filter">' + esc(owner) + "</button>");
   return b.length ? '<div class="dn-badges">' + b.join("") + "</div>" : "";
 }
 /* 外协单 PO/采购员：优先独立字段，旧数据（标签塞在 note 里的）回退标签反解（同 2-order.js） */
@@ -88,14 +90,14 @@ function addrLines(o) {
   for (const x of [o.province, o.city, o.district]) if (x && p[p.length - 1] !== x) p.push(x);
   return [p.join(""), o.street || ""];
 }
-/* 地址列（2026-10-22 用户规则「清单页面里的街道， 如果超过13个汉字， 那在地址列， 与省市区显示在一行。且公司显示在第二行；
-   如果超出13个字，那就换行显示，且公司显示在第三行」）：
-   街道≤13字 → 省市区+街道 第一行、公司第二行；街道>13字 → 省市区第一行、街道第二行、公司第三行（同录单页 18 字规则版式） */
+/* 地址列（2026-10-22 用户规则「清单页面里的街道， 如果超过N个汉字， 那在地址列， 与省市区显示在一行。且公司显示在第二行；
+   如果超出N个字，那就换行显示，且公司显示在第三行」；2026-10-25 用户规则：N 由 13 改为 16）：
+   街道≤16字 → 省市区+街道 第一行、公司第二行；街道>16字 → 省市区第一行、街道第二行、公司第三行（同录单页 18 字规则版式） */
 function fillAddrCell(td, o) {
   const [region, street] = addrLines(o);
   const company = o.company || "";
   const d1 = document.createElement("div");
-  if (street && street.length > 13) {
+  if (street && street.length > 16) {
     d1.textContent = region || (o.address || "");
     td.appendChild(d1);
     const d2 = document.createElement("div"); d2.textContent = street; td.appendChild(d2);
@@ -414,6 +416,17 @@ function renderRows(list) {
                     : ot0 === "其他"   ? senderOf(o)
                     : (o.is_owner || "");
         td.innerHTML = '<span class="dn-num">' + num + "</span>" + dnSecondRow(o, owner);
+        const ownerButton = td.querySelector(".dn-owner-filter");
+        if (ownerButton) {
+          ownerButton.title = "按 " + owner + " 筛选运单（全部／本周／上周／本月）";
+          ownerButton.setAttribute("aria-haspopup", "menu");
+          ownerButton.setAttribute("aria-expanded", "false");
+          ownerButton.classList.toggle("active", ownerDateFilter?.name === owner);
+          ownerButton.addEventListener("click", e => {
+            e.stopPropagation();
+            openOwnerPeriodMenu(ownerButton, owner);
+          });
+        }
       }
       else if (i === 1) td.innerHTML = soHtml(o.so_no || "—");   /* SO 列：32600 前缀上标 */
       else if (i === 4) {                        /* 姓名列（第5列）：姓名+电话两行；未下单（单号空）时允许跨列显示
@@ -595,6 +608,111 @@ function ownNameOf(o) {
   return o.is_owner || "";                 /* 发货单 SO 负责人 */
 }
 
+/* DN 第二行姓名快捷筛选：姓名 + 要求发货日期。全部=该姓名全部日期；
+   本周=本周一至周日，上周=上一自然周（周一至周日），本月=自然月；
+   再次选择当前项取消组合筛选。 */
+let ownerDateFilter = null;
+let ownerPeriodMenu = null;
+let ownerPeriodAnchor = null;
+const OWNER_PERIOD_OPTIONS = [
+  { key: "all", label: "全部", icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>' },
+  { key: "week", label: "本周", icon: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M7 15h10M7 18h6"/>' },
+  { key: "lastweek", label: "上周", icon: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M14 16H8M11 13l-3 3 3 3"/>' },
+  { key: "month", label: "本月", icon: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M7 14h1M12 14h1M17 14h1M7 18h1M12 18h1M17 18h1"/>' }
+];
+
+function closeOwnerPeriodMenu() {
+  if (ownerPeriodAnchor) ownerPeriodAnchor.setAttribute("aria-expanded", "false");
+  if (ownerPeriodMenu) ownerPeriodMenu.remove();
+  ownerPeriodMenu = null;
+  ownerPeriodAnchor = null;
+}
+
+function positionOwnerPeriodMenu() {
+  if (!ownerPeriodMenu || !ownerPeriodAnchor) return;
+  const r = ownerPeriodAnchor.getBoundingClientRect();
+  const mw = ownerPeriodMenu.offsetWidth, mh = ownerPeriodMenu.offsetHeight;
+  const left = Math.max(8, Math.min(r.right + 7, window.innerWidth - mw - 8));
+  const top = Math.max(8, Math.min(r.top + r.height / 2 - mh / 2, window.innerHeight - mh - 8));
+  ownerPeriodMenu.style.left = left + "px";
+  ownerPeriodMenu.style.top = top + "px";
+}
+
+function openOwnerPeriodMenu(anchor, name) {
+  name = String(name || "").trim();
+  if (ownerPeriodAnchor === anchor) { closeOwnerPeriodMenu(); return; }
+  closeOwnerPeriodMenu();
+  ownerPeriodAnchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
+  const menu = document.createElement("div");
+  menu.className = "lm-owner-period-menu";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", name + " 的运单日期筛选");
+  OWNER_PERIOD_OPTIONS.forEach(opt => {
+    const selected = ownerDateFilter?.name === name && ownerDateFilter.period === opt.key;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "lm-owner-period-option" + (selected ? " active" : "");
+    b.setAttribute("role", "menuitemradio");
+    b.setAttribute("aria-checked", String(selected));
+    b.title = selected ? "再次点击取消该姓名／日期筛选" : `${name} · ${opt.label}`;
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+      + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + opt.icon + "</svg>"
+      + "<span>" + opt.label + "</span>";
+    b.addEventListener("click", () => {
+      ownerDateFilter = selected ? null : { name, period: opt.key };
+      closeOwnerPeriodMenu();
+      applyView();
+    });
+    menu.appendChild(b);
+  });
+  document.body.appendChild(menu);
+  ownerPeriodMenu = menu;
+  positionOwnerPeriodMenu();
+  requestAnimationFrame(() => {
+    if (ownerPeriodMenu !== menu) return;
+    menu.classList.add("on");
+    (menu.querySelector(".active") || menu.firstElementChild)?.focus({ preventScroll: true });
+  });
+}
+
+document.addEventListener("click", e => {
+  if (ownerPeriodMenu && !ownerPeriodMenu.contains(e.target) && e.target !== ownerPeriodAnchor) {
+    closeOwnerPeriodMenu();
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && ownerPeriodMenu) {
+    const anchor = ownerPeriodAnchor;
+    closeOwnerPeriodMenu();
+    anchor?.focus({ preventScroll: true });
+  }
+});
+window.addEventListener("resize", closeOwnerPeriodMenu);
+
+function ownerPeriodRange(period) {
+  const now = new Date();
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (period === "week" || period === "lastweek") {
+    /* 周一为一周起点：先回到本周一，上周再往前推 7 天（不依赖 getDay 的周日=0） */
+    const back = (now.getDay() + 6) % 7 + (period === "lastweek" ? 7 : 0);
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+    return [ymd(start), ymd(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6))];
+  }
+  return [ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+    ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0))];
+}
+
+function matchesOwnerDateFilter(o) {
+  if (!ownerDateFilter) return true;
+  if (String(ownNameOf(o) || "").trim() !== ownerDateFilter.name) return false;
+  if (ownerDateFilter.period === "all") return true;
+  const day = dayOf(o.ship_date);
+  if (!day) return false;
+  const [start, end] = ownerPeriodRange(ownerDateFilter.period);
+  return day >= start && day <= end;
+}
+
 /* 四类筛选显示去重的我方姓名；每页只容纳完整标签，左右箭头切换剩余姓名。
    选中姓名与手工关键词是两个独立条件，可继续输入进行 AND 筛选。 */
 let nameChipPage = 0;
@@ -756,8 +874,9 @@ function clearPickedNameQuery() {
 }
 
 function applyView() {
+  closeOwnerPeriodMenu();
   updateNameChips();
-  let list = baseList;
+  let list = baseList.filter(matchesOwnerDateFilter);
   if (activeType) {
     list = list.filter(o => (o.order_type || "发货单") === activeType);
   }
@@ -1145,7 +1264,9 @@ function padR(s, w) { s = String(s); return s + " ".repeat(Math.max(0, w - dw(s)
 const SHARE_HEAD = ["DN", "SO", "优先级", "类型", "地址", "姓名", "电话", "单号", "下单时间", "签收时间", "下单状态", "路由状态", "回单日期", "备注"];
 const shareRowOf = o => [o.so || "", o.so_no || "", o.priority || "一般", o.order_type || "发货单",
                          o.address || "", o.name || "", o.phone || "", o.waybill_no || "",
-                         o.printed_at || "", o.signed_at || "",   /* 下单时间/签收时间（2026-10-22 用户规则「清单页面 在导出时候， 需要把快递的下单时间， 签收时间都导出」） */
+                         /* 下单时间/签收时间（2026-10-22 用户规则「清单页面 在导出时候， 需要把快递的下单时间， 签收时间都导出」）；
+                            2026-10-26：待下单（无运单号）一律导空，避免取消下单后残留的时间戳 */
+                         o.waybill_no ? (o.printed_at || "") : "", o.waybill_no ? (o.signed_at || "") : "",
                          o.waybill_no ? "已下单" : "待下单", o.route_status || "",
                          dayOf(o.returned_at), cleanNote(o.note)];
 function shareLinesF(rows, limit) {

@@ -100,6 +100,50 @@ check("cargoDesc", b.get("cargoDesc"), "喷嘴 25pcs")
 check("remark", b.get("remark"), "DN：8260034693 SO：3260027425")
 check("未下发 isSignBack", "isSignBack" in b, False)
 
+print("== ⑥ 顺丰：纸质回单 + 盖章（签回单盖章，attr015=2）==")
+b = sf_body(["纸质回单", "盖章"])
+check("isSignBack（盖章同样按签单返还下发）", b.get("isSignBack"), 1)
+check("extraInfoList（attr014=singBackInfo + attr015=2）", b.get("extraInfoList"),
+      [{"attrName": "attr014", "attrVal": "singBackInfo"},
+       {"attrName": "attr015", "attrVal": "2"}])
+check("盖章不改变备注", b.get("remark"), "DN：8260034693 SO：3260027425")
+check("盖章不改托寄物", b.get("cargoDesc"), "喷嘴 25pcs")
+check("盖章不混入 IN03（费用代码下单不下发）",
+      [s for s in (b.get("serviceList") or []) if s.get("name") == "IN03"], [])
+
+print("== ⑥b 顺丰：纸质回单 + 签名（签回单签名，attr015=1）==")
+b = sf_body(["纸质回单", "签名"])
+check("isSignBack（签名同样按签单返还下发）", b.get("isSignBack"), 1)
+check("extraInfoList（attr014=singBackInfo + attr015=1）", b.get("extraInfoList"),
+      [{"attrName": "attr014", "attrVal": "singBackInfo"},
+       {"attrName": "attr015", "attrVal": "1"}])
+check("签名不改托寄物", b.get("cargoDesc"), "喷嘴 25pcs")
+
+print("== ⑥c 顺丰：签名 + 盖章 同勾（attr015=1,2 英文逗号分隔）==")
+b = sf_body(["纸质回单", "签名", "盖章"])
+check("isSignBack", b.get("isSignBack"), 1)
+check("extraInfoList（attr015=1,2）", b.get("extraInfoList"),
+      [{"attrName": "attr014", "attrVal": "singBackInfo"},
+       {"attrName": "attr015", "attrVal": "1,2"}])
+check("备注不变", b.get("remark"), "DN：8260034693 SO：3260027425")
+
+print("== ⑦ 顺丰：仅签名 / 仅盖章（兜底仍按签单返还下发）==")
+b = sf_body(["签名"])
+check("仅签名：isSignBack 补 1", b.get("isSignBack"), 1)
+check("仅签名：attr015=1", b["extraInfoList"][1]["attrVal"], "1")
+b = sf_body(["盖章"])
+check("仅盖章：isSignBack 补 1", b.get("isSignBack"), 1)
+check("仅盖章：attr015=2", b["extraInfoList"][1]["attrVal"], "2")
+
+print("== ⑧ 顺丰：未勾签名/盖章 → 不下发扩展字段 ==")
+b = sf_body(["纸质回单"])
+check("未下发 extraInfoList", "extraInfoList" in b, False)
+b = sf_body(["纸质回单", "拍照回传"])
+check("纸质+拍照：仍无 extraInfoList", "extraInfoList" in b, False)
+check("纸质+拍照：isSignBack 仍为 1", b.get("isSignBack"), 1)
+check("纸质+拍照：serviceList 仍为 IN91",
+      b.get("serviceList"), [{"name": "IN91", "value": "13"}])
+
 print("== ⑤ 德邦：纸质回单 / 未勾回单 ==")
 b = dp_body(["纸质回单"])
 check("packageInfo.cargoName（原样，不加「的回单」）", b["packageInfo"]["cargoName"], "喷嘴 25pcs")
