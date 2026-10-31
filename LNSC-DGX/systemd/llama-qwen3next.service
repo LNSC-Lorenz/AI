@@ -1,0 +1,43 @@
+[Unit]
+Description=llama.cpp A/B server for Qwen3-Next-80B-A3B-Instruct (GB10 / sm_121)
+After=network-online.target
+Wants=network-online.target
+# 统一内存装不下 Flash + Next；启动本 unit 时由 systemd 自动停止 Flash。
+Conflicts=llama-qwen38.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/models/qwen3-next-80b-a3b-instruct/UD-Q4_K_XL
+ExecStartPre=/usr/bin/test -r /models/qwen3-next-80b-a3b-instruct/UD-Q4_K_XL/Qwen3-Next-80B-A3B-Instruct-UD-Q4_K_XL.gguf
+
+# 与 llama-qwen38.service 保持相同推理参数，确保 A/B 只改变模型。
+# 原生上下文 262144，-c 196608 不需要 rope scaling；无 mmproj，纯文本。
+ExecStart=/opt/llama.cpp/build/bin/llama-server \
+  -m /models/qwen3-next-80b-a3b-instruct/UD-Q4_K_XL/Qwen3-Next-80B-A3B-Instruct-UD-Q4_K_XL.gguf \
+  --alias qwen3-next-80b-a3b-instruct \
+  -c 196608 -b 2048 -ub 1024 -ngl 999 \
+  -fa on -ctk q8_0 -ctv q8_0 \
+  --cache-reuse 256 \
+  --jinja --parallel 1 --metrics \
+  --host 0.0.0.0 --port 8081
+
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+TimeoutStopSec=60
+KillSignal=SIGINT
+MemoryHigh=112G
+MemoryMax=116G
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-qwen3next
+Nice=-5
+
+# 2026-10-28 晚：Flash 为质量默认；本 unit 仅作速度回退，保持 disabled。
+# 运行时切换统一用 model-switch.sh，不要直接并行启动 Flash 与 Next。
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,14 @@
 
 > 全套只读。任何一步都不改配置、不重启服务。
 > 全部命令在 DGX 上以 root 执行（`ssh root@10.86.20.57`）。
+>
+> **2026-10-28 晚起质量默认是 `llama-qwen38`**；`llama-qwen3next` 仅作速度回退。
+> 当前日志用 `journalctl -u llama-qwen38 -b`；互斥切换见 `docs/07-next80-ab.md`，27B 淘汰结论见 `docs/08-qwen38-27b-trial.md`。
+> Flash 支持视觉，但常驻内存/swap 压力较大，巡检时重点关注。
+>
+> **双机专项**：即将按 `docs/10-two-node-deployment.md` 部署 2×DGX Spark + GLM-5.3-Flash。
+> 双机日常状态、启停顺序、NCCL/worker/网络故障与回滚见 `docs/12-two-node-operations.md`；
+> 验证数据规范见 `docs/11-two-node-validation.md`。当前尚未执行双机部署。
 
 ---
 
@@ -49,11 +57,11 @@ journalctl -u llama-qwen38 -b --no-pager | grep -iE 'no FlashAttention|error' ||
 systemctl is-active llama-qwen38 ollama
 ```
 
-判据：`health=200` + `n_ctx=196608` + 日志无 `no FlashAttention`/`error`。
+判据：`health=200` + `n_ctx=262144` + 日志无 `no FlashAttention`/`error`。
 若 3 分钟后仍未就绪 → `journalctl -u llama-qwen38 -b --no-pager | tail -50`，并注意 `StartLimitBurst=3` 会**在 3 次失败后主动停止重试**（这是设计，防止反复读盘）。
 
 - ✅ **服务已由 systemd 托管**（`llama-qwen38`），关终端不会再杀服务；日志用 `journalctl -u llama-qwen38` 看。
-- ✅ 上下文已扩到 **196608**，`--metrics` 已开启（`curl -s :8081/metrics`）。
+- ✅ 上下文已扩到原生最大 **262144**（2026-10-29 C9），`--metrics` 已开启（`curl -s :8081/metrics`）。
 - ⚠️ `MemAvailable` 常态约 **8~9 GiB**（权重 103.68 GiB 的真实代价）。**低于 1 GiB 就直接进 05-incident 的 I1**，不要继续做其它变更。
 - ✅ **视觉/视频已启用**（`--mmproj mmproj-F16.gguf`，2026-10-27 23:32）。`/props` 应显示 `vision:true`、`video:true`。
   - 回滚：删掉 unit 里 `--mmproj` 那行 → `daemon-reload && systemctl restart llama-qwen38`。

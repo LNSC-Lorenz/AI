@@ -1,0 +1,9 @@
+2026-10-29T09:15:40+08:00
+slot idle，允许重启
+# -c 262144 等于原生 context_length 262144，不需要 rope scaling.
+  -c 262144 -b 2048 -ub 1024 -ngl 999 \
+smoke= 
+CTX262144_SUCCESS 2026-10-29T09:17:20+08:00
+               total        used        free      shared  buff/cache   available
+Mem:           121Gi       112Gi       8.7Gi       874Mi       2.1Gi       8.9Gi
+Swap:           15Gi       3.7Gi        12Gi

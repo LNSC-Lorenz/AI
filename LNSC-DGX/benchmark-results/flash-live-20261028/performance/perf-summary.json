@@ -1,0 +1,70 @@
+{
+  "label": "flash-live",
+  "base": "http://127.0.0.1:8081",
+  "session": "lnsc-flash-live-20261028",
+  "target_tokens": 39000,
+  "body_sha256": "6fbbcb9b3baa2ede7373e805a6323fee5f8a458edc5f2e63b90ee3c28f2526e8",
+  "body_chars": 172221,
+  "runs": [
+    {
+      "http": 200,
+      "wall_s": 59.485,
+      "model": "qwen3.8-flash-next",
+      "usage_prompt_tokens": 38976,
+      "usage_completion_tokens": 512,
+      "prompt_n": 38976,
+      "prompt_ms": 37709.419,
+      "prefill_tps": 1033.5879213625647,
+      "predicted_n": 512,
+      "predicted_ms": 20435.272,
+      "decode_tps": 25.005784116795706,
+      "kind": "cold_39k_plus_decode512",
+      "run": 0,
+      "request_sha256": "a5d6ed1f30be1d6f33ca2f4e9b43fdf5a2cb0dffe70fc04837209c849d8dee35"
+    },
+    {
+      "http": 200,
+      "wall_s": 68.933,
+      "model": "qwen3.8-flash-next",
+      "usage_prompt_tokens": 38976,
+      "usage_completion_tokens": 512,
+      "prompt_n": 38976,
+      "prompt_ms": 37714.61,
+      "prefill_tps": 1033.4456593877014,
+      "predicted_n": 512,
+      "predicted_ms": 20446.912,
+      "decode_tps": 24.991548846104486,
+      "kind": "cold_39k_plus_decode512",
+      "run": 1,
+      "request_sha256": "14388fb56337be20d42d6d43b6d9a8f01a4b747a2c076ec7f8eb470e091e49d4"
+    },
+    {
+      "http": 200,
+      "wall_s": 48.919,
+      "model": "qwen3.8-flash-next",
+      "usage_prompt_tokens": 38976,
+      "usage_completion_tokens": 1,
+      "prompt_n": 4,
+      "prompt_ms": 183.759,
+      "prefill_tps": 21.76764131280645,
+      "predicted_n": 1,
+      "predicted_ms": 0.001,
+      "decode_tps": 0.0,
+      "kind": "warm_same_39k"
+    },
+    {
+      "http": 200,
+      "wall_s": 18.406,
+      "model": "qwen3.8-flash-next",
+      "usage_prompt_tokens": 93,
+      "usage_completion_tokens": 512,
+      "prompt_n": 51,
+      "prompt_ms": 423.515,
+      "prefill_tps": 120.42076431767471,
+      "predicted_n": 512,
+      "predicted_ms": 17340.887,
+      "decode_tps": 29.46792744800194,
+      "kind": "short_prompt_decode512"
+    }
+  ]
+}

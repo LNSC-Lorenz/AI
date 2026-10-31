@@ -1,0 +1,37 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"alpha\":\"NX-7319\",\"beta\":\"QZ-2048\",\"gamma\":\"LM-8864\"}",
+        "reasoning_content": "We need answer user's request. Need parse Chinese: \"阅读下面的长文本。找出三条以 RECORD 开头的记录，忽略 DECOY。只输出 JSON：{\"alpha\":\"对应代码\",\"beta\":\"对应代码\",\"gamma\":\"对应代码\"}\" Means read long text. Find three records starting with RECORD, ignore DECOY. Output only JSON with alpha beta gamma corresponding codes.\n\nWe need inspect text. It contains:\nRECORD ALPHA = NX-7319\n...\nRECORD BETA = QZ-2048\n...\nRECORD GAMMA = LM-8864\n...\nDECOY ALPHA = XX-0000\n...\nNeed output JSON only: {\"alpha\":\"NX-7319\",\"beta\":\"QZ-2048\",\"gamma\":\"LM-8864\"}\n\nNeed ensure final only JSON no extra. Final JSON.\n"
+      }
+    }
+  ],
+  "created": 1793191673,
+  "model": "qwen3.8-flash-next",
+  "system_fingerprint": "b0-unknown",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 223,
+    "prompt_tokens": 23476,
+    "total_tokens": 23699,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "id": "chatcmpl-XfWhdHs90RMHvn8PpIOQaMjmMJ9e3TM2",
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 23476,
+    "prompt_ms": 23085.13,
+    "prompt_per_token_ms": 0.9833502300221503,
+    "prompt_per_second": 1016.9316785307252,
+    "predicted_n": 223,
+    "predicted_ms": 8348.178,
+    "predicted_per_token_ms": 37.6044054054054,
+    "predicted_per_second": 26.592628954485637
+  }
+}

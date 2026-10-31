@@ -16,7 +16,7 @@ UNIT=llama-qwen38.service
 UNIT_PATH="/etc/systemd/system/$UNIT"
 BIN="${BIN:-/opt/llama.cpp/build/bin/llama-server}"
 MODEL="${MODEL:-/models/qwen3.8-flash-next/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf}"
-CTX="${CTX:-131072}"     # 要扩到 192k: CTX=196608 CTV=q4_0
+CTX="${CTX:-262144}"     # 原生最大上下文；要降内存时可显式设小（如 CTX=131072）
 CTK="${CTK:-q8_0}"
 CTV="${CTV:-q8_0}"
 MEM_HIGH="${MEM_HIGH:-}"     # 留空则不设（当前实际占用约 120 GiB, 设低了会触发 cgroup 限流）

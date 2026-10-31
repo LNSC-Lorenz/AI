@@ -1,0 +1,37 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"count_score\":3,\"avg_score\":80,\"sum_score\":240,\"count_rows\":5}",
+        "reasoning_content": "We need answer user's request. Need produce final only JSON. Need compute: rows: (1,80),(2,NULL),(3,90),(4,70),(5,NULL). COUNT(score)=3. AVG(score) = (80+90+70)/3 = 240/3=80. SUM(score)=240. COUNT(*)=5. Output JSON exactly. Ensure no extra text.\n"
+      }
+    }
+  ],
+  "created": 1793191579,
+  "model": "qwen3.8-flash-next",
+  "system_fingerprint": "b0-unknown",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 120,
+    "prompt_tokens": 143,
+    "total_tokens": 263,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "id": "chatcmpl-W1gYLKu6AHrxP9lhYxAmS2pHdnXGQ7tU",
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 143,
+    "prompt_ms": 1136.933,
+    "prompt_per_token_ms": 7.95058041958042,
+    "prompt_per_second": 125.77698070158928,
+    "predicted_n": 120,
+    "predicted_ms": 4046.236,
+    "predicted_per_token_ms": 34.00198319327731,
+    "predicted_per_second": 29.410049240825302
+  }
+}

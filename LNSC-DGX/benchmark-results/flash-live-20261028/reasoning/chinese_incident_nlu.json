@@ -1,0 +1,37 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"immediate_event\":\"client_cancel\",\"server_fault\":false,\"main_cost\":\"cold_prefill\",\"cache_effective\":true}",
+        "reasoning_content": "We need answer user's request. Need output only JSON. Need analyze Chinese event.\n\nUser: \"阅读事件：09:00 CPU 与内存稳定。09:02 一个 prompt_tokens=38972 的请求正在 prefill，实测速度约 1050 tokens/s，服务端没有异常日志；随后客户端达到自己的超时并发送 cancel。重发相同 prompt 后 38900 个前缀 token 命中缓存，0.3 秒开始输出。判断直接事件、是否存在服务端故障、主要耗时来源、缓存是否有效。只输出 JSON：{\"immediate_event\":\"client_cancel\"或\"server_crash\",\"server_fault\":true或false,\"main_cost\":\"cold_prefill\"或\"decode\",\"cache_effective\":true或false}\"\n\nNeed produce JSON only. Immediate event: client_cancel because client timeout sends cancel. server_fault false because stable, no exception logs, prefill speed normal. main_cost cold_prefill because large prompt prefill at 1050 tokens/s ~37s, client timeout. cache_effective true because resend prefix cache hit and output starts 0.3s. Need ensure valid JSON no extra.\n"
+      }
+    }
+  ],
+  "created": 1793191621,
+  "model": "qwen3.8-flash-next",
+  "system_fingerprint": "b0-unknown",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 283,
+    "prompt_tokens": 201,
+    "total_tokens": 484,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "id": "chatcmpl-gOR0SibShdkuaHRZsH8tKRmKnpVwTAYg",
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 201,
+    "prompt_ms": 1279.229,
+    "prompt_per_token_ms": 6.364323383084577,
+    "prompt_per_second": 157.12589380009365,
+    "predicted_n": 283,
+    "predicted_ms": 9543.453,
+    "predicted_per_token_ms": 33.84203191489362,
+    "predicted_per_second": 29.54905315717487
+  }
+}

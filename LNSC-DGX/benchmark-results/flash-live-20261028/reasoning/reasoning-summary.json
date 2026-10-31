@@ -1,0 +1,93 @@
+{
+  "label": "flash-live",
+  "passed": 5,
+  "total": 5,
+  "long_prompt_sha256": "a6daad507f372ba3dc693c420c7da6612e4e3280534bd041f4dd2f86f6da04a0",
+  "results": [
+    {
+      "task": "math_latency",
+      "passed": true,
+      "wall_s": 45.204,
+      "finish_reason": "stop",
+      "prompt_tokens": 157,
+      "completion_tokens": 597,
+      "reasoning_chars": 1343,
+      "content_chars": 49,
+      "actual": {
+        "before_s": 61.51,
+        "after_s": 57.6,
+        "saved_s": 3.91
+      },
+      "error": null
+    },
+    {
+      "task": "logic_order",
+      "passed": true,
+      "wall_s": 29.948,
+      "finish_reason": "stop",
+      "prompt_tokens": 117,
+      "completion_tokens": 190,
+      "reasoning_chars": 553,
+      "content_chars": 27,
+      "actual": {
+        "order": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ]
+      },
+      "error": null
+    },
+    {
+      "task": "sql_null",
+      "passed": true,
+      "wall_s": 140.259,
+      "finish_reason": "stop",
+      "prompt_tokens": 143,
+      "completion_tokens": 120,
+      "reasoning_chars": 246,
+      "content_chars": 63,
+      "actual": {
+        "count_score": 3,
+        "avg_score": 80,
+        "sum_score": 240,
+        "count_rows": 5
+      },
+      "error": null
+    },
+    {
+      "task": "chinese_incident_nlu",
+      "passed": true,
+      "wall_s": 42.272,
+      "finish_reason": "stop",
+      "prompt_tokens": 201,
+      "completion_tokens": 283,
+      "reasoning_chars": 805,
+      "content_chars": 106,
+      "actual": {
+        "immediate_event": "client_cancel",
+        "server_fault": false,
+        "main_cost": "cold_prefill",
+        "cache_effective": true
+      },
+      "error": null
+    },
+    {
+      "task": "long_context_records",
+      "passed": true,
+      "wall_s": 52.684,
+      "finish_reason": "stop",
+      "prompt_tokens": 23476,
+      "completion_tokens": 223,
+      "reasoning_chars": 553,
+      "content_chars": 54,
+      "actual": {
+        "alpha": "NX-7319",
+        "beta": "QZ-2048",
+        "gamma": "LM-8864"
+      },
+      "error": null
+    }
+  ]
+}

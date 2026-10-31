@@ -1,0 +1,28 @@
+[Unit]
+Description=GGML RPC worker for two-node GLM-5.3 (RDMA-capable private link)
+After=network-online.target lnsc-cx7-addresses.service
+Wants=network-online.target lnsc-cx7-addresses.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/llama.cpp
+Environment=GGML_RPC_DEBUG=1
+ExecStart=/opt/llama.cpp/build-rpc/bin/ggml-rpc-server --device CUDA0 --host 192.168.100.11 --port 50052 -c
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=60
+KillSignal=SIGINT
+MemoryHigh=104G
+MemoryMax=112G
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ggml-rpc
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

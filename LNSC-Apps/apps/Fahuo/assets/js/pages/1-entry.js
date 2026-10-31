@@ -282,7 +282,8 @@ if (typeof document !== "undefined") {
       const b = document.createElement("b");
       b.textContent = (a.name || "--") + (a.phone ? "  " + a.phone : "");
       const s = document.createElement("span");
-      s.textContent = [a.province, a.city, a.district, a.company, a.street].filter(Boolean).join(" ");
+      /* 池项地址显示：省市区 + 街道 + 公司（公司在最后；与入单拼接口径一致，2026-10-29） */
+      s.textContent = [a.province, a.city, a.district, a.street, a.company].filter(Boolean).join(" ");
       it.append(b, s);
       it.addEventListener("mousedown", e => {   /* mousedown 先于 input blur */
         e.preventDefault();
@@ -818,7 +819,8 @@ if (typeof document !== "undefined") {
     const prov = selProvince.value, city = selCity.value, dist = selDistrict.value;
     const street = streetInput.value.trim();
     const company = companyInput.value.trim();   /* 公司独立字段（2026-09-17 拆分） */
-    const addr = [[prov, city, dist].filter(Boolean).join(" "), company, street]
+    /* 地址拼接（2026-10-29 用户规则「公司名称 在最后」）：省市区 + 街道 + 公司（原「省市区+公司+街道」公司在中段，显示错误） */
+    const addr = [[prov, city, dist].filter(Boolean).join(" "), street, company]
       .filter(Boolean).join(" ");
     if (!addr) { alert("地址为空：请先粘贴地址并点击「识别」"); return; }
     if (!phoneInput.value.trim()) { alert("联系方式为必填项"); phoneInput.focus(); return; }

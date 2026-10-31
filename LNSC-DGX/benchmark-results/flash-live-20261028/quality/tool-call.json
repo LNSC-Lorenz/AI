@@ -1,0 +1,48 @@
+{
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "The user asks me to check /workspace/src/app.py, and I must call read_file first.\n",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": "{\"path\":\"/workspace/src/app.py\"}"
+            },
+            "id": "whxHGdddInhA3qC9DTkjMNRr8e0a8SY9"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 1793191040,
+  "model": "qwen3.8-flash-next",
+  "system_fingerprint": "b0-unknown",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 51,
+    "prompt_tokens": 342,
+    "total_tokens": 393,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "id": "chatcmpl-9v3FFySR4MYY3UccmeCWLTpkrB3t9pVi",
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 342,
+    "prompt_ms": 1180.454,
+    "prompt_per_token_ms": 3.4516198830409355,
+    "prompt_per_second": 289.71904030144333,
+    "predicted_n": 51,
+    "predicted_ms": 1692.681,
+    "predicted_per_token_ms": 33.85362,
+    "predicted_per_second": 29.53893852415192
+  },
+  "_ab_wall_s": 74.061
+}

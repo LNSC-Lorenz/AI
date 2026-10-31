@@ -1,0 +1,28 @@
+{
+  "label": "flash-live",
+  "passed": 3,
+  "total": 3,
+  "results": [
+    {
+      "task": "tool_call",
+      "passed": true,
+      "wall_s": 74.061
+    },
+    {
+      "passed": true,
+      "returncode": 0,
+      "stdout": "merge tests: PASS\n",
+      "stderr": "",
+      "task": "bugfix_merge",
+      "wall_s": 168.994
+    },
+    {
+      "passed": true,
+      "returncode": 0,
+      "stdout": "refactor tests: PASS\n",
+      "stderr": "",
+      "task": "cross_file_decimal_refactor",
+      "wall_s": 154.311
+    }
+  ]
+}

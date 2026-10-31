@@ -1,0 +1,40 @@
+786.00.360.117 I slot print_timing: id  0 | task 147062 | n_gen =   3132, tg =  21.81 t/s, tg_3s =  21.24 t/s
+786.03.378.111 I slot print_timing: id  0 | task 147062 | n_gen =   3197, tg =  21.81 t/s, tg_3s =  21.54 t/s
+786.06.409.782 I slot print_timing: id  0 | task 147062 | n_gen =   3263, tg =  21.81 t/s, tg_3s =  21.77 t/s
+786.09.435.219 I slot print_timing: id  0 | task 147062 | n_gen =   3329, tg =  21.81 t/s, tg_3s =  21.82 t/s
+786.12.463.429 I slot print_timing: id  0 | task 147062 | n_gen =   3394, tg =  21.80 t/s, tg_3s =  21.46 t/s
+786.15.483.689 I slot print_timing: id  0 | task 147062 | n_gen =   3459, tg =  21.80 t/s, tg_3s =  21.52 t/s
+786.18.504.045 I slot print_timing: id  0 | task 147062 | n_gen =   3524, tg =  21.79 t/s, tg_3s =  21.52 t/s
+786.21.536.229 I slot print_timing: id  0 | task 147062 | n_gen =   3589, tg =  21.78 t/s, tg_3s =  21.44 t/s
+786.24.553.645 I slot print_timing: id  0 | task 147062 | n_gen =   3653, tg =  21.77 t/s, tg_3s =  21.21 t/s
+786.25.024.004 W srv          stop: cancel task, id_task = 147062
+786.25.069.448 I slot      release: id  0 | task 147062 | stop processing: n_tokens = 71497, truncated = 0
+Stopping llama-qwen38.service - llama.cpp server for Qwen3.8-Flash-Next (GB10 / sm_121)...
+787.12.533.283 I srv    operator(): operator(): cleaning up before exit...
+llama-qwen38.service: Deactivated successfully.
+Stopped llama-qwen38.service - llama.cpp server for Qwen3.8-Flash-Next (GB10 / sm_121).
+llama-qwen38.service: Consumed 2h 5min 6.269s CPU time, 39.8G memory peak, 7.6G memory swap peak.
+Starting llama-qwen38.service - llama.cpp server for Qwen3.8-Flash-Next (GB10 / sm_121)...
+Started llama-qwen38.service - llama.cpp server for Qwen3.8-Flash-Next (GB10 / sm_121).
+0.00.113.037 I srv  llama_server: initializing ...
+0.00.113.054 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.113.226 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.117.420 I srv    load_model: loading model '/models/qwen3.8-flash-next/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf'
+1.23.543.640 I cmn          init: llama threadpool init, n_threads = 20
+1.23.780.245 W load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+1.23.780.254 W load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+1.23.780.254 W load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+1.27.929.498 I srv    load_model: loaded multimodal model, '/models/qwen3.8-flash-next/mmproj-F16.gguf'
+1.27.929.507 W srv    load_model: cache_reuse is not supported by multimodal, it will be disabled
+1.28.033.509 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 262144, kv_unified = 'false'
+1.28.046.342 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+1.28.046.417 I srv  server_run_i: model loaded
+1.28.046.424 I srv  server_on_li: listening on http://0.0.0.0:8081
+1.30.788.813 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+1.30.788.929 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+1.32.450.030 I slot print_timing: id  0 | task 0 | prompt eval time =    1137.74 ms /    57 tokens (   19.96 ms per token,    50.10 tokens per second)
+1.32.450.037 I slot print_timing: id  0 | task 0 |        eval time =     523.32 ms /    16 tokens (   34.89 ms per token,    28.66 tokens per second)
+1.32.450.038 I slot print_timing: id  0 | task 0 |       total time =    1661.06 ms /    73 tokens
+1.32.450.044 I slot print_timing: id  0 | task 0 |    graphs reused =         15
+1.32.450.044 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+1.32.461.177 I slot      release: id  0 | task 0 | stop processing: n_tokens = 72, truncated = 0

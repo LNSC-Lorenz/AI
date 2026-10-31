@@ -1,0 +1,15 @@
+[Unit]
+Description=Assign private QSFP addresses for the two-node RPC cluster
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/nmcli device set enp1s0f1np1 managed no
+ExecStartPre=/usr/bin/nmcli device set enP2p1s0f1np1 managed no
+ExecStart=/bin/sh -c 'ip addr add 192.168.100.11/24 dev enp1s0f1np1 || true; ip addr add 192.168.101.11/24 dev enP2p1s0f1np1 || true'
+SyslogIdentifier=lnsc-cx7
+
+[Install]
+WantedBy=multi-user.target

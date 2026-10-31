@@ -13,7 +13,7 @@ ALIAS="${ALIAS:-qwen3.8-flash-next}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8081}"
 
-CTX="${CTX:-196608}"       # 上下文: 与 systemd unit 保持一致(196608 < 原生 262144, 无需 rope)
+CTX="${CTX:-262144}"       # 上下文: 与 systemd unit 保持一致(262144 = 原生最大, 无需 rope)
 BATCH="${BATCH:-2048}"      # 逻辑批
 UBATCH="${UBATCH:-1024}"    # 微批: 决定 prefill 速度. 实测 24k prompt: 512→935 tok/s, 1024→1082 tok/s(+15.7%)
                             # 内存紧张时降到 512/256；cgroup peak 会 +1.6 GiB 左右

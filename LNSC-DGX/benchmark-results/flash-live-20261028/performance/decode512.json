@@ -1,0 +1,37 @@
+{
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "We need to respond to user: \"nonce lnsc-flash-live-20261028-short\nExplain how to diagnose a flaky Python integration test. Give a systematic, detailed answer and continue to the token limit.\"\n\nNeed produce final answer. Need likely include nonce? Maybe user expects include nonce? It says nonce ... maybe from eval. We should include it? Probably yes, maybe start with nonce. Need answer systematic detailed, continue to token limit. Need maybe very long. Need ensure no hidden chain-of-thought. Final only answer. Need maybe discuss flaky Python integration test diagnosis. Need be thorough. Token limit? We can produce long but not insane. Desired oververbosity 9. Need maybe include sections, checklist, commands, pytest, CI, logs, bisect, isolation, concurrency, time, network, DB, fixtures, seeds, retries, etc. Need maybe mention nonce at top. Need not mention token limit. Need maybe \"nonce lnsc-flash-live-20261028-short\".\n\nNeed think if any safety? no.\n\nNeed produce final with detailed systematic answer. Could be around 3000-5000 words? Token limit unknown. \"continue to the token limit\" maybe wants max. But we shouldn't exceed? We can produce long. Need maybe not too long. Let's craft comprehensive. Include:\n- Define flaky\n- Gather evidence: reproduce locally, CI, environment, test IDs, timestamps, artifacts\n- Stabilize reproduction: run N times, random seeds, parallel, order, time, network, load\n- Isolate test: run alone, group, dependencies, fixtures, setup/teardown, shared state\n- Inspect failure signatures: assertion, timeout, connection reset, 500, DB deadlock, race, resource exhaustion\n- Instrumentation: logging, pytest -vv, --tb=long, --showlocals, caplog, structured logs, tracebacks, core dumps, py-spy, strace, tcpdump, DB query logs\n- Environment parity: Python version, deps, OS, containers, env vars, timezones, locale, file paths, permissions, disk, memory, CPU, network latency, external services\n- Test design: isolation, deterministic fixtures, unique namespaces, cleanup, idempotency, avoid sleeps, use polling with timeouts, control time, mock external services, use testcontainers, ephemeral resources\n- Concurrency: pytest-xdist"
+      }
+    }
+  ],
+  "created": 1793190965,
+  "model": "qwen3.8-flash-next",
+  "system_fingerprint": "b0-unknown",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 512,
+    "prompt_tokens": 93,
+    "total_tokens": 605,
+    "prompt_tokens_details": {
+      "cached_tokens": 42
+    }
+  },
+  "id": "chatcmpl-5cNhSYLfwRxMzJWoRasEsf0i9GacUBqf",
+  "timings": {
+    "cache_n": 42,
+    "prompt_n": 51,
+    "prompt_ms": 423.515,
+    "prompt_per_token_ms": 8.30421568627451,
+    "prompt_per_second": 120.42076431767471,
+    "predicted_n": 512,
+    "predicted_ms": 17340.887,
+    "predicted_per_token_ms": 33.93519960861057,
+    "predicted_per_second": 29.46792744800194
+  }
+}

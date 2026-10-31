@@ -674,22 +674,13 @@ html { scrollbar-gutter: stable; }
 /* ===== 打单模式：面单预览 + 三段 ===== */
 .pw-main {
   display: grid;
-  grid-template-columns: 1fr 3fr;   /* 左面单预览 25%（2026-09-17 用户指定），右 3/4 */
+  grid-template-columns: 1fr;   /* 面单预览移除，右侧工作区全宽铺开（2026-10-28 用户规则） */
   gap: 20px;
   grid-row: 2 / -1;
   min-height: 0;
 }
 
-/* 左：承运商切换 + 130 面单模拟 */
-.pw-left {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  align-self: stretch;       /* 拉满整列高度，与右侧内容等高 */
-  padding-top: 36px;         /* 承运商按钮顶边 = 录单DN框顶边（右侧标题行 36px） */
-  min-height: 0;
-}
+/* 左侧面单预览面板已移除（2026-10-28 用户规则「移除左侧的面单模拟页面」）：原 .pw-left 删除 */
 .pw-carrier { display: flex; gap: 8px; }
 .pw-cb {
   flex: 1;
@@ -705,6 +696,24 @@ html { scrollbar-gutter: stable; }
 }
 .pw-cb.active { background: var(--black); color: var(--white); }
 /* 承运商按钮全部 2 字：flex:1 原生等宽（原「客户自提」加宽规则已移除） */
+
+/* 承运商 2行2列网格：承运商设置左侧，与设置区同高均分（2026-10-29 用户规则
+   「移除「跨越」按钮和空框：剩 顺丰/德邦/专车/自提，网格改 2×2」；
+   原 2行3列含空框方案同日被本规则替代，.pw-cb-empty 一并删除） */
+.pw-carrier-g {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);   /* 行1=顺丰/德邦，行2=专车/自提 */
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+  flex: none;
+  width: 156px;                            /* 2 列按钮 + 间距，与设置区左对齐 */
+  align-self: stretch;                     /* 与 pw-config-row 同高（108px），整体高度一致 */
+}
+.pw-carrier-g .pw-cb { height: auto; font-size: 16px; }   /* 覆盖横向 30px 固定高，网格行内自适应 */
+
+/* 面单打印模板仓（2026-10-28 用户规则「移除左侧的面单模拟页面」）：
+   屏幕不显示，仅 JS 填充（fillBill/setCarrier/printBills 克隆）与 @media print 输出使用 */
+.pw-bill-store { display: none; }
 
 /* 面单框（填满承运商栏以下全部高度，与右侧等高；打印时按 130mm 出纸） */
 .pw-bill {
@@ -852,13 +861,15 @@ html { scrollbar-gutter: stable; }
 .ms-wrap.off { opacity: .38; cursor: not-allowed; }
 .ms-switch input:disabled { cursor: not-allowed; }
 
-/* 上段：DN 平铺滚动（触屏大按钮，5 列网格） */
+/* 上段：DN 平铺滚动（触屏大按钮，2 行 8 列网格——2026-10-28 用户规则「DN候选区2行8列显示」） */
 .pw-dn-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 列数减少，按钮更宽 */
+  grid-template-columns: repeat(8, minmax(0, 1fr)); /* minmax(0,…)：列可缩到内容最小宽以下，防 chip 大字号把整页撑出横向溢出 */
+  grid-auto-rows: 80px;    /* 固定行高：2 行内容高度 = 容器高度，不足 3 行不出现竖向滚动条（2026-10-29 用户规则） */
   gap: 10px;
   align-content: start;
-  height: 240px;          /* 3 行按钮完全显示（66×3 + 间距 20 + 内边距 20）+ 滚动 */
+  height: 196px;          /* border-box：内容 80×2+间距 10 = 170 + 内边距 20 + 边框 4 + 2px 余量；
+                             恰好 2 行时内容 ≤ 内容区，不出现竖向滚动条（2026-10-29 用户规则），第 3 行起滚动 */
   overflow-y: auto;
   border: 2px solid var(--black);
   padding: 10px;
@@ -869,14 +880,32 @@ html { scrollbar-gutter: stable; }
   background: var(--white);
   color: var(--black);
   font-family: inherit;
-  font-size: 38px;        /* DN 号最大显示（数字再加大） */
+  font-size: 38px;        /* 大数字加大（2026-10-29 用户规则）；82600 前缀独立小行 + 大数字行靠右 */
   font-weight: 800;
-  padding: 10px 6px;
-  min-height: 66px;       /* 触屏目标尺寸 */
+  padding: 4px 10px;      /* 减少框内留白（同日用户规则） */
+  min-width: 0;           /* button 固有最小内容宽可缩（配合 minmax(0,1fr) 防横向溢出） */
+  overflow: hidden;
   text-align: center;
   cursor: pointer;
 }
+/* 单行 DN chip（发货单）：前缀 82600 独立小行居左上、加大加粗（选中黑底反白）；大数字独占一行靠右。
+   ⚠️ 必须限定 :not(.two)——外协单两行 chip（.pw-chip.two）的 PO 98260 上标若被 display:block 强制成行，
+   PO 剩余位会掉到第三行导致 chip 三行错乱（2026-10-29 用户反馈「外协单显示错误」） */
+.pw-chip:not(.two) .dn-pre {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  vertical-align: baseline;
+  text-align: left;
+  margin-bottom: 1px;
+}
+.pw-chip.active .dn-pre { color: var(--white); }   /* 选中黑底：82600 反白 */
+.pw-chip > b { display: block; text-align: right; }   /* 大数字行靠右（> 直选子，不影响外协 chip 内 pc-po） */
 .pw-chip.active { background: var(--black); color: var(--white); }
+/* 外协单/其他候选区：2 行 7 列（2026-10-29 用户规则「外协单和其他 以2x7 显示」；
+   两行 chip（公司+PO+采购员 / 收件人+发件人）内容更宽，每行比发货单少 1 列；发货单保持 8 列） */
+.pw-dn-list.cols7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 /* DN 类型过滤（发货单/外协单/其他，多选开关左侧） */
 .dn-filter { display: flex; gap: 6px; margin-left: auto; margin-right: 14px; }
 .dn-ft {
@@ -902,10 +931,10 @@ html { scrollbar-gutter: stable; }
 }
 .f-ico img { display: block; width: 24px; height: 24px; }
 .f-ico:hover img { opacity: .55; }  /* 全透明，hover 仅降透明度 */
-/* 查看列文件滚动容器（2026-10-20 用户规则：文件多时加左右箭头滚动；
-   2026-10-21 用户规则「尽量放宽显示， 预览多个」：内宽加大，初始滚动到最右，左箭头向左滚动） */
-.view-files-wrap { display: flex; align-items: center; gap: 2px; }
-.view-files-inner { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; max-width: 160px; }
+/* 查看列文件容器（2026-10-29 用户规则「查看文件2行显示， 列调窄」）：
+   图标换行最多 2 行，超出格内纵向滚动（隐藏滚动条）；原横向滚动 + 左右箭头（2026-10-20/21 方案）随换行取消 */
+.view-files-wrap { display: flex; align-items: flex-start; gap: 2px; }
+.view-files-inner { display: flex; flex-wrap: wrap; gap: 2px; max-height: 62px; overflow-y: auto; scrollbar-width: none; }
 .view-files-inner::-webkit-scrollbar { display: none; }
 .view-arrow { border: 0; background: none; color: var(--gray); cursor: pointer; font-size: 22px; line-height: 1; padding: 4px 6px; font-weight: 700; }
 .view-arrow:hover { color: var(--black); background: var(--light); border-radius: 4px; }
@@ -942,6 +971,9 @@ html { scrollbar-gutter: stable; }
 .pv-head b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pv-actions { display: flex; gap: 8px; }
 .pv-actions .btn { min-height: 32px; padding: 4px 14px; font-size: 13px; }
+/* 文件预览弹窗翻页（2026-10-29 用户反馈「文件显示不全」）：‹ 1/N › 浏览该单全部上传文件 */
+.pv-nav { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; }
+.pv-nav .pv-nav-i { min-width: 38px; text-align: center; font-size: 13px; }
 .pv-body { flex: 1; overflow: auto; padding: 10px; }
 .pv-frame { width: 100%; height: 100%; border: none; }
 .pv-doc table { border-collapse: collapse; font-size: 13px; }
@@ -1108,9 +1140,26 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .pw-list { min-height: 0; }
 .pw-list td:first-child { font-weight: 800; }   /* 列表 DN 号加粗 */
 /* 下单列表行高压低（承运商/单号/状态两行更紧凑；2026-10-14 用户规则「行高再低些」） */
-.pw-list .order-table td { padding: 5px 12px; }
-.pw-list .order-table td:nth-child(4) { line-height: 1.25; }
-.pw-list .order-table td:nth-child(4) div { line-height: 1.25; }
+.pw-list .order-table td { padding: 5px 8px; }   /* 12 列后收窄内距，日期/状态列完整显示（2026-10-29） */
+.pw-list .order-table td:nth-child(8) { line-height: 1.25; }   /* 承运商/单号/状态列（12 列列序第 8 列，2026-10-29） */
+.pw-list .order-table td:nth-child(8) div { line-height: 1.25; }
+/* SO负责人列：姓名括号内容第二行显示（2026-10-29 用户规则「SO负责人 姓名里的括号内容换行显示」） */
+.pw-list .own-en { font-size: 13px; line-height: 1.25; }
+
+/* 地址列（第 7 列）：最多 2 行换行显示（2026-10-29 用户规则「地址2行显示」）。
+   2026-10-29 用户反馈「错误, 行被限制了」：line-clamp 直接作用在 td 上时，行被其他高格
+   （查看列两行图标等）撑高会漏出第 3 行半截——改为内层 .addr2 独立盒子，
+   line-height + max-height 严格卡死 2 行，悬浮仍显示完整地址 */
+.pw-list .addr2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.35;
+  max-height: 2.7em;      /* 严格 2 行高（2×1.35em），行再高也不漏第 3 行 */
+}
 /* 模拟路由时间线（左下面单下方；点击已下单行显示） */
 .pw-track {
   border: 2px solid var(--black);
@@ -1156,7 +1205,17 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .pw-list tbody tr.row-active,
 .pw-list tbody tr.row-active:hover { background: #e3e3e3; color: var(--black); }
 /* 选中行姓名反向显示（2026-10-22 用户规则「选中某行时候，姓名没有反向显示回去」） */
-.pw-list tbody tr.row-active td:nth-child(5) { background: var(--black); color: var(--white); }
+.pw-list tbody tr.row-active td:nth-child(9) { background: var(--black); color: var(--white); }   /* 路由状态列反色（12 列列序第 9 列，2026-10-29） */
+/* 其他视图 10 列（无 SO负责人/SO，2026-10-29 用户规则「下单 其他 的列表调整列宽， 移除 SO负责人，SO列」）：
+   承运商列=第 6 列、路由状态列=第 7 列，行高与选中反色同步修正 */
+.pw-list.ot-other .order-table td:nth-child(6) { line-height: 1.25; }
+.pw-list.ot-other .order-table td:nth-child(6) div { line-height: 1.25; }
+.pw-list.ot-other tbody tr.row-active td:nth-child(7) { background: var(--black); color: var(--white); }
+/* 外协单视图 11 列（无 SO 列，2026-10-29 用户规则「外协单， 列表移除SO列」）：
+   承运商列=第 7 列、路由状态列=第 8 列，行高与选中反色同步修正 */
+.pw-list.ot-wx .order-table td:nth-child(7) { line-height: 1.25; }
+.pw-list.ot-wx .order-table td:nth-child(7) div { line-height: 1.25; }
+.pw-list.ot-wx tbody tr.row-active td:nth-child(8) { background: var(--black); color: var(--white); }
 /* 专车关闭按钮（2026-10-15 用户规则：专车路由状态下方加「> 送达？」关闭按钮） */
 .sp-close-btn { margin-top: 2px; border: 0; background: var(--black); color: #fff; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 6px; font-weight: 700; }
 .sp-close-btn:hover { background: var(--gray); color: #fff; }
@@ -1169,6 +1228,15 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .sp-close-label { font-size: 13px; font-weight: 600; color: var(--black); }
 .sp-close-note { width: 100%; border: 1px solid var(--line-light); border-radius: 4px; padding: 6px 8px; font-size: 13px; font-family: inherit; resize: vertical; }
 .sp-close-btns { display: flex; justify-content: flex-end; gap: 8px; }
+/* 手动录入运单（2026-10-30 用户规则「所有待下单 字符后面加一个手动的图标」）：
+   待下单文字后铅笔图标 + 录入弹窗（输入即识别承运商，确认后自动查询；与下单按钮流程无关） */
+.mw-ic { border: 0; background: none; padding: 0 2px; margin-left: 4px; cursor: pointer; color: var(--gray); vertical-align: -2px; }
+.mw-ic:hover { color: var(--black); }
+.mw-ic svg { width: 15px; height: 15px; display: block; }
+.mw-input { width: 100%; font-size: 15px; letter-spacing: 1px; }
+.mw-det { font-size: 13px; min-height: 30px; display: flex; align-items: center; gap: 8px; }
+.mw-det-sel { width: 120px; }
+.mw-result { font-size: 13px; font-weight: 600; min-height: 18px; }
 
 /* 打印面单按钮（面单下方，撑满列宽） */
 #btnPrint { width: 100%; }
@@ -1190,6 +1258,7 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
   html.otpage, html.otpage body { page: ot1015; }
   body { height: 0; overflow: hidden; }   /* 隐藏内容不占版面：防多余空白页（A4 下也不跨页） */
   body * { visibility: hidden; }
+  .pw-bill-store { display: block; }   /* 模板仓仅打印时输出（屏幕 .pw-bill-store{display:none} 的对应恢复） */
   .pw-bill, .pw-bill * { visibility: visible; }
   .pw-bill {
     position: absolute;
@@ -1813,6 +1882,22 @@ a.btn, a.label-print { text-decoration: none; }   /* 弹窗下载链接与按钮
 .pw-list.ot-wx col.col2-dn { width: 9.3%; }
 .col2-ret   { width: 9%; }  /* 回单日期 */
 .col2-pr    { width: 8%; }
+/* 打单列表 12 列列宽（2026-10-29 用户规则「列表：DN，要求发货日期，SO负责人，SO，下单日期，联系人，地址」+ 功能列在后）：
+   仅作用下单页（.pw-list），清单页共享的 col2-* 基础宽度不变；全部按百分比写死、合计恰为 100%——
+   ⚠️ Chrome 固定表格布局（table-layout:fixed）会把「% 列按表宽取值后的全部剩余宽度」分给固定 px 列，
+   此前 col2-view 用 px（200/120/60）实测始终渲染为剩余 ≈184px，减窄不生效；改百分比后列宽才精确 */
+.pw-list col.col2-dn    { width: 6%; }   /* DN 减窄（2026-10-29 用户规则「DN, SO列减窄」；5.5% 会截断 10 位号码，6% 为保完整的最小值） */
+.pw-list col.col2-ship  { width: 7.5%; }   /* 要求日期（表头改 4 字并调窄；紧急行加粗日期也完整显示） */
+.pw-list col.col2-owner { width: 11%; }    /* SO负责人加宽（2026-10-29 用户规则；外协单=采购员；超长省略+悬浮） */
+.pw-list col.col2-so    { width: 6%; }   /* SO 减窄（2026-10-29 用户规则「DN, SO列减窄」；同 DN 保完整最小 6%） */
+.pw-list col.col2-pdate { width: 7.5%; }   /* 下单日期（YYYY-MM-DD 完整显示） */
+.pw-list col.col2-name  { width: 5.5%; }
+.pw-list col.col2-addr  { width: 18.5%; }  /* 地址加宽（2026-10-29 用户规则；2 行换行 + 悬浮完整；DN/SO 减窄再让 1%） */
+.pw-list col.col2-sf    { width: 11%; }    /* 承运商/单号/状态：加宽一点（2026-10-29 用户规则；15 位运单号完整显示） */
+.pw-list col.col2-st    { width: 6.5%; }   /* 路由状态（表头不折行 + 关单按钮） */
+.pw-list col.col2-pr    { width: 4.5%; }
+.pw-list col.col2-note  { width: 12%; }
+.pw-list col.col2-view  { width: 4%; }     /* 查看列减窄一半（2026-10-29 用户规则；≈61px，图标 2 行换行+格内纵滚） */
 .order-table {
   width: 100%;
   border-collapse: collapse;

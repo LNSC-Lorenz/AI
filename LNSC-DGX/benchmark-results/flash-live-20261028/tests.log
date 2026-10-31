@@ -1,0 +1,45 @@
+2026-10-28T20:32:40+08:00 performance_start
+{"http": 200, "wall_s": 59.485, "model": "qwen3.8-flash-next", "usage_prompt_tokens": 38976, "usage_completion_tokens": 512, "prompt_n": 38976, "prompt_ms": 37709.419, "prefill_tps": 1033.5879213625647, "predicted_n": 512, "predicted_ms": 20435.272, "decode_tps": 25.005784116795706, "kind": "cold_39k_plus_decode512", "run": 0, "request_sha256": "a5d6ed1f30be1d6f33ca2f4e9b43fdf5a2cb0dffe70fc04837209c849d8dee35"}
+{"http": 200, "wall_s": 68.933, "model": "qwen3.8-flash-next", "usage_prompt_tokens": 38976, "usage_completion_tokens": 512, "prompt_n": 38976, "prompt_ms": 37714.61, "prefill_tps": 1033.4456593877014, "predicted_n": 512, "predicted_ms": 20446.912, "decode_tps": 24.991548846104486, "kind": "cold_39k_plus_decode512", "run": 1, "request_sha256": "14388fb56337be20d42d6d43b6d9a8f01a4b747a2c076ec7f8eb470e091e49d4"}
+{"http": 200, "wall_s": 48.919, "model": "qwen3.8-flash-next", "usage_prompt_tokens": 38976, "usage_completion_tokens": 1, "prompt_n": 4, "prompt_ms": 183.759, "prefill_tps": 21.76764131280645, "predicted_n": 1, "predicted_ms": 0.001, "decode_tps": 0.0, "kind": "warm_same_39k"}
+{"http": 200, "wall_s": 18.406, "model": "qwen3.8-flash-next", "usage_prompt_tokens": 93, "usage_completion_tokens": 512, "prompt_n": 51, "prompt_ms": 423.515, "prefill_tps": 120.42076431767471, "predicted_n": 512, "predicted_ms": 17340.887, "decode_tps": 29.46792744800194, "kind": "short_prompt_decode512"}
+保存：/root/lnsc-ab/flash-live-20261028/performance/perf-summary.json
+2026-10-28T20:36:05+08:00 performance_done MemAvailable=3165MiB
+2026-10-28T20:36:05+08:00 cline_quality_start
+{
+  "label": "flash-live",
+  "passed": 3,
+  "total": 3,
+  "results": [
+    {
+      "task": "tool_call",
+      "passed": true,
+      "wall_s": 74.061
+    },
+    {
+      "passed": true,
+      "returncode": 0,
+      "stdout": "merge tests: PASS\n",
+      "stderr": "",
+      "task": "bugfix_merge",
+      "wall_s": 168.994
+    },
+    {
+      "passed": true,
+      "returncode": 0,
+      "stdout": "refactor tests: PASS\n",
+      "stderr": "",
+      "task": "cross_file_decimal_refactor",
+      "wall_s": 154.311
+    }
+  ]
+}
+2026-10-28T20:42:43+08:00 cline_quality_done MemAvailable=3527MiB
+2026-10-28T20:42:43+08:00 reasoning_start
+{"task": "math_latency", "passed": true, "wall_s": 45.204, "finish_reason": "stop", "prompt_tokens": 157, "completion_tokens": 597, "reasoning_chars": 1343, "content_chars": 49, "actual": {"before_s": 61.51, "after_s": 57.6, "saved_s": 3.91}, "error": null}
+{"task": "logic_order", "passed": true, "wall_s": 29.948, "finish_reason": "stop", "prompt_tokens": 117, "completion_tokens": 190, "reasoning_chars": 553, "content_chars": 27, "actual": {"order": ["A", "B", "C", "D"]}, "error": null}
+{"task": "sql_null", "passed": true, "wall_s": 140.259, "finish_reason": "stop", "prompt_tokens": 143, "completion_tokens": 120, "reasoning_chars": 246, "content_chars": 63, "actual": {"count_score": 3, "avg_score": 80, "sum_score": 240, "count_rows": 5}, "error": null}
+{"task": "chinese_incident_nlu", "passed": true, "wall_s": 42.272, "finish_reason": "stop", "prompt_tokens": 201, "completion_tokens": 283, "reasoning_chars": 805, "content_chars": 106, "actual": {"immediate_event": "client_cancel", "server_fault": false, "main_cost": "cold_prefill", "cache_effective": true}, "error": null}
+{"task": "long_context_records", "passed": true, "wall_s": 52.684, "finish_reason": "stop", "prompt_tokens": 23476, "completion_tokens": 223, "reasoning_chars": 553, "content_chars": 54, "actual": {"alpha": "NX-7319", "beta": "QZ-2048", "gamma": "LM-8864"}, "error": null}
+{"passed": 5, "total": 5}
+2026-10-28T20:47:54+08:00 ALL_DONE

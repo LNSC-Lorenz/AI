@@ -453,10 +453,12 @@ def init_db():
 
 
 def row_to_json(r):
-    """拼接展示用地址（直辖市去重：省=市）"""
+    """拼接展示用地址（直辖市去重：省=市；2026-10-29 用户规则「公司名称 在最后」：
+       省市区 + 街道 + 公司——原「省市区+公司+街道」公司在中段，用户反馈「地址都显示错了」。
+       address 为读取时拼接，存量数据无需迁移，全部即时生效）"""
     parts = []
     for p in (r["province"], r["city"], r["district"],
-              r["company"] if "company" in r.keys() else "", r["street"]):
+              r["street"], r["company"] if "company" in r.keys() else ""):
         if p and (not parts or parts[-1] != p):
             parts.append(p)
     return {

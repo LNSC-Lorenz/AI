@@ -1,0 +1,175 @@
+{
+  "model": "qwen3.8-flash-next",
+  "performance": {
+    "cold_runs": 2,
+    "prompt_tokens": [
+      38976,
+      38976
+    ],
+    "prompt_ms_mean": 37712.014500000005,
+    "prefill_tps_mean": 1033.516790375133,
+    "decode_512_ms_mean": 20441.092,
+    "decode_512_tps_mean": 24.998666481450094,
+    "compute_total_s_mean": 58.15310650000001,
+    "wall_s_values": [
+      59.485,
+      68.933
+    ],
+    "warm_new_prompt_tokens": 4,
+    "warm_prompt_ms": 183.759,
+    "warm_wall_s_contended": 48.919,
+    "short_decode_tps": 29.46792744800194,
+    "short_prompt_ms": 423.515
+  },
+  "cline_quality": {
+    "label": "flash-live",
+    "passed": 3,
+    "total": 3,
+    "results": [
+      {
+        "task": "tool_call",
+        "passed": true,
+        "wall_s": 74.061
+      },
+      {
+        "passed": true,
+        "returncode": 0,
+        "stdout": "merge tests: PASS\n",
+        "stderr": "",
+        "task": "bugfix_merge",
+        "wall_s": 168.994
+      },
+      {
+        "passed": true,
+        "returncode": 0,
+        "stdout": "refactor tests: PASS\n",
+        "stderr": "",
+        "task": "cross_file_decimal_refactor",
+        "wall_s": 154.311
+      }
+    ]
+  },
+  "reasoning": {
+    "label": "flash-live",
+    "passed": 5,
+    "total": 5,
+    "long_prompt_sha256": "a6daad507f372ba3dc693c420c7da6612e4e3280534bd041f4dd2f86f6da04a0",
+    "results": [
+      {
+        "task": "math_latency",
+        "passed": true,
+        "wall_s": 45.204,
+        "finish_reason": "stop",
+        "prompt_tokens": 157,
+        "completion_tokens": 597,
+        "reasoning_chars": 1343,
+        "content_chars": 49,
+        "actual": {
+          "before_s": 61.51,
+          "after_s": 57.6,
+          "saved_s": 3.91
+        },
+        "error": null
+      },
+      {
+        "task": "logic_order",
+        "passed": true,
+        "wall_s": 29.948,
+        "finish_reason": "stop",
+        "prompt_tokens": 117,
+        "completion_tokens": 190,
+        "reasoning_chars": 553,
+        "content_chars": 27,
+        "actual": {
+          "order": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "error": null
+      },
+      {
+        "task": "sql_null",
+        "passed": true,
+        "wall_s": 140.259,
+        "finish_reason": "stop",
+        "prompt_tokens": 143,
+        "completion_tokens": 120,
+        "reasoning_chars": 246,
+        "content_chars": 63,
+        "actual": {
+          "count_score": 3,
+          "avg_score": 80,
+          "sum_score": 240,
+          "count_rows": 5
+        },
+        "error": null
+      },
+      {
+        "task": "chinese_incident_nlu",
+        "passed": true,
+        "wall_s": 42.272,
+        "finish_reason": "stop",
+        "prompt_tokens": 201,
+        "completion_tokens": 283,
+        "reasoning_chars": 805,
+        "content_chars": 106,
+        "actual": {
+          "immediate_event": "client_cancel",
+          "server_fault": false,
+          "main_cost": "cold_prefill",
+          "cache_effective": true
+        },
+        "error": null
+      },
+      {
+        "task": "long_context_records",
+        "passed": true,
+        "wall_s": 52.684,
+        "finish_reason": "stop",
+        "prompt_tokens": 23476,
+        "completion_tokens": 223,
+        "reasoning_chars": 553,
+        "content_chars": 54,
+        "actual": {
+          "alpha": "NX-7319",
+          "beta": "QZ-2048",
+          "gamma": "LM-8864"
+        },
+        "error": null
+      }
+    ]
+  },
+  "monitor": {
+    "samples": 101,
+    "start": "2026-10-28T20:32:40+08:00",
+    "end": "2026-10-28T20:49:31+08:00",
+    "mem_available_mib": {
+      "start": 5451,
+      "min": 891,
+      "max": 5943,
+      "end": 5076
+    },
+    "swap_used_mib": {
+      "start": 234,
+      "min": 234,
+      "max": 5632,
+      "end": 5632
+    },
+    "process_swap_mib_max": 5221,
+    "cgroup_mib": {
+      "min": 30418,
+      "max": 35581,
+      "end": 31258
+    },
+    "gpu_util_max": 96,
+    "sm_clock_min": 2411,
+    "sm_clock_max": 2554
+  },
+  "notes": [
+    "wall_s 受其他 Cline 请求排队影响；性能均值使用 llama.cpp prompt_ms/predicted_ms",
+    "测试未改运行参数，未重启模型"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "mem_min": {
+    "timestamp": "2026-10-28T20:43:07+08:00",
+    "mem_available_mib": "891",
+    "swap_used_mib": "4413",
+    "cgroup_mib": "35581",
+    "process_swap_mib": "4051",
+    "gpu_util_percent": "0",
+    "sm_clock_mhz": "2411"
+  },
+  "swap_max": {
+    "timestamp": "2026-10-28T20:46:59+08:00",
+    "mem_available_mib": "4193",
+    "swap_used_mib": "5632",
+    "cgroup_mib": "32265",
+    "process_swap_mib": "5221",
+    "gpu_util_percent": "89",
+    "sm_clock_mhz": "2554"
+  }
+}

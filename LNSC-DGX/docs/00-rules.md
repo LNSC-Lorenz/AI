@@ -22,6 +22,16 @@
 
 ---
 
+## 附 · 双机专项边界（2×DGX Spark / vLLM TP2）
+
+- 一个跨双机的 vLLM TP2 逻辑实例，**不视为额外第二份模型副本**；head/worker 必须同 recipe、同模型 revision、同镜像 digest。
+- 禁止双 head、禁止 worker 对 Cline 开放、禁止在双机基线之外再起 llama.cpp/Ollama/vLLM 做临时对比。
+- 只允许 200GbE QSFP 私网/直连；NCCL、RPC 与容器端口不得暴露办公网或公网。
+- 官方 recipe 的 privileged 容器属于专项审批范围，必须固定镜像、记录 digest；不能据此放开其他 Docker 测试。
+- 双机部署与调优统一按 `docs/10-two-node-deployment.md`、`docs/11-two-node-validation.md`、`docs/12-two-node-operations.md` 执行；未通过验收前，当前 Flash 仍是生产默认。
+
+---
+
 ## 二、"不过度"红线（明确不要做的事）
 
 以下操作**收益极低但风险很高**，未经书面评估不得执行：

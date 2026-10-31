@@ -1,0 +1,39 @@
+[Unit]
+Description=Two-node llama.cpp RPC server for GLM-5.3-Flash (GB10 / sm_121)
+After=network-online.target lnsc-cx7-addresses.service
+Wants=network-online.target lnsc-cx7-addresses.service
+Conflicts=llama-qwen38.service llama-qwen3next.service llama-qwen38-27b.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/models/glm-5.3-flash-gguf/UD-Q4_K_XL
+ExecStartPre=/usr/bin/test -r /models/glm-5.3-flash-gguf/UD-Q4_K_XL/GLM-5.3-Flash-UD-Q4_K_XL-00001-of-00006.gguf
+ExecStartPre=/usr/bin/test -r /models/glm-5.3-flash-gguf/mmproj-F16.gguf
+Environment=GGML_RPC_DEBUG=1
+ExecStart=/opt/llama.cpp/build-rpc/bin/llama-server \
+  -m /models/glm-5.3-flash-gguf/UD-Q4_K_XL/GLM-5.3-Flash-UD-Q4_K_XL-00001-of-00006.gguf \
+  --alias glm-5.3-flash \
+  --mmproj /models/glm-5.3-flash-gguf/mmproj-F16.gguf \
+  --rpc 192.168.100.11:50052 \
+  -c 131072 -b 2048 -ub 1024 -ngl 999 \
+  -fa on -ctk q8_0 -ctv q8_0 \
+  --cache-reuse 256 --jinja --parallel 1 --metrics \
+  --host 0.0.0.0 --port 8081
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=3600
+TimeoutStopSec=60
+KillSignal=SIGINT
+MemoryHigh=112G
+MemoryMax=116G
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-glm53-rpc
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

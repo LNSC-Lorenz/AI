@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>工单周刊 · 工单系统适用范围规则</title>
+<style>
+  /* 主色 PETROL #006878（CMYK 100/50/50/0 ｜ RAL 5021 ｜ Pantone 315） 点缀 LIME #AFCA0B */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { font-family:"Segoe UI","Microsoft YaHei","微软雅黑",Arial,sans-serif;
+         color:#2C464C; background:#FFFFFF;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page { position:relative; width:210mm; min-height:297mm; background:#FFFFFF;
+          display:flex; flex-direction:column; }
+  .bar { height:1.2mm; display:flex; }
+  .bar i:first-child { flex:1; background:#006878; }
+  .bar i:last-child  { width:18mm; background:#AFCA0B; }
+
+  /* ===== 刊头 ===== */
+  .mast { padding:9mm 16mm 0; }
+  .mast .mrow { display:flex; align-items:flex-start; justify-content:space-between; }
+  .mast h1 { margin:0; font-size:21pt; font-weight:700; color:#00495A; letter-spacing:3.5px; }
+  .mast .en { margin:1mm 0 0; font-size:8pt; color:#006878; letter-spacing:3.6px; text-transform:uppercase; }
+  .mast img { height:9mm; width:auto; display:block; margin-top:1mm; }
+  .issue { display:flex; align-items:center; flex-wrap:wrap; gap:3mm; margin-top:4.5mm;
+           font-size:8.5pt; color:#5A757C; letter-spacing:.4px; }
+  .issue .no { background:#006878; color:#FFFFFF; padding:.6mm 3mm; border-radius:1mm;
+               font-weight:700; letter-spacing:.8px; }
+  .issue .dot { color:#AFCA0B; font-size:6.5pt; }
+  .dbl { margin:2.5mm 16mm 0; height:1.4mm; border-top:.5mm solid #006878; border-bottom:.16mm solid #006878; }
+
+  /* ===== 导语 ===== */
+  .lead { display:flex; align-items:center; gap:4.5mm; padding:5mm 16mm 0; }
+  .lead .jira { flex:0 0 11mm; width:11mm; height:11mm; display:block; }
+  .lead .jira svg { width:100%; height:100%; display:block; }
+  .lead p { margin:0; font-size:10.5pt; line-height:1.6; color:#3B575E; }
+  .lead b { color:#00495A; }
+
+  /* ===== 本期导读 ===== */
+  .toc { display:flex; margin:6mm 16mm 0; border-top:.16mm solid #DCE8EA; border-bottom:.16mm solid #DCE8EA; }
+  .toc > div { flex:1; display:flex; align-items:center; gap:2.5mm; padding:2.8mm 0;
+               font-size:9pt; color:#4E686E; }
+  .toc > div + div { border-left:.3mm solid #E3ECEE; padding-left:5mm; }
+  .toc b { color:#006878; font-size:10pt; letter-spacing:.6px; }
+  .toc em { font-style:normal; margin-left:auto; color:#00495A; font-weight:700; white-space:nowrap; }
+
+  /* ===== 双栏正文 ===== */
+  .wrap { flex:1; display:flex; align-items:center; padding:0 16mm; }
+  .cols { display:grid; grid-template-columns:1.65fr 1fr; gap:0 8mm; width:100%; min-height:100mm; }
+  .kick { display:flex; align-items:center; gap:2mm; margin:0 0 2mm;
+          font-size:8pt; font-weight:700; letter-spacing:1.8px; color:#006878; text-transform:uppercase; }
+  .kick::before { content:""; width:2mm; height:2mm; background:#AFCA0B; }
+  .tag { display:inline-block; margin-left:2.5mm; padding:.5mm 3mm; border-radius:999px;
+         background:#AFCA0B; color:#00495A; font-size:9pt; font-weight:700; letter-spacing:.5px; }
+
+  article.feature { background:#F6FAFB; border:1px solid #DCE8EA; border-top:3px solid #006878;
+                    border-radius:0 0 2mm 2mm; padding:7mm 7mm;
+                    display:flex; flex-direction:column; justify-content:center; }
+  article.feature h2 { margin:0; font-size:14pt; font-weight:700; color:#00495A; line-height:1.35; }
+  article.feature p.bd { margin:2.5mm 0 0; font-size:10.5pt; line-height:1.6; color:#41606A; }
+  .chips { display:flex; flex-wrap:wrap; gap:2.4mm; margin-top:3.5mm; }
+  .chip { border:1px solid #B9D3D7; background:#FFFFFF; color:#006878; border-radius:999px;
+          padding:1.2mm 4mm; font-size:9.5pt; }
+  p.ex { margin:3.2mm 0 0; padding-left:3mm; border-left:2px solid #AFCA0B; font-size:9.5pt; color:#7A8F95; }
+
+  aside.side { border-left:.3mm solid #E3ECEE; padding-left:7mm;
+               display:flex; flex-direction:column; justify-content:center; }
+  aside.side .item + .item { margin-top:9mm; padding-top:9mm; border-top:.3mm solid #E3ECEE; }
+  aside.side h3 { margin:0; font-size:12.5pt; font-weight:700; color:#00495A; line-height:1.4; }
+  aside.side p { margin:2mm 0 0; font-size:10pt; line-height:1.55; color:#41606A; }
+
+  /* ===== 出版信息条 ===== */
+  .strip { margin:0 16mm; padding:3mm 4mm; border:.3mm solid #DCE8EA; border-left:3px solid #AFCA0B;
+           font-size:9pt; color:#4E686E; letter-spacing:.3px; }
+  .strip b { color:#00495A; }
+
+  /* ===== 页脚 ===== */
+  footer { padding:0 16mm; margin-top:5mm; }
+  .fline { height:.4mm; background:#E3ECEE; }
+  .frow { display:flex; align-items:center; justify-content:space-between;
+          padding:2.8mm 0 5mm; font-size:7.5pt; color:#8CA1A6; letter-spacing:.5px; }
+  .frow .fl { display:flex; align-items:center; gap:2.5mm; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bar"><i></i><i></i></div>
+
+  <div class="mast">
+    <div class="mrow">
+      <div>
+        <h1>工单周刊</h1>
+        <p class="en">Ticket Weekly · LNSC IT</p>
+      </div>
+      <img src="lechler-c-logo-combination-mark-cmyk-00.svg" alt="Lechler" />
+    </div>
+    <div class="issue">
+      <span class="no">第 1 期</span>
+      <span>2026 年 10 月 28 日</span>
+      <span class="dot">◆</span>
+      <span>LNSC IT 主办 · 内部资料</span>
+      <span class="dot">◆</span>
+      <span>本期主题：工单系统适用范围规则</span>
+    </div>
+  </div>
+
+  <div class="dbl"></div>
+
+  <div class="lead">
+    <span class="jira">
+      <svg fill="#2684FF" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <title>Jira</title>
+        <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0Z"/>
+      </svg>
+    </span>
+    <p><b>工单系统适用范围规则</b>：在 IT-Ticketsystem 提交前先对齐三条边界——谁的系统、是否内部事项、其余一律建单。</p>
+  </div>
+
+  <div class="toc">
+    <div><b>01</b><span>GmbH 系统平台</span><em>优先走工单</em></div>
+    <div><b>02</b><span>LNSC 内部事项</span><em>无需工单</em></div>
+    <div><b>03</b><span>其它问题</span><em>一律优先走工单</em></div>
+  </div>
+
+  <div class="wrap">
+    <div class="cols">
+      <article class="feature">
+        <p class="kick">本期聚焦 · 规则一</p>
+        <h2>GmbH 开发或维护的系统与平台<span class="tag">优先走工单</span></h2>
+        <p class="bd">下列 9 个系统的开发 / 维护需求，优先以 Jira 工单发起：</p>
+        <div class="chips">
+          <span class="chip">SAP</span><span class="chip">CRM</span><span class="chip">ProFile</span>
+          <span class="chip">Cornerstone</span><span class="chip">TankClean</span><span class="chip">Nozzle3</span>
+          <span class="chip">GasCool</span><span class="chip">Smart Factory</span><span class="chip">M365</span>
+        </div>
+        <p class="ex">例外：纯业务问题（使用咨询）不走工单。</p>
+      </article>
+
+      <aside class="side">
+        <div class="item">
+          <p class="kick">规则二</p>
+          <h3>LNSC 内部事项<span class="tag">无需工单</span></h3>
+          <p>OA 新流程开发 · 新账户 / 新设备初始化 · RPA Job 开发 · 打印机故障 · 项目开发</p>
+        </div>
+        <div class="item">
+          <p class="kick">规则三</p>
+          <h3>其它问题<span class="tag">一律优先走工单</span></h3>
+          <p>不属于规则一、二的问题，默认以工单形式发起。</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="strip"><b>归口与发布：</b>LNSC IT 编辑发布 ｜ 提交入口：IT-Ticketsystem（Help Center） ｜ 系统清单或事项范围变更时，更新本刊并递增期号。</div>
+
+  <footer>
+    <div class="fline"></div>
+    <div class="frow">
+      <div class="fl">
+        <img src="lechler-c-logo-symbol-mark-cmyk-00.svg" alt="Lechler" style="height:3.4mm;width:auto;display:block" />
+        <span>工单周刊 · 内部资料，未经授权不得外传</span>
+      </div>
+      <div>第 1 期 · 第 1 页 / 共 1 页</div>
+    </div>
+  </footer>
+
+  <div class="bar"><i></i><i></i></div>
+
+</div>
+</body>
+</html>

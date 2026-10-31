@@ -1,27 +1,29 @@
-# LNSC-DGX · GB10 上运行 Qwen3.8-Flash-Next（含运维包）
+# LNSC-DGX · DGX Spark 模型服务与双机部署运维包
 
-DGX Spark（GB10 Grace Blackwell，sm_121 / CUDA 13 / 121.6 GiB 统一内存）上，用 **llama.cpp**
-跑 `Qwen3.8-Flash-Next`（**177B 参数 / 103.68 GiB 权重 / 原生 262144 上下文**）的：
-最终启动参数、内存预算、**日常巡检 SOP、受控变更框架、监控与故障预案**。
+DGX Spark（GB10 Grace Blackwell，sm_121 / CUDA 13 / 121.6 GiB 统一内存）上，用 **llama.cpp** 运行双模型：
+质量默认 **Qwen3.8-Flash-Next**，速度回退 **Qwen3-Next-80B-A3B-Instruct**。
+另包含 **2×DGX Spark + vLLM TP2 + GLM-5.3-Flash** 的部署、验证、调优与回滚框架（尚未执行）。
+包含启动参数、内存预算、同 prompt A/B、**日常巡检 SOP、受控变更框架、监控与故障预案**。
 
 > 所有脚本都是 **Linux(DGX) 侧**用的。从 Windows 拷过去先转行尾并赋权：
 > ```bash
 > sed -i 's/\r$//' scripts/*.sh && chmod +x scripts/*.sh
 > ```
 
-## 🟢 当前状态（2026-10-27 23:10，已解除冻结）
+## 🟢 当前状态（2026-10-28 20:07，Flash 为质量默认）
 
 | 项 | 值 |
 |---|---|
-| 服务 | ✅ `/health` ok，`n_ctx=196608`，pid 58398 |
-| 托管 | ✅ **systemd `llama-qwen38`**（`enabled` + `active`），日志进 journal，`MemoryHigh=112G/MemoryMax=116G` |
-| 内存 | 🟢 `MemAvailable` 8.5 GiB（cgroup `current` 30.3 GiB / `peak` 40.4 GiB），`SwapFree` 15.3 GiB 几乎未动 |
-| 上下文 | 🟢 196608（原生 262144），KV `q8_0/q8_0` ≈ 4.6 GiB |
-| 性能 | 🟢 decode **29.7 tok/s**；prefill **1081 tok/s @24k**（`-ub 1024`，2026-10-28 调优后 +15.7%） |
-| 可观测 | 🟢 `/metrics` 已开启；`journalctl -u llama-qwen38` 可回溯 |
-| 视觉 | ✅ **已启用**（2026-10-27 23:32）：`--mmproj mmproj-F16.gguf`，`vision:true` `video:true`；真图识别验证通过（红图→`Red`），decode 30.08 tok/s |
-| ollama | 🟠 `0.0.0.0:11434` + `OLLAMA_KEEP_ALIVE=-1`（待 C4 收敛） |
-| 变更 | ✅ 已解冻；剩余队列见 `docs/06-changelog.md` 第四节 |
+| 质量主模型 | ⏸️ **已按用户要求停止并取消自启**：`llama-qwen38 inactive + disabled`，为双机部署释放内存 |
+| 速度回退 | ✅ Next-80B-Instruct，`llama-qwen3next inactive + disabled`；用 `model-switch.sh next` 切换 |
+| 27B 候选 | ❌ Qwen3.8-27B Q6 实测跨文件任务连续失败且 decode 约 9 tok/s；`llama-qwen38-27b inactive + disabled`，不采用 |
+| 实测性能 | 2026-10-28 20:32 复测：39k prefill **37.712 s / 1033.52 tok/s**；长 decode **25.00 tok/s**；短 decode **29.47 tok/s**；Cline 3/3、推理 5/5 |
+| 内存 | 🟠 测试采样 `MemAvailable` 最低 **891 MiB**、swap 234→5,632 MiB；无 OOM，但高负载内存压力明确（见 09） |
+| 可观测 | 🟢 `/metrics` + journal；`model-switch.sh status|next|flash` |
+| 上下文 | ✅ **262144 = 模型原生最大上下文**（无需 rope）；KV `q8_0/q8_0` 约 6.1 GiB |
+| 视觉 | ✅ Flash `vision:true`、`video:true` |
+| 变更 | ✅ 27B 完整下载、灰度、A/B 和淘汰结论见 `docs/08-qwen38-27b-trial.md` |
+| 双机部署 | 🟢 两台 kernel 1021、driver 595.71.05、CUDA 13.2.2 已一致；NCCL 约 19.08 GB/s。Qwen Q1 镜像/模型下载进行中，尚未启动推理 |
 
 > 🔴 **一条硬规则**：`-ctk` 与 `-ctv` 必须同型。本 build 只编译了
 > `q4_0-q4_0 / q8_0-q8_0 / f16-f16 / bf16-bf16` 四种 FA 组合，
@@ -40,6 +42,14 @@ DGX Spark（GB10 Grace Blackwell，sm_121 / CUDA 13 / 121.6 GiB 统一内存）�
 | [`docs/04-monitoring.md`](docs/04-monitoring.md) | 装监控（cron + logrotate，可逆）；CSV 字段、阈值、查询 |
 | [`docs/05-incident.md`](docs/05-incident.md) | 出事时看。I1~I6 预案：OOM / 上下文超限 / 终端带走进程 / 整机卡死 / ollama / 输出异常 |
 | [`docs/06-changelog.md`](docs/06-changelog.md) | 记录模板 + 已发生历史 + 当前风险清单 + 待执行队列 |
+| [`docs/07-next80-ab.md`](docs/07-next80-ab.md) | Flash/Next 同 prompt A/B、质量任务、互斥切换与回滚（历史选型） |
+| [`docs/08-qwen38-27b-trial.md`](docs/08-qwen38-27b-trial.md) | 27B Q4/Q6 实测淘汰依据，Flash 质量默认、Next 速度回退 |
+| [`docs/09-flash-live-test.md`](docs/09-flash-live-test.md) | **最新实测**：性能、Cline 3/3、推理 5/5、长上下文、逐 10 秒内存/swap CSV |
+| [`docs/10-two-node-deployment.md`](docs/10-two-node-deployment.md) | **双机主计划**：QSFP、Sync/NCCL、官方 GLM-5.3 recipe、inventory、P0~P8 准出门 |
+| [`docs/11-two-node-validation.md`](docs/11-two-node-validation.md) | 双机验证/A/B：链路、API、性能、质量、长上下文、并发与一次一变量调优 |
+| [`docs/12-two-node-operations.md`](docs/12-two-node-operations.md) | 双机运维：启停顺序、监控、NCCL/worker/网络故障、服务与网络回滚 |
+| [`docs/13-two-node-changelog.md`](docs/13-two-node-changelog.md) | 双机专用阶段、调优、事故、验收签字模板（未执行项均为待填） |
+| [`benchmark-results/two-node-glm53/README.md`](benchmark-results/two-node-glm53/README.md) | 双机原始数据目录与 JSON/CSV 字段约定 |
 | [`docs/health-report-2026-10-27.md`](docs/health-report-2026-10-27.md) | 两次巡检的完整原始报告 |
 
 ## 🛠 脚本一览（默认全部只读）
@@ -53,7 +63,15 @@ DGX Spark（GB10 Grace Blackwell，sm_121 / CUDA 13 / 121.6 GiB 统一内存）�
 | `scripts/dgx-change.sh` | 受控变更：`status` / `plan` / `apply` / `rollback` | ✅ 仅 `apply`/`rollback` |
 | `scripts/preflight.sh` | 部署前体检（参数写法、原生上下文） | ❌ 只读 |
 | `scripts/start-llama-server.sh` | 手工启动（含防呆，已被 systemd 方案取代） | 启动服务 |
-| `systemd/llama-qwen38.service` | 常驻单元模板 | 安装后生效 |
+| `scripts/download-next80.sh` | 下载 Next UD-Q4_K_XL；aria2 续传 + 上游 SHA256 校验 | 只写模型目录 |
+| `scripts/download-qwen38-27b.sh` | 下载 27B Q6 + mmproj；双文件 SHA256 校验（本次评测不采用） | 只写模型目录 |
+| `scripts/model-switch.sh` | Flash/Next 安全互斥切换；排空旧进程、alias 校验、失败恢复 | 启停服务，不改 enabled |
+| `scripts/ab-perf.py` / `ab-quality.py` | 同 prompt 性能与 Cline 类质量 A/B | 发请求；质量代码仅在降权沙箱运行 |
+| `scripts/reasoning-suite.py` | 确定性数学、逻辑、SQL/NULL、中文 NLU、长上下文检索 | 发请求并保存原始 JSON |
+| `scripts/ab-monitor.sh` | 逐 10 秒记录内存、swap、cgroup、VmSwap、GPU 到 CSV | 只读采样 |
+| `systemd/llama-qwen38.service` | Flash 回退单元模板 | 安装后生效 |
+| `systemd/llama-qwen3next.service` | Next 速度回退单元模板，与 Flash 互斥 | 安装后生效 |
+| `systemd/llama-qwen38-27b.service` | 27B Q6 灰度单元模板（实测不采用，保持 disabled） | 安装后生效 |
 | `systemd/lnsc-logrotate.conf` | 日志轮转（12 周，防止吃满磁盘） | 安装后生效 |
 
 **快速上手**
@@ -64,27 +82,38 @@ bash scripts/dgx-change.sh plan systemd-llama   # 3. 看变更计划（只读）
 # 真正执行前，先读 docs/03-change-plan.md 并用 docs/00-rules.md 的五问自检
 ```
 
+**双机部署阅读顺序（按阶段确认，不连续自动执行）：**
+
+```text
+00-rules → 14 当前状态与分阶段计划 → 15 Qwen 只读预检 → 16 NCCL 调优 → 17 Dell NCCL 对照 → 18 RDMA/GDR 分层诊断 → 19 官方连接对照 → 20 认证整栈复核 → 21 版本对齐与 NCCL 恢复 → 22 595 安装 → 10 部署主计划 → 11 验证与调优 → 12 运维回滚 → 13 留痕
+```
+
+先完成阶段 A 只读核验；未通过 GLM MoE 推理验收前，不启动 Cline 验收，也不把当前服务视为生产。
+
 ---
 
 ## 1. 当前运行方式（systemd 托管）
 
-**日常操作只有这四条：**
+**当前无生产模型端点。Flash 回退单元 `llama-qwen38` 保持 inactive + disabled；GLM-5.3 单元也保持 inactive + disabled，等待分阶段确认。**
 
 ```bash
-systemctl status llama-qwen38 --no-pager        # 看状态
-journalctl -u llama-qwen38 -b -f                # 看实时日志
-sudo systemctl restart llama-qwen38             # 重启（约 45~95 秒恢复）
-curl -s http://127.0.0.1:8081/health            # 健康检查
+systemctl status llama-qwen38 --no-pager         # 看状态
+journalctl -u llama-qwen38 -b -f                 # 看实时日志
+sudo systemctl restart llama-qwen38              # 重启（约 90 秒）
+curl -s http://127.0.0.1:8081/health             # 健康检查
+# 运行中互斥切换，不改开机默认：
+bash /root/lnsc-ab/bin/model-switch.sh next      # 速度优先
+bash /root/lnsc-ab/bin/model-switch.sh flash     # 质量/视觉
 ```
 
-实际生效的启动命令（写在 `/etc/systemd/system/llama-qwen38.service`，仓库同源）：
+Flash 回退单元的启动命令（`/etc/systemd/system/llama-qwen38.service`，仓库同源）：
 
 ```bash
 /opt/llama.cpp/build/bin/llama-server \
   -m /models/qwen3.8-flash-next/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf \
   --alias qwen3.8-flash-next \
   --mmproj /models/qwen3.8-flash-next/mmproj-F16.gguf \
-  -c 196608 \
+  -c 262144 \
   -b 2048 -ub 1024 \
   -ngl 999 \
   -fa on \
@@ -102,7 +131,7 @@ curl -s http://127.0.0.1:8081/health            # 健康检查
 
 | 项 | 错误写法 | 正确写法 | 原因 |
 |---|---|---|---|
-| 上下文 | `-c 49152` | `-c 196608` | 49k 请求直接超限报 `exceeds the available context size (49152 tokens)`；196608 < 原生 262144，无需 rope |
+| 上下文 | `-c 49152` | `-c 262144` | 49k 请求直接超限报 `exceeds the available context size (49152 tokens)`；262144 = 原生最大，无需 rope |
 | 逻辑批 | `-b 128` | `-b 2048` | 太小，prefill 被卡死 |
 | 微批 | `-ub 32` | `-ub 512` | prefill 快 10~20 倍（49k prompt：约 1540 轮 → 约 96 轮） |
 | FA | `-fa off` | `-fa on` | 混合注意力（Gated DeltaNet + full attn）关 FA 极慢；且 **KV 量化只支持 FA 路径** |

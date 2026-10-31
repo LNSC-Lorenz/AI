@@ -1,0 +1,74 @@
+# /etc/systemd/system/llama-qwen38.service
+[Unit]
+Description=llama.cpp server for Qwen3.8-Flash-Next (GB10 / sm_121)
+After=network-online.target
+Wants=network-online.target
+
+# ⚠️ 防重启风暴: 加载一次权重 = 读 103.68 GiB 盘. 若启动即失败(端口占用/限额/OOM),
+# 没有 StartLimit 会每 RestartSec 秒重读一遍硬盘 -> 必定打爆机器. 3 次即停, 交给人工.
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/models/qwen3.8-flash-next/UD-Q4_K_XL
+
+# 快速失败: 模型不可读就别等 900 秒超时
+ExecStartPre=/usr/bin/test -r /models/qwen3.8-flash-next/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf
+
+# 显式写全参数(可审计). 注意: "\" 续行符后面绝对不能有尾随空格, 否则参数会被当成空串.
+# 本 build 无 --no-mmap/--direct-io/--mmap/--mlock, 不要加.
+# -c 262144 等于原生 context_length 262144，不需要 rope scaling.
+# ⚠️ KV 类型必须 K/V 同型! 本 build 编译的 FA 组合只有:
+#    GGML_CUDA_FA_QUANTS = "q4_0-q4_0;q8_0-q8_0;f16-f16;bf16-bf16"  (GGML_CUDA_FA_ALL_QUANTS=OFF)
+#    用 -ctk q8_0 -ctv q4_0 这种混型会报:
+#      "no FlashAttention vector kernel compiled for K/V types q8_0-q4_0, converting K and V to f16 instead (slow)"
+#    即每步都把 K/V 转 f16, 长上下文 decode 会明显变慢 —— 不要用混型.
+# KV 占用: q8_0/q8_0 @262144 ≈ 6.1 GiB (24 KiB/token × 262144)
+# --mmproj: 视觉投影器(862 MiB), 让模型支持图片输入.
+#   来源: modelscope unsloth/Qwen3.8-Flash-Next-GGUF (当初下载只取了 UD-Q4_K_XL/*, 漏了这个文件)
+#   代价: 常驻 +0.9 GB; 图片 token 进 KV 约 25~50 MB/张(1080p)
+#   回滚: 删掉本行 -> daemon-reload && restart (文件留着不影响文本模式)
+# -ub 1024: prefill 微批(2026-10-27 23:5x 起从 512 提升, 见 docs/03-change-plan.md C7 实测对比)
+# --cache-reuse 256: 允许 KV shifting 复用中间对齐块, 客户端编辑/重发消息时少算 prefill
+ExecStart=/opt/llama.cpp/build/bin/llama-server \
+  -m /models/qwen3.8-flash-next/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf \
+  --alias qwen3.8-flash-next \
+  --mmproj /models/qwen3.8-flash-next/mmproj-F16.gguf \
+  -c 262144 -b 2048 -ub 1024 -ngl 999 \
+  -fa on -ctk q8_0 -ctv q8_0 \
+  --cache-reuse 256 \
+  --jinja --parallel 1 --metrics \
+  --host 0.0.0.0 --port 8081
+
+Restart=on-failure
+RestartSec=10
+# 冷页缓存下读 103.68 GiB + CUDA 初始化, 900 秒足够
+TimeoutStartSec=900
+TimeoutStopSec=60
+KillSignal=SIGINT
+
+# 关键保险: 统一内存(GB10)上把"整机卡死"降级为"进程被杀", SSH 永远进得去
+# 物理 121.6 GiB. 常驻: 权重 103.68 + KV 3.5 + compute ≈ 110 GiB.
+# 112G 开始回收(只回收可回收的 mmap 页缓存, 不杀人); 116G 才硬杀.
+# 代价: 逼近限额时权重页缓存被反复丢弃 -> prefill 可能重读盘变慢(安全性优先).
+MemoryHigh=112G
+MemoryMax=116G
+# 注意: 本机 cgroup **未启用 swap accounting**
+#   (实测 `ls /sys/fs/cgroup/memory.swap.max` → No such file or directory)
+# 因此这里不能写 MemorySwapMax=4G —— 写了也不生效, 只会留个假保险.
+# 想抑制 swap 抖动只能靠: vm.swappiness=10 (见 docs/03-change-plan.md C1) + 本限额.
+
+# 默认 1024 在长连接/多客户端下会耗尽
+LimitNOFILE=65535
+
+# 启动日志看这几行最有用: KV buffer size / model buffer size / n_ctx
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-qwen38
+
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

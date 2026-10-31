@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>工单系统适用范围规则</title>
+<style>
+  /* 主色 PETROL #006878（CMYK 100/50/50/0 ｜ RAL 5021 ｜ Pantone 315） 点缀 LIME #AFCA0B */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { font-family:"Segoe UI","Microsoft YaHei","微软雅黑",Arial,sans-serif;
+         color:#2C464C; background:#FFFFFF;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page { position:relative; width:210mm; min-height:297mm; background:#FFFFFF;
+          display:flex; flex-direction:column; }
+
+  /* ===== 页眉 / 页脚品牌细条（满幅，左右出血）===== */
+  .bar { height:1.2mm; display:flex; }
+  .bar i:first-child { flex:1; background:#006878; }
+  .bar i:last-child  { width:18mm; background:#AFCA0B; }
+
+  header { padding:10mm 18mm 0; }
+  .h-row1 { display:flex; justify-content:flex-end; align-items:flex-start; }
+  .h-row1 img { height:10mm; width:auto; display:block; }
+  .h-row2 { display:flex; align-items:center; gap:5mm; margin-top:5mm; }
+  .h-row2 .jira { flex:0 0 13mm; width:13mm; height:13mm; display:block; }
+  .h-row2 .jira svg { width:100%; height:100%; display:block; }
+  h1 { margin:0; font-size:20pt; font-weight:700; color:#00495A; letter-spacing:.5px; }
+  .sub { margin:1mm 0 0; font-size:8.5pt; color:#006878; letter-spacing:1.1px; text-transform:uppercase; }
+  .hrule { margin:5mm 18mm 0; height:.6mm;
+           background:linear-gradient(90deg,#006878 0%,#006878 62%,#AFCA0B 62%,#AFCA0B 100%); }
+
+  /* ===== 正文：三条规则 ===== */
+  main { flex:1; padding:0 18mm; display:flex; flex-direction:column; }
+  .rules { flex:1; display:flex; flex-direction:column; justify-content:center; gap:14mm; }
+  .rule { display:flex; align-items:center; gap:7mm; padding:8mm 8mm;
+          background:#FFFFFF; border:1px solid #DCE8EA; border-left:3px solid #006878;
+          border-radius:0 2mm 2mm 0; }
+  .n { flex:0 0 13mm; height:13mm; border-radius:50%; background:#006878; color:#FFFFFF;
+       font-weight:700; font-size:14.5pt; text-align:center; line-height:13mm; }
+  .bd { flex:1; }
+  h2 { margin:0; font-size:14pt; font-weight:700; color:#00495A; line-height:1.35; }
+  .tag { display:inline-block; margin-left:2.5mm; padding:.5mm 3mm; border-radius:999px;
+         background:#AFCA0B; color:#00495A; font-size:9pt; font-weight:700; letter-spacing:.5px; }
+  p { margin:2.5mm 0 0; font-size:10.5pt; line-height:1.55; color:#41606A; }
+  .chips { display:flex; flex-wrap:wrap; gap:1.8mm; margin-top:2.8mm; }
+  .chip { border:1px solid #B9D3D7; background:#F1F8F9; color:#006878; border-radius:999px;
+          padding:.9mm 3.4mm; font-size:9pt; }
+  p.ex { margin-top:2.8mm; padding-left:3mm; border-left:2px solid #AFCA0B;
+         font-size:9.5pt; color:#7A8F95; }
+
+  /* ===== 页脚 ===== */
+  footer { padding:0 18mm; }
+  .fline { height:.5mm; background:#E3ECEE; }
+  .frow { display:flex; align-items:center; justify-content:space-between;
+          padding:3mm 0 6mm; font-size:7.5pt; color:#8CA1A6; letter-spacing:.5px; }
+  .frow .fl { display:flex; align-items:center; gap:2.5mm; }
+  .frow .fl svg { height:3.4mm; width:auto; display:block; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bar"><i></i><i></i></div>
+
+  <header>
+    <div class="h-row1">
+      <img src="lechler-c-logo-combination-mark-cmyk-00.svg" alt="Lechler" />
+    </div>
+    <div class="h-row2">
+      <span class="jira">
+        <svg fill="#2684FF" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <title>Jira</title>
+          <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0Z"/>
+        </svg>
+      </span>
+      <div>
+        <h1>工单系统适用范围规则</h1>
+        <p class="sub">Jira · IT-Ticketsystem</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="hrule"></div>
+
+  <main>
+    <div class="rules">
+      <div class="rule">
+        <div class="n">1</div>
+        <div class="bd">
+          <h2>GmbH 开发或维护的系统与平台<span class="tag">优先走工单</span></h2>
+          <div class="chips">
+            <span class="chip">SAP</span><span class="chip">CRM</span><span class="chip">ProFile</span>
+            <span class="chip">Cornerstone</span><span class="chip">TankClean</span><span class="chip">Nozzle3</span>
+            <span class="chip">GasCool</span><span class="chip">Smart Factory</span><span class="chip">M365</span>
+          </div>
+          <p class="ex">例外：纯业务问题（使用咨询）不走工单。</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="n">2</div>
+        <div class="bd">
+          <h2>LNSC 内部事项<span class="tag">无需工单</span></h2>
+          <p>OA 新流程开发 · 新账户 / 新设备初始化 · RPA Job 开发 · 打印机故障 · 项目开发</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="n">3</div>
+        <div class="bd">
+          <h2>其它问题<span class="tag">一律优先走工单</span></h2>
+          <p>不属于规则一、二的问题，默认以工单形式发起。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="fline"></div>
+    <div class="frow">
+      <div class="fl">
+        <img src="lechler-c-logo-symbol-mark-cmyk-00.svg" alt="Lechler" style="height:3.4mm;width:auto;display:block" />
+        <span>Lechler · 内部文件</span>
+      </div>
+      <div>第 1 页 / 共 1 页</div>
+    </div>
+  </footer>
+
+  <div class="bar"><i></i><i></i></div>
+
+</div>
+</body>
+</html>

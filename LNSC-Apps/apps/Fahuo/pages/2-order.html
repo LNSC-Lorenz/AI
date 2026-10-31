@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>下单模式 | LNSC 全链发货平台</title>
 <link rel="stylesheet" href="../assets/css/fonts.css?v=20261024a">
-<link rel="stylesheet" href="../assets/css/style.css?v=20261027b">
+<link rel="stylesheet" href="../assets/css/style.css?v=20261030a">
 <link rel="icon" type="image/svg+xml" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.svg">
 <link rel="icon" type="image/png" href="../assets/images/lechler-c-logo-symbol-mark-cmyk-00.png">
 </head>
@@ -61,15 +61,10 @@
 
     <div class="pw-main">
 
-      <!-- 左 1/4：承运商切换 + 130 面单模拟预览（顺丰/德邦/跨越三套模板） -->
-      <div class="pw-left">
-        <div class="pw-carrier" id="carrierBar">
-          <button class="pw-cb active" type="button" data-c="顺丰">顺丰</button>
-          <button class="pw-cb" type="button" data-c="德邦">德邦</button>
-          <button class="pw-cb" type="button" data-c="跨越">跨越</button>
-          <button class="pw-cb" type="button" data-c="专车">专车</button>
-          <button class="pw-cb" type="button" data-c="自提">自提</button>
-        </div>
+      <!-- 面单打印模板（2026-10-28 用户规则「移除左侧的面单模拟页面」）：
+           屏幕不显示（.pw-bill-store display:none），仅 JS 填充 + @media print 输出；
+           fillBill/setCarrier/printBills 等逻辑不变，右侧工作区全宽铺开 -->
+      <div class="pw-bill-store">
         <section class="pw-bill" id="pwBill">
 
           <!-- 顺丰 130 模板（丰桥：130×230mm，丰密面单隐藏手机号） -->
@@ -217,11 +212,11 @@
           </div>
 
         </section>
-        <!-- 路由时间线（点击已下单行时显示：模拟节点时间，交互反馈） -->
+        <!-- 路由时间线（面单预览移除后随模板区屏幕隐藏；renderTrack() 保留，逻辑不变） -->
         <div class="pw-track" id="pwTrack" hidden></div>
       </div>
 
-      <!-- 右 3/4：上中下三段 -->
+      <!-- 右侧工作区（2026-10-28 用户规则：面单预览移除后全宽铺开）：上中下三段 -->
       <div class="pw-right">
 
         <!-- 上段：录单 DN 平铺滚动（右上多选开关） -->
@@ -245,6 +240,8 @@
               </label>
             </div>
           </div>
+          <!-- DN 候选区 2 行 8 列网格（2026-10-28 用户规则「DN候选区2行8列显示」）；
+               承运商按钮 2026-10-29 移至承运商设置左侧（2行3列） -->
           <div class="pw-dn-list scroll-dark" id="dnList"></div>
         </section>
 
@@ -252,6 +249,15 @@
         <section>
           <div class="pw-sec-title">承运商设置</div>
           <div class="pw-config-row">
+            <!-- 承运商 2行2列网格（2026-10-29 用户规则「移除「跨越」按钮和空框：剩 顺丰/德邦/专车/自提，网格改 2×2」）：
+                 行1=顺丰/德邦，行2=专车/自提；按钮块与设置区同高（108px）均分。
+                 跨越仅从下单页快捷栏移除——TPL/billKY 模板、承运商启用开关与存量跨越单打印显示不受影响 -->
+            <div class="pw-carrier pw-carrier-g" id="carrierBar">
+              <button class="pw-cb active" type="button" data-c="顺丰">顺丰</button>
+              <button class="pw-cb" type="button" data-c="德邦">德邦</button>
+              <button class="pw-cb" type="button" data-c="专车">专车</button>
+              <button class="pw-cb" type="button" data-c="自提">自提</button>
+            </div>
             <div class="pw-config">
               <div class="pw-r1">
                 <label>产品类型
@@ -326,19 +332,21 @@
           <div class="header-wrap">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-name">
+                <col class="col2-dn"><col class="col2-ship"><col class="col2-owner"><col class="col2-so">
+                <col class="col2-pdate"><col class="col2-name"><col class="col2-addr">
                 <col class="col2-sf"><col class="col2-st"><col class="col2-pr"><col class="col2-note"><col class="col2-view">
               </colgroup>
               <thead>
-                <!-- 优先级列移除（2026-09-20 用户规则：分类只留在录单页；紧急行整行加粗红字） -->
-                <tr><th>DN</th><th>SO</th><th>联系人</th><th>承运商/单号/状态</th><th>路由状态</th><th>打印</th><th>备注</th><th>查看</th></tr>
+                <!-- 列序（2026-10-29 用户规则）：DN 要求日期 SO负责人 SO 下单日期 联系人 地址 + 功能列在后 -->
+                <tr><th>DN</th><th>要求日期</th><th>SO负责人</th><th>SO</th><th>下单日期</th><th>联系人</th><th>地址</th><th>承运商/单号/状态</th><th>路由状态</th><th>打印</th><th>备注</th><th>查看</th></tr>
               </thead>
             </table>
           </div>
           <div class="table-section">
             <table class="order-table">
               <colgroup>
-                <col class="col2-dn"><col class="col2-so"><col class="col2-name">
+                <col class="col2-dn"><col class="col2-ship"><col class="col2-owner"><col class="col2-so">
+                <col class="col2-pdate"><col class="col2-name"><col class="col2-addr">
                 <col class="col2-sf"><col class="col2-st"><col class="col2-pr"><col class="col2-note"><col class="col2-view">
               </colgroup>
               <tbody id="printBody"></tbody>
@@ -444,6 +452,6 @@
 <!-- 专车/自提面单：CODE128 条码 -->
 <script src="../assets/vendor/JsBarcode.all.min.js"></script>
 <script src="../assets/js/note-copy.js?v=20261024a"></script>
-<script src="../assets/js/pages/2-order.js?v=20261027b"></script>
+<script src="../assets/js/pages/2-order.js?v=20261030b"></script>
 </body>
 </html>

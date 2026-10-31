@@ -1,5 +1,8 @@
 # 04 · 监控与日志（Monitoring）
 
+> 双机 vLLM 专项：按节点分别保存资源与网络 CSV，监控 RoCE/NCCL、rank/容器、链路、MTP 和并发。
+> 数据结构与验证顺序见 `docs/11-two-node-validation.md`，告警处置见 `docs/12-two-node-operations.md`。
+
 > 原则：**不引入新守护进程、不装新依赖**。用 cron + bash + logrotate 完成 90% 的观察需求；
 > 只有当确实需要趋势图表时，才启用第 4 节的 Prometheus（可选）。
 

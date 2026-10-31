@@ -1,0 +1,44 @@
+[Unit]
+Description=llama.cpp quality server for Qwen3.8-27B Q6 (GB10 / sm_121)
+After=network-online.target
+Wants=network-online.target
+# 可与 Next-80B 并行；不能与 103.68 GiB Flash-Next 并行。
+Conflicts=llama-qwen38.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/models/qwen3.8-27b
+ExecStartPre=/usr/bin/test -r /models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf
+ExecStartPre=/usr/bin/test -r /models/qwen3.8-27b/mmproj-F16.gguf
+
+# 质量优先：Q6、Thinking/medium、保留推理历史；原生 262144，无需 rope。
+ExecStart=/opt/llama.cpp/build/bin/llama-server \
+  -m /models/qwen3.8-27b/Qwen3.8-27B-UD-Q6_K_XL.gguf \
+  --alias qwen3.8-27b \
+  --mmproj /models/qwen3.8-27b/mmproj-F16.gguf \
+  -c 196608 -b 2048 -ub 1024 -ngl 999 \
+  -fa on -ctk q8_0 -ctv q8_0 \
+  --cache-reuse 256 --min-p 0.0 \
+  --reasoning on --reasoning-effort medium --reasoning-preserve \
+  --image-min-tokens 1024 \
+  --jinja --parallel 1 --metrics \
+  --host 0.0.0.0 --port 8082
+
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+TimeoutStopSec=60
+KillSignal=SIGINT
+MemoryHigh=64G
+MemoryMax=72G
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-qwen38-27b
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

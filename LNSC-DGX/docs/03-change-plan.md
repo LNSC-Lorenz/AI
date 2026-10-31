@@ -2,7 +2,7 @@
 
 > **当前状态：✅ 已解冻（2026-10-27 23:01 执行 C2+C3）**
 > 触发窗口：旧的手动进程已于 22:49 前退出（`8081` 空闲、`MemAvailable` 118.7 GiB、无 OOM 记录），
-> 经确认后按 C2+C3 合并执行，现已由 systemd 托管并在 `196608` 上下文下运行。
+> 经确认后按 C2+C3 合并执行，现已由 systemd 托管；2026-10-29 经 C9 调整为原生最大 `262144` 上下文。
 > 剩余未执行项：C1（swappiness）、C4（ollama 收敛）、C5 观察项。
 
 每项变更都满足：一次只改一个变量、有快照、有验证、有回滚。
@@ -112,6 +112,42 @@
 | Cline 的 request timeout 调到 300~600 s、开启 streaming | 避免 50 秒被误判超时取消（**取消=前面 prefill 全部作废**） |
 
 39k → 20k 可把首轮等待从 ~36 s 直接压到 ~19 s，**比任何服务端调参都有效**。
+
+---
+
+## C8 · 双机 GLM-5.3-Flash / vLLM TP2（**文档已备，部署未开始**）
+
+| 项 | 内容 |
+|---|---|
+| 目的 | 两台 128GB Spark 通过 200GbE QSFP 组成一个逻辑推理服务，改善复杂编程、推理、长上下文与并发，而非只增加独立副本 |
+| 目标模型 | `unsloth/GLM-5.3-Flash-GGUF` UD-Q4_K_XL（320B 总参数 / 18B 激活，185.99 GiB）；备选 `nvidia/GLM-5.3-Flash-FP4-Local` |
+| 官方路径 | **当前首选 ModelScope GGUF + llama.cpp RPC**：私网/SSH → NCCL 验证 → worker `ggml-rpc` → head `llama-glm53-rpc`；Cline 只连 head `:8081/v1`。备选 NVIDIA Sync + vLLM TP2 |
+| 当前状态 | **仅完成部署/验证/运维/留痕框架；未改网、未下载 GLM、未启动双机服务** |
+| 执行顺序 | P1 备份与 QSFP → P2 网络/SSH → P3 NCCL → P4 镜像/模型 → P5 worker→head → P6 API/Cline → P7 A/B/调优 → P8 交接 |
+| 主计划 | `docs/10-two-node-deployment.md`（硬件、官方基线、模型、阶段准出门） |
+| 验证调优 | `docs/11-two-node-validation.md`（分层验证、同口径 A/B、一次一变量） |
+| 运维回滚 | `docs/12-two-node-operations.md`（监控、故障、双机/网络/服务回滚） |
+| 留痕 | `docs/13-two-node-changelog.md` + `benchmark-results/two-node-glm53/` |
+| 生产门槛 | 功能/工具通过；真实质量不劣于 Flash；decode 与总完成时间可接受；30 分钟稳定；回滚演练通过 |
+| 回滚 | 停止 head→worker 新增容器，验证无残留后恢复既有 Flash；网络仅用 P1 备份回滚 |
+| 禁止 | 未验证 NCCL 就下载/上模型、双 head、暴露私网端口、同时改多项参数、把官方数据写成本机结果 |
+
+**在 C8 验收并签字前，不修改当前 `llama-qwen38` 的 active/enabled 状态。**
+
+---
+
+## C9 · 上下文 196608 → 262144（原生最大）· ✅ 已执行 2026-10-29 09:17
+
+| 项 | 内容 |
+|---|---|
+| 目的 | 将当前 Flash-Next 上下文调整为模型原生最大值；不使用 YaRN 或 1M 外推 |
+| 前置 | 等待活跃 slot 空闲；备份 `/root/llama-qwen38.service.bak.ctx196608.*`；变更脚本检查失败自动恢复 |
+| 变更 | unit 与手动启动脚本 `-c 196608 → 262144`；其余 `-b 2048 -ub 1024 -fa on -ctk/-ctv q8_0` 等不变 |
+| 验证 | `/v1/models` 与 `/props` 均为 `n_ctx=262144`、`n_ctx_train=262144`；`active+enabled`；短请求 HTTP 200；无 FA slow-path |
+| 内存 | KV 估算约 4.6→6.1 GiB（+1.5 GiB）；重启后 `MemAvailable≈8.9 GiB`、swap 约 3.7 GiB（较重启前下降） |
+| 证据 | DGX `/root/lnsc-ab/ctx262144/`；本地 `benchmark-results/ctx262144/` |
+| 回滚 | 恢复 `/root/llama-qwen38.service.bak.ctx196608.*` → `daemon-reload && restart` |
+| 注意 | 最大容量不代表应长期塞满；长 prompt 的 prefill、KV 和 swap 成本仍需监控 |
 
 ---
 

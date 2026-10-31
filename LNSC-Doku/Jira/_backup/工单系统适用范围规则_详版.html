@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>工单系统适用范围规则</title>
+<style>
+  /* 主色 PETROL #006878 = CMYK 100/50/50/0 = RAL 5021 Wasserblau = Pantone 315
+     点缀 LIME #AFCA0B ｜ 深阶 DEEP PETROL #00495A */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { font-family:"Segoe UI","Microsoft YaHei","微软雅黑",Arial,sans-serif;
+         font-size:10pt; line-height:1.6; color:#FFFFFF; background:#006878;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page { position:relative; width:210mm; min-height:297mm; background:#006878;
+          display:flex; flex-direction:column; overflow:hidden; }
+  .page::before { content:""; position:absolute; top:0; left:0; right:0; height:3.5mm; background:#AFCA0B; }
+  .deco, .deco2 { position:absolute; clip-path:polygon(50% 0, 100% 100%, 0 100%); }
+  .deco  { top:16mm;  right:-8mm; width:74mm; height:74mm; background:rgba(255,255,255,.05); }
+  .deco2 { top:52mm;  right:14mm; width:40mm; height:40mm; background:rgba(175,202,11,.10); }
+
+  .top { padding:10mm 18mm 0; display:flex; align-items:flex-end; justify-content:space-between; }
+  .top .logo svg { height:9mm; width:auto; display:block; }
+  .top .doc { text-align:right; font-size:8.2pt; color:#BFE0E6; letter-spacing:.6px; line-height:1.5; }
+  .top .doc b { display:block; font-size:9.5pt; color:#FFFFFF; letter-spacing:1.2px; }
+
+  main { flex:1; padding:0 18mm; position:relative; }
+  h1 { margin:6mm 0 1mm; font-size:23pt; font-weight:700; color:#FFFFFF; letter-spacing:.6px; }
+  .sub { margin:0 0 3.5mm; font-size:10pt; color:#C6E3E8; }
+  /* ===== 文档信息 ===== */
+  table.meta { width:100%; border-collapse:collapse; font-size:8.6pt; margin:0 0 2mm; }
+  table.meta th, table.meta td { border:1px solid rgba(255,255,255,.30); padding:1.4mm 3mm; text-align:left; }
+  table.meta th { width:15%; background:rgba(255,255,255,.16); color:#EAF6F8; font-weight:700; white-space:nowrap; }
+  table.meta td { background:rgba(255,255,255,.05); color:#FFFFFF; }
+
+  /* ===== 三条规则 ===== */
+  .rule { display:flex; gap:5mm; padding:2.5mm 0; border-top:1px solid rgba(255,255,255,.22); }
+  .rule:last-of-type { border-bottom:1px solid rgba(255,255,255,.22); }
+  .n { flex:0 0 9mm; height:9mm; border-radius:50%; background:#AFCA0B; color:#00495A;
+       font-weight:700; font-size:11pt; text-align:center; line-height:9mm; }
+  .bd { flex:1; }
+  h2 { margin:0 0 1mm; font-size:12.5pt; font-weight:700; color:#FFFFFF; }
+  h2 span { margin-left:2.5mm; font-size:9.5pt; font-weight:400; color:#DCEC9B; letter-spacing:.5px; }
+  p { margin:0; }
+  p.ex { margin-top:.8mm; font-size:9.4pt; color:#CDE6EA; }
+  .chips { display:flex; flex-wrap:wrap; gap:1.2mm; margin-top:1.2mm; }
+  .chip { border:1px solid rgba(255,255,255,.48); border-radius:999px; padding:.2mm 2.4mm;
+          font-size:8.4pt; color:#FFFFFF; background:rgba(255,255,255,.07); }
+  .note { margin-top:2.8mm; padding:2mm 4mm; background:rgba(175,202,11,.18);
+          border-left:3px solid #AFCA0B; font-size:9.4pt; color:#F2F8DF; }
+  .note b { color:#DCEC9B; }
+
+  /* ===== 小节标题 / 速查表 ===== */
+  h3.sec { margin:3.4mm 0 0; font-size:11.5pt; font-weight:700; color:#FFFFFF;
+           border-left:3px solid #AFCA0B; padding-left:3mm; }
+  table.qs { width:100%; border-collapse:collapse; margin-top:2.2mm; font-size:9pt; }
+  table.qs caption { caption-side:top; text-align:left; font-size:8.4pt; color:#BFE0E6; padding-bottom:1.2mm; }
+  table.qs th { background:#AFCA0B; color:#00495A; border:1px solid #AFCA0B;
+                padding:1.3mm 3mm; text-align:left; font-weight:700; }
+  table.qs td { border:1px solid rgba(255,255,255,.26); padding:1.25mm 3mm; color:#FFFFFF; }
+  table.qs tr:nth-child(even) td { background:rgba(255,255,255,.08); }
+  .yes { color:#C7E24B; font-weight:700; }
+  .no  { color:#FF9E93; font-weight:700; }
+  p.body2 { margin-top:1.8mm; font-size:9.3pt; color:#DCEDF0; }
+
+  /* ===== 签署区 ===== */
+  table.sign { width:100%; border-collapse:collapse; margin-top:3.5mm; font-size:8.6pt; }
+  table.sign th { background:rgba(255,255,255,.16); color:#FFFFFF; border:1px solid rgba(255,255,255,.30);
+                  padding:1.5mm 3mm; font-weight:700; text-align:center; }
+  table.sign td { border:1px solid rgba(255,255,255,.30); height:8mm; text-align:center; color:#C6E3E8; }
+
+  /* ===== 主色色卡 ===== */
+  .pal { display:flex; align-items:stretch; margin-top:3mm; border:1px solid rgba(255,255,255,.30); }
+  .pal .sw { width:10mm; flex:0 0 10mm; box-shadow:inset 0 0 0 1px rgba(255,255,255,.35); }
+  .pal .txt { flex:1; padding:1.3mm 3mm; font-size:7.6pt; color:#DCEFF2; line-height:1.5; }
+  .pal .txt b { color:#FFFFFF; letter-spacing:.6px; }
+
+  /* ===== 页脚 ===== */
+  footer { margin-top:4mm; background:#00495A; color:#BFE0E6; padding:3mm 18mm;
+           display:flex; align-items:center; justify-content:space-between; font-size:7.6pt; }
+  footer .fl { display:flex; align-items:center; gap:2mm; }
+  footer .fl svg { height:3.4mm; width:auto; display:block; }
+  footer .r { text-align:right; }
+
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="deco"></div>
+  <div class="deco2"></div>
+
+  <div class="top">
+    <div class="logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 634.96 85.04" role="img" aria-label="Lechler">
+        <polygon fill="#FFFFFF" points="195.89 70.87 195.89 60.56 154.42 60.56 154.42 14.17 141.73 14.17 141.73 70.87 195.89 70.87"/>
+        <polygon fill="#FFFFFF" points="269.09 70.87 269.09 60.56 219.62 60.56 219.62 47.32 264.49 47.32 264.49 37.01 219.62 37.01 219.62 24.48 269.09 24.48 269.09 14.17 206.93 14.17 206.93 70.87 269.09 70.87"/>
+        <polygon fill="#FFFFFF" points="362.77 70.87 362.77 47.71 402.73 47.71 402.73 70.87 415.41 70.87 415.41 14.17 402.73 14.17 402.73 37.41 362.77 37.41 362.77 14.17 350.08 14.17 350.08 70.87 362.77 70.87"/>
+        <polygon fill="#FFFFFF" points="483.6 70.87 483.6 60.56 442.14 60.56 442.14 14.17 429.45 14.17 429.45 70.87 483.6 70.87"/>
+        <polygon fill="#FFFFFF" points="556.81 70.87 556.81 60.56 507.33 60.56 507.33 47.32 552.21 47.32 552.21 37.01 507.33 37.01 507.33 24.48 556.81 24.48 556.81 14.17 494.65 14.17 494.65 70.87 556.81 70.87"/>
+        <path fill="#FFFFFF" d="M634.96,32.09c0-6.03-1.63-10.52-4.88-13.48-3.25-2.96-7.81-4.44-13.68-4.44h-47.5v56.69h12.69v-20.85h26.17l12.13,20.85h14.43l-13.08-21.25c4.39-.74,7.77-2.56,10.15-5.47,2.38-2.91,3.57-6.92,3.57-12.05h0ZM622.12,32.09c0,2.75-.62,4.71-1.86,5.87-1.24,1.16-3.03,1.74-5.35,1.74l-33.3-.08v-15.14h33.3c2.33,0,4.11.57,5.35,1.7,1.24,1.14,1.86,3.11,1.86,5.91h0Z"/>
+        <path fill="#FFFFFF" d="M290.54,42.52c0-10.04,8.14-18.18,18.18-18.18h0s29.31,0,29.31,0v-10.17h-31.89c-15.65,0-28.35,12.69-28.35,28.35s12.69,28.35,28.35,28.35h31.88v-10.17h-29.31c-10.04,0-18.18-8.14-18.18-18.18h0Z"/>
+        <path fill="#AFCA0B" d="M98.19,42.52l-12.27-21.26L73.65,0l-12.27,21.26-12.27,21.26h49.1ZM36.82,21.26L49.1,0h-24.55s-12.27,21.26-12.27,21.26L0,42.52l12.27,21.26,12.27-21.26,12.27-21.26h0ZM36.82,63.78H12.27s12.27,21.26,12.27,21.26h49.1l12.27-21.26h-49.1Z"/>
+      </svg>
+    </div>
+    <div class="doc"><b>LNSC-JIRA-004</b>V1.0 · 2026-10 · Wasserblau</div>
+  </div>
+
+  <main>
+    <h1>工单系统适用范围规则</h1>
+    <p class="sub">判定顺序：先看规则一 → 再看规则二 → 其余按规则三</p>
+
+    <table class="meta">
+      <tr><th>文档编号</th><td>LNSC-JIRA-004</td><th>版本</th><td>V1.0</td></tr>
+      <tr><th>生效日期</th><td>2026 年 10 月 28 日</td><th>归口部门</th><td>LNSC IT</td></tr>
+    </table>
+
+    <div class="rule">
+      <div class="n">1</div>
+      <div class="bd">
+        <h2>GmbH 开发或维护的系统与平台<span>优先走工单</span></h2>
+        <div class="chips">
+          <span class="chip">SAP</span><span class="chip">CRM</span><span class="chip">ProFile</span>
+          <span class="chip">Cornerstone</span><span class="chip">TankClean</span><span class="chip">Nozzle3</span>
+          <span class="chip">GasCool</span><span class="chip">Smart Factory</span><span class="chip">M365</span>
+        </div>
+        <p class="ex">例外：纯业务问题（使用咨询）不走工单。</p>
+      </div>
+    </div>
+
+    <div class="rule">
+      <div class="n">2</div>
+      <div class="bd">
+        <h2>LNSC 内部事项<span>无需工单</span></h2>
+        <p>OA 新流程开发 · 新账户 / 新设备初始化 · RPA Job 开发 · 打印机故障 · 项目开发</p>
+      </div>
+    </div>
+
+    <div class="rule">
+      <div class="n">3</div>
+      <div class="bd">
+        <h2>其它问题<span>一律优先走工单</span></h2>
+        <p>不属于规则一、二的问题，默认以工单形式发起。</p>
+      </div>
+    </div>
+
+    <div class="note"><b>兜底：</b>拿不准归属时优先建单，并注明「待确认归属」。</div>
+    <h3 class="sec">判定速查表</h3>
+    <table class="qs">
+      <caption>按请求性质自上而下匹配，命中即止</caption>
+      <tr><th style="width:11%">优先级</th><th>请求情形</th><th style="width:20%">处理方式</th></tr>
+      <tr><td>1</td><td>纯业务使用咨询（如何操作、在哪里查询等）</td><td class="no">不走工单</td></tr>
+      <tr><td>2</td><td>LNSC 内部事项（规则二所列 5 类）</td><td class="no">不走工单</td></tr>
+      <tr><td>3</td><td>规则一所列 9 个系统的开发 / 维护需求</td><td class="yes">走工单</td></tr>
+      <tr><td>4</td><td>其它一切 IT 相关问题</td><td class="yes">走工单</td></tr>
+    </table>
+
+    <h3 class="sec">生效与修订</h3>
+    <p class="body2">本规则自生效之日起执行，由 LNSC IT 负责解释与修订。系统清单或内部事项范围发生变更时，应更新本文档并提升版本号；历史版本由归口部门存档备查。</p>
+
+    <table class="sign">
+      <tr><th style="width:16%">编制</th><th style="width:16%">审核</th><th style="width:16%">批准</th><th>日期</th></tr>
+      <tr><td></td><td></td><td></td><td>2026 / 10 / 28</td></tr>
+    </table>
+
+    <div class="pal">
+      <div class="sw" style="background:#006878; border-right:1px solid rgba(255,255,255,.30)"></div>
+      <div class="sw" style="background:#AFCA0B; border-right:1px solid rgba(255,255,255,.30)"></div>
+      <div class="sw" style="background:#00495A; border-right:1px solid rgba(255,255,255,.30)"></div>
+      <div class="txt"><b>主色 PETROL　#006878　·　CMYK 100/50/50/0　·　RGB 0/104/120　·　RAL 5021 Wasserblau　·　Pantone 315</b><br />
+        点缀 LIME #AFCA0B　·　深阶 DEEP PETROL #00495A（本文件背景即主色 PETROL）</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="fl">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98.19 85.04" role="img" aria-label="Lechler">
+        <polygon fill="#FFFFFF" points="98.19 42.52 85.92 21.26 73.65 0 61.38 21.26 49.1 42.52 98.19 42.52"/>
+        <polygon fill="#AFCA0B" points="36.82 21.26 49.1 0 24.55 0 12.27 21.26 0 42.52 12.27 63.78 24.55 85.04 36.82 63.78 49.1 42.52 36.82 21.26"/>
+        <polygon fill="#AFCA0B" points="36.82 63.78 12.27 63.78 24.55 85.04 73.65 85.04 85.92 63.78 36.82 63.78"/>
+      </svg>
+      <span>Lechler © 2026 · 内部文件，未经授权不得复制或外传</span>
+    </div>
+    <div class="r">第 1 页 / 共 1 页 · LNSC-JIRA-004 V1.0</div>
+  </footer>
+
+
+</div>
+</body>
+</html>

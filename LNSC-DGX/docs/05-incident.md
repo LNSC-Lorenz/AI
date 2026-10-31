@@ -1,5 +1,8 @@
 # 05 · 故障处置预案（Incident Playbook）
 
+> 双机 vLLM/NCCL/worker/RoCE 故障、启停与回滚，统一使用 `docs/12-two-node-operations.md`。
+> 本文件主要覆盖单机 llama.cpp/Ollama 事件。
+
 > 所有场景都遵守：**先止血 → 再定位 → 最后才改配置**。
 > 每次处置结束，把时间线与结论补进 `docs/06-changelog.md`。
 
